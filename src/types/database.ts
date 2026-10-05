@@ -10,10 +10,14 @@
 // Relationships lists the real foreign keys of the public schema, because that is what PostgREST
 // embeds resolve against. Two known omissions, both deliberate: `employees.user_id` points at
 // `auth.users`, which is not in this type and cannot be embedded from `public`; and the views carry
-// an empty list because PostgREST infers their relationships from the base tables and no caller
-// embeds through a view on a typed client. Functions is empty for the same reason -- the schema's
-// SQL functions are called through untyped clients, so typing them here would be guesswork nobody
-// checks.
+// an empty list because no caller embeds through a view on a typed client. The four
+// `*_employee_view` views are security_invoker views over SECURITY DEFINER functions in the
+// unexposed `private` schema (20261004120000), so they have no foreign keys for PostgREST to infer:
+// their embeds go through computed relationships, SQL functions in `public` named after the embed
+// target (`appointments_employee_view`, `employees_employee_view`, `clients`, `client_locations`,
+// `jobs_employee_view`). Functions is empty for the same reason as the view relationships -- the
+// schema's SQL functions are called through untyped clients, so typing them here would be guesswork
+// nobody checks.
 export type Database = {
   public: {
     Tables: {
