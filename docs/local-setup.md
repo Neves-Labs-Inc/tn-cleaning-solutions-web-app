@@ -68,6 +68,18 @@ npx supabase db query --file supabase/test-data.sql --local
 
 This creates the Johnson Family client, the Standard House Cleaning job, and a today-only appointment assigned to both employee accounts.
 
+## Database Tests
+
+pgTAP tests live in `supabase/tests/database/`. Each file builds its own fixtures inside a
+transaction and rolls back, so they don't need `seed.sql` or `test-data.sql`. Run them against a
+freshly reset local stack:
+
+```bash
+npx supabase start
+npx supabase db reset
+npx supabase test db
+```
+
 ## Useful Commands
 
 | Command | Purpose |
