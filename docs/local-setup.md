@@ -80,6 +80,30 @@ npx supabase db reset
 npx supabase test db
 ```
 
+## CI
+
+`.github/workflows/ci.yml` runs on every pull request into `main`:
+
+- **`app`** runs on every PR: lint, unit tests, and `next build` (which is also the TypeScript gate).
+- **`db`** runs only when the PR changes `supabase/**` or `src/types/database.ts` (or the workflow
+  itself). It starts a local stack, applies migrations, runs the pgTAP tests, then checks
+  `src/types/database.ts` for schema drift.
+
+To run the same checks locally:
+
+| Check | Local command |
+|-------|---------------|
+| Lint | `npm run lint` |
+| Unit tests | `npm test` |
+| Build and type-check | `npm run build` |
+| Migrations | `npx supabase db reset` |
+| pgTAP tests | `npx supabase test db` |
+| Schema drift | `npm run db:check-types` (needs a running, migrated local stack) |
+
+The drift check compares names only: it fails when a table, view or column exists in the database
+`public` schema but not in `src/types/database.ts`, or the other way round. Types and nullability
+are not compared, because that file narrows them on purpose.
+
 ## Useful Commands
 
 | Command | Purpose |

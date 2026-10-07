@@ -1,0 +1,95 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install the locked dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      # The type gate: `next build` fails on TypeScript errors by default, so no separate tsc step.
+      - name: Build
+        run: npm run build
+
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    # paths-filter reads the PR's changed files through the GitHub API, so no checkout is needed.
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      db: ${{ steps.filter.outputs.db }}
+    steps:
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            db:
+              - 'supabase/**'
+              - 'src/types/database.ts'
+              - '.github/workflows/ci.yml'
+
+  db:
+    needs: changes
+    # A skipped job counts as passing for required checks, so app-only PRs stay green.
+    if: needs.changes.outputs.db == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.120.0
+
+      # Only Postgres, auth (the pgTAP test writes auth.users), PostgREST and Kong are needed.
+      - name: Start Supabase
+        run: supabase start -x studio,mailpit,imgproxy,edge-runtime,logflare,vector,supavisor,realtime,storage-api,postgres-meta
+
+      - name: Apply migrations and seed
+        run: supabase db reset
+
+      - name: Run pgTAP tests
+        run: supabase test db
+
+      # Name-level check that src/types/database.ts matches the migrated public schema.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install the locked dependencies
+        run: npm ci
+
+      - name: Check database types for drift
+        run: npm run db:check-types
