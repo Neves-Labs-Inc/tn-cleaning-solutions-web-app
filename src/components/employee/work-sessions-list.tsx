@@ -140,7 +140,7 @@ export function WorkSessionsList({ records }: { records: TimeSheetRecord[] }) {
               <Search className="size-5" aria-hidden="true" />
             </div>
             <h3 className="mt-3 text-base font-semibold text-neutral-950">No results found</h3>
-            <p className="mt-1 text-sm text-neutral-600">Try adjusting your search to find what you're looking for.</p>
+            <p className="mt-1 text-sm text-neutral-600">Try adjusting your search to find what you&apos;re looking for.</p>
           </CardContent>
         </Card>
       ) : (

@@ -18,6 +18,15 @@
 // `jobs_employee_view`). Functions is empty for the same reason as the view relationships -- the
 // schema's SQL functions are called through untyped clients, so typing them here would be guesswork
 // nobody checks.
+//
+// `invoices_with_status` is a plain security_invoker projection of `invoices`, one row per invoice.
+// Its Row follows the database's real column nullability, not the narrowed `invoices` Row: `notes`,
+// `created_at`, `updated_at` and `is_archived` have no NOT NULL constraint on the table, so they are
+// nullable here. `effective_status` is `status` with an issued, past-due invoice reported as
+// 'overdue'.
+//
+// `npm run db:check-types` (run in CI) fails when a table, view or column name here and in the
+// database `public` schema disagree. It compares names only, never types or nullability.
 export type Database = {
   public: {
     Tables: {
@@ -573,6 +582,22 @@ export type Database = {
           created_at: string
           updated_at: string
           is_archived: boolean
+        }
+        Relationships: []
+      }
+      invoices_with_status: {
+        Row: {
+          id: string
+          client_id: string
+          status: 'draft' | 'issued' | 'paid' | 'void'
+          issued_date: string | null
+          due_date: string | null
+          total_cents: number
+          notes: string | null
+          created_at: string | null
+          updated_at: string | null
+          is_archived: boolean | null
+          effective_status: 'draft' | 'issued' | 'paid' | 'void' | 'overdue'
         }
         Relationships: []
       }
