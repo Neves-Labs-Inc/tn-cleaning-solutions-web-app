@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState, useEffect, useMemo, useState } from 'react'
+import { useActionState, useMemo, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 
 import { Button } from '@/components/ui/button'
@@ -119,9 +119,10 @@ export function InvoiceForm({
     return Array.from(map.values())
   }, [availableAppointments, preselectedAppointments])
 
-  const [selectedClientId, setSelectedClientId] = useState(
-    invoice?.client_id ?? clients[0]?.id ?? ''
-  )
+  // Only the user's pick is state; the default is derived so it needs no effect.
+  const [chosenClientId, setChosenClientId] = useState('')
+  const selectedClientId =
+    invoice?.client_id || chosenClientId || clients[0]?.id || ''
 
   const clientOptions = useMemo(() => {
     return clients.map((client) => ({ value: client.id, label: client.name }))
@@ -131,40 +132,16 @@ export function InvoiceForm({
     () => preselectedAppointments.map((appointment) => appointment.id)
   )
 
-  const [priceValues, setPriceValues] = useState<Record<string, string>>(() => {
+  // Only user edits are state; defaults are derived so new appointments get one.
+  const [priceEdits, setPriceEdits] = useState<Record<string, string>>({})
+
+  const priceValues = useMemo(() => {
     const values: Record<string, string> = {}
     for (const appointment of allAppointments) {
       values[appointment.id] = initialPriceForAppointment(appointment).toFixed(2)
     }
-    return values
-  })
-
-  useEffect(() => {
-    if (invoice?.client_id) {
-      setSelectedClientId(invoice.client_id)
-      return
-    }
-
-    if (selectedClientId) {
-      return
-    }
-
-    if (clients[0]?.id) {
-      setSelectedClientId(clients[0].id)
-    }
-  }, [clients, invoice?.client_id, selectedClientId])
-
-  useEffect(() => {
-    setPriceValues((previous) => {
-      const next = { ...previous }
-      for (const appointment of allAppointments) {
-        if (!next[appointment.id]) {
-          next[appointment.id] = initialPriceForAppointment(appointment).toFixed(2)
-        }
-      }
-      return next
-    })
-  }, [allAppointments])
+    return { ...values, ...priceEdits }
+  }, [allAppointments, priceEdits])
 
   const appointmentsForClient = useMemo(
     () => allAppointments.filter((appointment) => appointment.client_id === selectedClientId),
@@ -223,7 +200,7 @@ export function InvoiceForm({
             options={clientOptions}
             value={selectedClientId}
             onValueChange={(nextClientId) => {
-              setSelectedClientId(nextClientId)
+              setChosenClientId(nextClientId)
               setSelectedIds([])
             }}
             placeholder="Select client..."
@@ -301,7 +278,7 @@ export function InvoiceForm({
                           step="0.01"
                           value={priceValues[appointment.id] ?? ''}
                           onChange={(event) =>
-                            setPriceValues((previous) => ({
+                            setPriceEdits((previous) => ({
                               ...previous,
                               [appointment.id]: event.target.value,
                             }))

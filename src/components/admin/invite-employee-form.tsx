@@ -39,7 +39,7 @@ export function InviteEmployeeForm() {
             role="status"
             aria-live="polite"
           >
-            Invite sent to {state.data?.email ?? 'the employee'}! They'll receive an email to set up
+            Invite sent to {state.data?.email ?? 'the employee'}! They&apos;ll receive an email to set up
             their account.
           </div>
         ) : null}
