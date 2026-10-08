@@ -9,11 +9,10 @@ import { Card } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import StatusBadge from '@/components/ui/status-badge'
-import { calculateDuration, formatDuration } from '@/lib/schedule'
+import { calculateDuration, formatBusinessTime, formatDuration } from '@/lib/schedule'
 import type { TimeSheetRecord } from '@/types/time-sheet-record'
 
 const DATE_FORMAT = 'EEE, MMM d, yyyy'
-const TIME_FORMAT = 'h:mm a'
 const MAX_ANIMATED_ROWS = 8
 const ROW_STAGGER_MS = 40
 
@@ -161,13 +160,13 @@ export function WorkSessionsList({ records, monthLabel, now, emptyDescription, e
                   <p className="min-w-0 text-sm wrap-break-word text-muted-foreground">{record.appointments.clients.name}</p>
                   <p className="font-mono text-sm tabular-nums text-muted-foreground">
                     <span className="whitespace-nowrap">
-                      In {record.clocked_in_at ? format(new Date(record.clocked_in_at), TIME_FORMAT) : '—'}
+                      In {record.clocked_in_at ? formatBusinessTime(new Date(record.clocked_in_at)) : '—'}
                     </span>{' '}
                     ·{' '}
                     <span className="whitespace-nowrap">
                       Out{' '}
                       {record.clocked_out_at ? (
-                        format(new Date(record.clocked_out_at), TIME_FORMAT)
+                        formatBusinessTime(new Date(record.clocked_out_at))
                       ) : (
                         <span className="font-sans font-medium text-status-warning-foreground">Still clocked in</span>
                       )}

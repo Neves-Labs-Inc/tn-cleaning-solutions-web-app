@@ -5,6 +5,7 @@ import {
   buildMapsUrl,
   buildStop,
   getBusinessDate,
+  formatBusinessTime,
   toBusinessWallClock,
   calculateDuration,
   formatDuration,
@@ -251,4 +252,15 @@ test('buildStop: falls back to the own assignment row when the team view omits t
   const stop = buildStop(assignment('2026-10-14T12:00:00Z'), [teammate('a', 'Abe')], ME)
   assert.deepEqual(stop.crew.map((m) => m.id), ['me', 'a'])
   assert.equal(stop.you.clockStatus, 'clocked_in')
+})
+
+test('formatBusinessTime: renders Eastern clock time in summer and winter', () => {
+  assert.equal(formatBusinessTime(new Date('2026-07-14T16:30:00Z')), '12:30 PM')
+  assert.equal(formatBusinessTime(new Date('2026-01-14T16:30:00Z')), '11:30 AM')
+})
+
+test('resolveTimeSheetMonth: 02:00Z on 1 Nov is still October in Eastern time', () => {
+  const month = resolveTimeSheetMonth(undefined, toBusinessWallClock(new Date('2026-11-01T02:00:00Z')))
+  assert.equal(month.year, 2026)
+  assert.equal(month.month, 10)
 })

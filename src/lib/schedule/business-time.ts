@@ -31,6 +31,19 @@ export function getBusinessDate(instant: Date): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
+const timeFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: BUSINESS_TIME_ZONE,
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+})
+
+// "h:mm AM" in business time. Parts are joined by hand because newer ICU puts a narrow no-break space before AM/PM.
+export function formatBusinessTime(instant: Date): string {
+  const parts = Object.fromEntries(timeFormatter.formatToParts(instant).map((part) => [part.type, part.value]))
+  return `${parts.hour}:${parts.minute} ${parts.dayPeriod}`
+}
+
 // A Date whose local fields equal the business wall clock. Appointment dates are stored as naive
 // wall-clock strings and parsed in the process zone, so "now" must be expressed the same way.
 export function toBusinessWallClock(instant: Date): Date {

@@ -6,7 +6,7 @@ import { WorkSessionsList } from '@/components/employee/work-sessions-list'
 import { Button, buttonVariants } from '@/components/ui/button'
 import PageHeader from '@/components/ui/page-header'
 import StatTile from '@/components/ui/stat-tile'
-import { formatDuration, resolveTimeSheetMonth, summarizeSessions } from '@/lib/schedule'
+import { formatDuration, resolveTimeSheetMonth, summarizeSessions, toBusinessWallClock } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 import { cn } from '@/lib/utils'
 import type { TimeSheetRecord } from '@/types/time-sheet-record'
@@ -92,8 +92,9 @@ export default async function TimeSheetsPage({ searchParams }: TimeSheetsPagePro
     notFound()
   }
 
+  // Durations use the real instant; only the month boundary follows business time.
   const now = new Date()
-  const selectedMonth = resolveTimeSheetMonth(month, now)
+  const selectedMonth = resolveTimeSheetMonth(month, toBusinessWallClock(now))
 
   const { data: timeSheets, error } = await supabase
     .from('appointment_employees_employee_view')

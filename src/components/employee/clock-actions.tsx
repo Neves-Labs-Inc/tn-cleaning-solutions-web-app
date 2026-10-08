@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from 'react'
 import { CheckCircle2, CircleAlert, Clock } from 'lucide-react'
-import { format } from 'date-fns'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
@@ -11,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { Spinner } from '@/components/ui/spinner'
 import { clockIn, clockOut, type ClockActionState } from '@/lib/actions/attendance'
+import { formatBusinessTime } from '@/lib/schedule'
 
 type ClockStatus = 'clocked_in' | 'clocked_out' | 'not_started'
 type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
@@ -23,7 +23,6 @@ type ClockActionsProps = {
 	variant?: 'inline' | 'bar'
 }
 
-const CLOCK_TIME_FORMAT = 'h:mm a'
 const NETWORK_ERROR_MESSAGE = "Couldn't reach the server. Check your connection and try again."
 
 // Both variants are w-full with no margin; the bar's padding comes from its sticky wrapper.
@@ -64,7 +63,7 @@ export function ClockActions({ appointmentEmployeeId, clockStatus, appointmentSt
 		})
 	}
 
-	const handleClockIn = () => runClockAction(clockIn, () => `Clocked in at ${format(new Date(), CLOCK_TIME_FORMAT)}`)
+	const handleClockIn = () => runClockAction(clockIn, () => `Clocked in at ${formatBusinessTime(new Date())}`)
 	const handleConfirmClockOut = () => runClockAction(clockOut, () => 'Clocked out')
 
 	const handleDrawerOpenChange = (isOpen: boolean) => {

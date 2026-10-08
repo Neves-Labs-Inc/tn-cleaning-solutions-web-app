@@ -1,8 +1,8 @@
-import { format } from "date-fns";
 import { CheckCircle2, Clock, type LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { AppointmentStatus } from "@/lib/helpers/dashboard";
+import { formatBusinessTime } from "@/lib/schedule";
 import { cn } from "@/lib/utils";
 
 export type StatusTone = "info" | "success" | "warning" | "danger" | "neutral";
@@ -34,8 +34,6 @@ const TONE_CLASSES: Record<StatusTone, string> = {
     "border-status-danger-border bg-status-danger text-status-danger-foreground dark:bg-status-danger",
   neutral: "border-border bg-muted text-muted-foreground dark:bg-muted",
 };
-
-const CLOCK_TIME_FORMAT = "h:mm a";
 
 export default function StatusBadge({
   tone,
@@ -81,14 +79,14 @@ export function clockStatusBadge(
     clocked_in: {
       tone: "success",
       label: clockedInAt
-        ? `Clocked in at ${format(new Date(clockedInAt), CLOCK_TIME_FORMAT)}`
+        ? `Clocked in at ${formatBusinessTime(new Date(clockedInAt))}`
         : "Clocked in",
       icon: CheckCircle2,
     },
     clocked_out: {
       tone: "neutral",
       label: clockedOutAt
-        ? `Clocked out at ${format(new Date(clockedOutAt), CLOCK_TIME_FORMAT)}`
+        ? `Clocked out at ${formatBusinessTime(new Date(clockedOutAt))}`
         : "Clocked out",
     },
   };
