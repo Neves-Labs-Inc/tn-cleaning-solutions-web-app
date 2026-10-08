@@ -5,7 +5,10 @@ import {
   buildMapsUrl,
   buildStop,
   getBusinessDate,
+  formatBusinessDate,
+  formatBusinessDateTime,
   formatBusinessTime,
+  fromBusinessWallClock,
   toBusinessWallClock,
   calculateDuration,
   formatDuration,
@@ -263,4 +266,29 @@ test('resolveTimeSheetMonth: 02:00Z on 1 Nov is still October in Eastern time', 
   const month = resolveTimeSheetMonth(undefined, toBusinessWallClock(new Date('2026-11-01T02:00:00Z')))
   assert.equal(month.year, 2026)
   assert.equal(month.month, 10)
+})
+
+test('formatBusinessDate: renders the Eastern calendar date, not the UTC one', () => {
+  assert.equal(formatBusinessDate(new Date('2026-07-14T16:30:00Z')), 'Jul 14, 2026')
+  assert.equal(formatBusinessDate(new Date('2026-10-09T02:30:00Z')), 'Oct 8, 2026')
+})
+
+test('formatBusinessDateTime: renders Eastern date and time in summer and winter', () => {
+  assert.equal(formatBusinessDateTime(new Date('2026-07-14T16:30:00Z')), 'Jul 14, 2026, 12:30 PM')
+  assert.equal(formatBusinessDateTime(new Date('2026-01-14T16:30:00Z')), 'Jan 14, 2026, 11:30 AM')
+})
+
+test('getBusinessDate: uses the Eastern date when UTC has already rolled over', () => {
+  assert.equal(getBusinessDate(new Date('2026-10-09T02:30:00Z')), '2026-10-08')
+})
+
+test('fromBusinessWallClock: round-trips toBusinessWallClock across DST', () => {
+  for (const iso of ['2026-07-14T16:30:00Z', '2026-01-14T16:30:00Z', '2026-11-01T05:30:00Z']) {
+    const instant = new Date(iso)
+    assert.equal(fromBusinessWallClock(toBusinessWallClock(instant)).getTime(), instant.getTime())
+  }
+})
+
+test('fromBusinessWallClock: the repeated fall-back hour resolves to the earlier EDT instant', () => {
+  assert.equal(fromBusinessWallClock(new Date(2026, 10, 1, 1, 30)).toISOString(), '2026-11-01T05:30:00.000Z')
 })

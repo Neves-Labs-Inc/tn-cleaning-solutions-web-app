@@ -3,7 +3,15 @@ export type { ClockStatus } from './clock-status.ts'
 export { groupAppointmentsByDay } from './group-appointments.ts'
 export { buildStop } from './build-stop.ts'
 export type { AppointmentRecord, EmployeeSummary, TeamMemberRecord } from './build-stop.ts'
-export { BUSINESS_TIME_ZONE, formatBusinessTime, getBusinessDate, toBusinessWallClock } from './business-time.ts'
+export {
+  BUSINESS_TIME_ZONE,
+  formatBusinessDate,
+  formatBusinessDateTime,
+  formatBusinessTime,
+  fromBusinessWallClock,
+  getBusinessDate,
+  toBusinessWallClock,
+} from './business-time.ts'
 export { formatTimeRange } from './time-range.ts'
 export { buildMapsUrl } from './maps-url.ts'
 export { resolveTimeSheetMonth } from './time-sheet-month.ts'
