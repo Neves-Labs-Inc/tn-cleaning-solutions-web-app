@@ -104,6 +104,13 @@ test('resolveTimeSheetMonth falls back to the current month for bad or missing i
   }
 })
 
+test('resolveTimeSheetMonth rejects years before 2000', () => {
+  const result = resolveTimeSheetMonth('0026-05', NOW)
+
+  assert.equal(result.label, 'October 2026')
+  assert.equal(result.nextParam, null)
+})
+
 test('resolveTimeSheetMonth uses the first element of an array param', () => {
   assert.equal(resolveTimeSheetMonth(['2026-08', '2026-09'], NOW).month, 8)
 })

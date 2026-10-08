@@ -11,6 +11,8 @@ export type TimeSheetMonth = {
 }
 
 const MONTH_PARAM = /^\d{4}-(0[1-9]|1[0-2])$/
+// Years before this are typos (e.g. 0026), not real time sheets.
+const MIN_YEAR = 2000
 const DAY_FORMAT = 'yyyy-MM-dd'
 const PARAM_FORMAT = 'yyyy-MM'
 
@@ -22,7 +24,7 @@ export function resolveTimeSheetMonth(param: string | string[] | undefined, now:
   if (raw !== undefined && MONTH_PARAM.test(raw)) {
     const [year, month] = raw.split('-').map(Number)
     const requested = new Date(year, month - 1, 1)
-    if (requested <= currentMonthStart) {
+    if (year >= MIN_YEAR && requested <= currentMonthStart) {
       monthStart = requested
     }
   }

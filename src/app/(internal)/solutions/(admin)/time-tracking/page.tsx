@@ -252,7 +252,7 @@ export default async function AdminTimeSheetsPage({
 				</div>
 			</section>
 
-			<WorkSessionsList records={records} />
+			<WorkSessionsList records={records} monthLabel={format(selectedDate, 'MMMM yyyy')} now={new Date().toISOString()} />
 		</div>
 	)
 }
