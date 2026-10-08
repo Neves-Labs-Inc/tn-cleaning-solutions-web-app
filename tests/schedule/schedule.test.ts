@@ -3,8 +3,12 @@ import { test } from 'node:test'
 
 import {
   buildMapsUrl,
+  buildStop,
+  getBusinessDate,
+  toBusinessWallClock,
   calculateDuration,
   formatDuration,
+  formatTimeRange,
   getClockStatus,
   groupAppointmentsByDay,
   resolveTimeSheetMonth,
@@ -163,4 +167,81 @@ test('summarizeSessions totals and averages, including an open shift', () => {
 
 test('summarizeSessions with no records averages to 0', () => {
   assert.deepEqual(summarizeSessions([], NOW), { count: 0, totalMinutes: 0, averageMinutes: 0 })
+})
+
+test('formatTimeRange: renders 12-hour start and end joined by a spaced en dash', () => {
+  assert.equal(formatTimeRange('2026-10-14', '08:00:00', '11:30:00'), '8:00 AM – 11:30 AM')
+  assert.equal(formatTimeRange('2026-10-14', '13:05:00', '15:00:00'), '1:05 PM – 3:00 PM')
+})
+
+test('formatTimeRange: midnight is 12 AM and noon is 12 PM', () => {
+  assert.equal(formatTimeRange('2026-10-14', '00:00:00', '12:00:00'), '12:00 AM – 12:00 PM')
+})
+
+test('getBusinessDate: summer 23:30 UTC is still the same Eastern day, 03:59 UTC is the earlier one', () => {
+  assert.equal(getBusinessDate(new Date('2026-07-15T23:30:00Z')), '2026-07-15')
+  assert.equal(getBusinessDate(new Date('2026-07-16T03:59:00Z')), '2026-07-15')
+  assert.equal(getBusinessDate(new Date('2026-07-16T04:00:00Z')), '2026-07-16')
+})
+
+test('getBusinessDate: winter 23:30 UTC is still the same Eastern day, 04:59 UTC is the earlier one', () => {
+  assert.equal(getBusinessDate(new Date('2026-01-15T23:30:00Z')), '2026-01-15')
+  assert.equal(getBusinessDate(new Date('2026-01-16T04:59:00Z')), '2026-01-15')
+  assert.equal(getBusinessDate(new Date('2026-01-16T05:00:00Z')), '2026-01-16')
+})
+
+test('toBusinessWallClock: local fields match the Eastern wall clock, so 00:30 UTC groups as the earlier day', () => {
+  const evening = toBusinessWallClock(new Date('2026-10-09T00:30:00Z')) // 8:30 PM EDT on Oct 8
+  const grouped = groupAppointmentsByDay(
+    [row('tonight', '2026-10-08', '18:00:00'), row('tomorrow', '2026-10-09', '08:00:00')],
+    evening
+  )
+  assert.deepEqual(grouped.today.map((r) => r.id), ['tonight'])
+  assert.deepEqual(grouped.upcoming.map((g) => g.date), ['2026-10-09'])
+})
+
+const ME = { id: 'me', full_name: 'Zed Last', phone: null }
+
+function assignment(clockedInAt: string | null = null) {
+  return {
+    id: 'assignment-1',
+    appointment_id: 'appt-1',
+    clocked_in_at: clockedInAt,
+    clocked_out_at: null,
+    appointments: {
+      id: 'appt-1',
+      scheduled_date: '2026-10-14',
+      scheduled_start_time: '08:00:00',
+      scheduled_end_time: '11:00:00',
+      status: 'scheduled' as const,
+      clients: { name: 'Acme', phone: null },
+      client_locations: null,
+      jobs: { name: 'Deep clean', description: null },
+    },
+  }
+}
+
+function teammate(id: string, fullName: string) {
+  return {
+    appointment_id: 'appt-1',
+    clocked_in_at: null,
+    clocked_out_at: null,
+    employees_employee_view: { id, full_name: fullName, phone: null },
+  }
+}
+
+test('buildStop: puts the signed-in Cleaner first and sorts the rest by name', () => {
+  const stop = buildStop(
+    assignment(),
+    [teammate('b', 'Bea'), teammate('me', 'Zed Last'), teammate('a', 'Abe')],
+    ME
+  )
+  assert.deepEqual(stop.crew.map((m) => m.full_name), ['Zed Last', 'Abe', 'Bea'])
+  assert.equal(stop.you.id, 'me')
+})
+
+test('buildStop: falls back to the own assignment row when the team view omits the Cleaner', () => {
+  const stop = buildStop(assignment('2026-10-14T12:00:00Z'), [teammate('a', 'Abe')], ME)
+  assert.deepEqual(stop.crew.map((m) => m.id), ['me', 'a'])
+  assert.equal(stop.you.clockStatus, 'clocked_in')
 })
