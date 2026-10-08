@@ -1,12 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState } from 'react'
-import { useFormStatus } from 'react-dom'
+import { useActionState, useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import SubmitButton from '@/components/ui/submit-button'
 
 export type ForgotPasswordActionState = {
   success: boolean
@@ -20,9 +20,6 @@ const initialState: ForgotPasswordActionState = {
   fieldErrors: {},
 }
 
-const submitButtonClassName =
-  'h-11 w-full rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(5,150,105,0.18)] transition-all hover:bg-emerald-700 hover:shadow-[0_16px_34px_rgba(5,150,105,0.22)]'
-
 type ForgotPasswordFormProps = {
   action: (
     previousState: ForgotPasswordActionState,
@@ -32,77 +29,83 @@ type ForgotPasswordFormProps = {
 
 export const ForgotPasswordForm = ({ action }: ForgotPasswordFormProps) => {
   const [state, formAction] = useActionState(action, initialState)
-  let content
+  // Controlled so a failed submit does not wipe the typed email (React resets uncontrolled inputs).
+  const [email, setEmail] = useState('')
+
+  useEffect(() => {
+    if (state.fieldErrors.email) {
+      document.getElementById('email')?.focus()
+    }
+  }, [state])
 
   if (state.success) {
-    content = (
-      <div className="space-y-4" role="status" aria-live="polite">
-        <p className="text-sm leading-6 text-neutral-600">
+    return (
+      <div
+        className="animate-in space-y-4 fade-in-0 duration-base ease-out-quart"
+        role="status"
+        aria-live="polite"
+      >
+        <p className="text-sm leading-6 text-muted-foreground">
           If an account exists for that email address, a password reset link
           is on its way.
         </p>
-        <Link
-          href="/login"
-          className={`inline-flex items-center justify-center ${submitButtonClassName}`}
+        <Button
+          size="lg"
+          className="w-full active:scale-[0.98]"
+          render={<Link href="/login" />}
+          nativeButton={false}
         >
           Back to login
-        </Link>
+        </Button>
       </div>
     )
-  } else {
-    content = (
-      <form action={formAction} className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="email" className="text-sm font-medium text-neutral-700">
+  }
+
+  return (
+    <form action={formAction}>
+      <FieldGroup>
+        <Field data-invalid={Boolean(state.fieldErrors.email)}>
+          <FieldLabel htmlFor="email" className="text-sm font-medium">
             Email
-          </Label>
+          </FieldLabel>
           <Input
             id="email"
             name="email"
             type="email"
+            inputMode="email"
             autoComplete="email"
+            enterKeyHint="next"
             autoFocus
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             required
             aria-invalid={Boolean(state.fieldErrors.email)}
             aria-describedby={state.fieldErrors.email ? 'email-error' : undefined}
-            className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
             placeholder="admin@tncleaningsolutions.com"
           />
           {state.fieldErrors.email && (
-            <p
-              id="email-error"
-              className="text-xs text-red-600"
-              role="alert"
-              aria-live="polite"
-            >
+            <FieldError id="email-error" className="text-sm">
               {state.fieldErrors.email}
-            </p>
+            </FieldError>
           )}
-        </div>
+        </Field>
+      </FieldGroup>
 
-        <SubmitButton />
+      <SubmitButton
+        label="Send reset link"
+        pendingLabel="Sending..."
+        size="lg"
+        className="mt-6 w-full active:scale-[0.98]"
+      />
 
-        <p className="text-center text-sm text-neutral-500">
-          <Link
-            href="/login"
-            className="font-medium text-emerald-700 transition-colors hover:text-emerald-800"
-          >
-            Back to login
-          </Link>
-        </p>
-      </form>
-    )
-  }
-
-  return content
-}
-
-const SubmitButton = () => {
-  const { pending } = useFormStatus()
-
-  return (
-    <Button type="submit" disabled={pending} className={submitButtonClassName}>
-      {pending ? 'Sending...' : 'Send reset link'}
-    </Button>
+      <p className="mt-2 text-center text-sm text-muted-foreground">
+        <Link
+          href="/login"
+          className="-mx-1 inline-flex min-h-11 items-center rounded-sm px-1 text-sm font-medium text-primary transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none active:text-primary/70 md:hover:text-primary/80 md:hover:underline md:hover:underline-offset-4"
+        >
+          Back to login
+        </Link>
+      </p>
+    </form>
   )
 }
