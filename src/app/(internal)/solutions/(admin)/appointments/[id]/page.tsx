@@ -14,6 +14,7 @@ import {
   type PriceSource,
   type ResolvedPrice,
 } from '@/lib/pricing/resolve'
+import { formatBusinessDateTime } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 import { cn } from '@/lib/utils'
 
@@ -316,7 +317,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
                         Clock in:{' '}
                         <span className="font-medium text-neutral-800">
                           {assignment.clocked_in_at
-                            ? format(parseISO(assignment.clocked_in_at), 'MMM d, yyyy p')
+                            ? formatBusinessDateTime(new Date(assignment.clocked_in_at))
                             : 'Not set'}
                         </span>
                       </p>
@@ -324,7 +325,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
                         Clock out:{' '}
                         <span className="font-medium text-neutral-800">
                           {assignment.clocked_out_at
-                            ? format(parseISO(assignment.clocked_out_at), 'MMM d, yyyy p')
+                            ? formatBusinessDateTime(new Date(assignment.clocked_out_at))
                             : 'Not set'}
                         </span>
                       </p>
