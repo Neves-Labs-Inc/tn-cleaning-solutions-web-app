@@ -318,6 +318,7 @@ export default async function AppointmentDetailPage({
 									appointmentEmployeeId={currentAssignmentId}
 									clockStatus={currentClockStatus}
 									appointmentStatus={appointment.appointments.status}
+									jobName={job.name}
 								/>
 							</div>
 						</div>
