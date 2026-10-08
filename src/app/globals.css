@@ -213,5 +213,6 @@
   }
   html {
     @apply font-sans;
+    scroll-padding-top: calc(3.5rem + var(--safe-top) + 8px);
   }
 }

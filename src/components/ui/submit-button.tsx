@@ -12,11 +12,13 @@ type SubmitButtonProps = Omit<
 > & {
   label: string;
   pendingLabel: string;
+  icon?: React.ReactNode;
 };
 
 export default function SubmitButton({
   label,
   pendingLabel,
+  icon,
   disabled,
   ...rest
 }: SubmitButtonProps): React.ReactNode {
@@ -44,11 +46,12 @@ export default function SubmitButton({
         </span>
         <span
           className={cn(
-            "inline-flex items-center justify-center",
+            "inline-flex items-center justify-center gap-2",
             pending ? "invisible" : "visible",
           )}
           aria-hidden={pending}
         >
+          {icon}
           {label}
         </span>
       </span>

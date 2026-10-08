@@ -1,107 +1,98 @@
 'use client'
 
+import { AlertCircle } from 'lucide-react'
 import { useActionState, useEffect, useRef } from 'react'
-import { useFormStatus } from 'react-dom'
+import { toast } from 'sonner'
 
-import { Button } from '@/components/ui/button'
+import { Alert, AlertTitle } from '@/components/ui/alert'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { PasswordInput } from '@/components/ui/password-input'
-import { Label } from '@/components/ui/label'
+import SubmitButton from '@/components/ui/submit-button'
 
 import { type ActionState, updatePassword } from '@/lib/actions/profile'
 
 const initialState: ActionState = {}
+const NEW_PASSWORD_ID = 'new_password'
+const CONFIRM_PASSWORD_ID = 'confirm_password'
 
-function SubmitButton() {
-  const { pending } = useFormStatus()
-
-  return (
-    <Button
-      type="submit"
-      disabled={pending}
-      className="h-11 w-full rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(5,150,105,0.18)] transition-all hover:bg-emerald-700 hover:shadow-[0_16px_34px_rgba(5,150,105,0.22)]"
-    >
-      {pending ? 'Updating password...' : 'Change password'}
-    </Button>
-  )
+// Server message -> id of the input to focus.
+const ERROR_FIELD: Record<string, string> = {
+  'Password is required': NEW_PASSWORD_ID,
+  'Password must be at least 8 characters': NEW_PASSWORD_ID,
+  'Passwords do not match': CONFIRM_PASSWORD_ID,
 }
 
 export function PasswordForm() {
   const [state, formAction] = useActionState(updatePassword, initialState)
   const formRef = useRef<HTMLFormElement>(null)
+  const invalidFieldId = state.error ? ERROR_FIELD[state.error] : undefined
 
   useEffect(() => {
     if (state.success) {
       formRef.current?.reset()
+      toast.success('Password updated')
     }
-  }, [state.success])
+    if (invalidFieldId) {
+      document.getElementById(invalidFieldId)?.focus()
+    }
+  }, [state, invalidFieldId])
 
   return (
-    <section className="rounded-[1.75rem] border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5 sm:p-8">
-      <div className="space-y-2">
-        <h2 className="text-lg font-semibold tracking-tight text-neutral-950">
-          Change password
-        </h2>
-        <p className="text-sm text-neutral-600">
-          Choose a new password with at least 8 characters.
-        </p>
-      </div>
+    <Card className="sm:py-5">
+      <CardHeader className="sm:px-5">
+        <CardTitle className="text-lg font-semibold tracking-tight">Change password</CardTitle>
+        <CardDescription className="text-sm text-muted-foreground">
+          At least 8 characters.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="sm:px-5">
+        <form ref={formRef} action={formAction} noValidate>
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor={NEW_PASSWORD_ID} className="text-sm">
+                New password
+              </FieldLabel>
+              <PasswordInput
+                id={NEW_PASSWORD_ID}
+                name="new_password"
+                autoComplete="new-password"
+                required
+                minLength={8}
+                aria-invalid={invalidFieldId === NEW_PASSWORD_ID}
+                className="scroll-mb-24"
+                placeholder="At least 8 characters"
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={CONFIRM_PASSWORD_ID} className="text-sm">
+                Confirm password
+              </FieldLabel>
+              <PasswordInput
+                id={CONFIRM_PASSWORD_ID}
+                name="confirm_password"
+                autoComplete="new-password"
+                required
+                aria-invalid={invalidFieldId === CONFIRM_PASSWORD_ID}
+                className="scroll-mb-24"
+                placeholder="Re-enter the new password"
+              />
+            </Field>
+          </FieldGroup>
 
-      <form ref={formRef} action={formAction} className="mt-6 space-y-4">
-        {state.error ? (
-          <div
-            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
-            role="alert"
-            aria-live="polite"
-          >
-            {state.error}
-          </div>
-        ) : null}
+          {state.error ? (
+            <Alert
+              variant="destructive"
+              className="mt-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart"
+            >
+              <AlertCircle aria-hidden="true" />
+              <AlertTitle className="text-sm">{state.error}</AlertTitle>
+            </Alert>
+          ) : null}
 
-        {state.success ? (
-          <div
-            className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700"
-            role="status"
-            aria-live="polite"
-          >
-            Password updated successfully.
-          </div>
-        ) : null}
-
-        <div className="space-y-1.5">
-          <Label htmlFor="new_password" className="text-sm font-medium text-neutral-700">
-            New password
-          </Label>
-          <PasswordInput
-            id="new_password"
-            name="new_password"
-            autoComplete="new-password"
-            required
-            minLength={8}
-            className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-            placeholder="At least 8 characters"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="confirm_password" className="text-sm font-medium text-neutral-700">
-            Confirm password
-          </Label>
-          <PasswordInput
-            id="confirm_password"
-            name="confirm_password"
-            autoComplete="new-password"
-            required
-            className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-            placeholder="Re-enter the new password"
-          />
-        </div>
-
-        <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-xs leading-5 text-neutral-600">
-          Use a password you do not reuse elsewhere. The change takes effect immediately.
-        </div>
-
-        <SubmitButton />
-      </form>
-    </section>
+          <SubmitButton label="Change password" pendingLabel="Updating…" className="mt-6 w-full" />
+        </form>
+      </CardContent>
+    </Card>
   )
 }
