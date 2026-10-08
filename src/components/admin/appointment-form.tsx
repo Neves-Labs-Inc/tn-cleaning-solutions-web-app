@@ -306,6 +306,8 @@ export function AppointmentForm({
 
           {appointment ? (
             <div className="space-y-1.5">
+              {/* The status this form rendered with; the action refuses to save over a status that moved since. */}
+              <input type="hidden" name="expected_status" value={appointment.status} />
               <Label htmlFor="status" className="text-sm font-medium text-neutral-700">
                 Status
               </Label>

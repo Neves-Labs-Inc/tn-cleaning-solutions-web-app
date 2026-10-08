@@ -38,6 +38,10 @@ export function ClockActions({ appointmentEmployeeId, clockStatus, appointmentSt
 	const [isDrawerOpen, setIsDrawerOpen] = useState(false)
 
 	const isDisabled = appointmentStatus === 'completed' || appointmentStatus === 'cancelled'
+	const disabledMessage = `This appointment is ${appointmentStatus}. Clock actions are disabled.`
+	// After a refused clock the refresh flips isDisabled, and the standing notice then says the
+	// same thing as the inline error, so the error yields to it.
+	const shownError = isDisabled && error === disabledMessage ? null : error
 
 	const runClockAction = (action: (id: string) => Promise<ClockActionState>, getSuccessMessage: () => string) => {
 		setError(null)
@@ -48,17 +52,18 @@ export function ClockActions({ appointmentEmployeeId, clockStatus, appointmentSt
 			} catch {
 				// A rejected call (e.g. network drop) must surface inline, not hit the error boundary.
 				result = { error: NETWORK_ERROR_MESSAGE }
-				// The action may have committed before the connection dropped, so resync the UI.
-				router.refresh()
 			}
 
 			setIsDrawerOpen(false)
+			// Refresh on every outcome: a dropped connection may have committed, and a refused clock
+			// means this screen is stale (an admin closed the appointment), so the server state must
+			// replace it. The inline error is local state and survives the refresh.
+			router.refresh()
 			if (result.error) {
 				setError(result.error)
 				return
 			}
 
-			router.refresh()
 			toast.success(getSuccessMessage())
 		})
 	}
@@ -95,14 +100,14 @@ export function ClockActions({ appointmentEmployeeId, clockStatus, appointmentSt
 				</div>
 			) : null}
 
-			{error ? (
+			{shownError ? (
 				<Alert variant="destructive" className="text-sm animate-in fade-in-0 slide-in-from-top-1 duration-200">
 					<CircleAlert aria-hidden="true" />
-					<AlertTitle className="font-medium">{error}</AlertTitle>
+					<AlertTitle className="font-medium">{shownError}</AlertTitle>
 				</Alert>
 			) : null}
 
-			{isDisabled ? <p className="text-sm text-muted-foreground">This appointment is {appointmentStatus}. Clock actions are disabled.</p> : null}
+			{isDisabled ? <p className="text-sm text-muted-foreground">{disabledMessage}</p> : null}
 
 			<Drawer open={isDrawerOpen} onOpenChange={handleDrawerOpenChange} dismissible={!isPending} autoFocus>
 				<DrawerContent className="sm:mx-auto sm:max-w-md">
