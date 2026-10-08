@@ -196,6 +196,8 @@ Keep the existing pattern: desktop sidebar (`lg:flex`) + mobile top bar with a l
 
 Implement by editing the `size` variants in `src/components/ui/button.tsx` and the base class in `input.tsx` etc. — **not** by passing `className="h-11 …"` on every call site (which is the current pattern and the main source of drift). Compact `xs`/`icon-xs` sizes remain only for desktop admin tables and must never appear on employee screens.
 
+**Mechanism (as built):** the responsive sizes live in CSS variables in `globals.css` (`--control-height` 44px → 36px at `md`, `--control-height-sm` 40 → 32, `--control-padding-x`), and primitives use `h-(--control-height)` / `size-(--control-height)` / `px-(--control-padding-x)`. Never put `md:h-*` / `md:px-*` on a primitive: tailwind-merge drops the base height when a call site passes its own `h-*`, but the `md:` class survives and shrinks the control at `md`+.
+
 Links inside running text are exempt (they are text), but a `tel:` phone link that is the primary way to call the client is a **button**, not inline text.
 
 ---
