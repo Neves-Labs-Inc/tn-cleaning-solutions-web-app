@@ -76,7 +76,7 @@ A Series edit that applies, from one visit onward, only the fields the admin cha
 What an appointment would be charged now: its appointment override if set, otherwise the client's negotiated rate, otherwise the Job rate, applied to the scheduled minutes and the number of Cleaners.
 
 **Billed amount**:
-The amount frozen on an appointment's live invoice line. It wins over the Live price wherever a price is shown.
+The amount frozen on an appointment's line when its invoice is issued. It wins over the Live price wherever a price is shown. A line on a draft has no Billed amount yet: it follows the Live price.
 _Avoid_: billed price cache
 
 **Unpriced**:
@@ -102,8 +102,10 @@ The automatic pass, made after a Billing period ends, that creates one draft inv
 - A **Cleaner** has one default **Pay rate** and zero or more **Job pay overrides**
 - A **Pay run** covers many visits; each visit's pay is **Clocked time** × the applicable **Pay rate**, plus its **Visit add-ons**
 - A visit belongs to at most one **Pay run**
-- An appointment shows its **Billed amount** if it is on a live invoice, otherwise its **Live price**
-- A cancelled appointment never has a **Live claim**; it must be removed from its draft, or its invoice voided, before it can be cancelled
+- An appointment shows its **Billed amount** if it is on an issued or paid invoice, otherwise its **Live price**
+- A cancelled appointment never has a **Live claim**. Cancelling an appointment on a draft removes it from the draft, and a draft left empty is deleted; an appointment on an issued invoice can't be cancelled until the invoice is voided
+- Moving an appointment on a draft to another client removes it from the draft, the same way
+- An appointment on a draft that stops qualifying (no longer completed, or rescheduled past the draft's period) stays on it with a warning, and bulk issue skips that draft
 - An invoice moves draft → issued → paid, and a draft or issued invoice can be voided; voiding releases its **Live claims**
 
 ## Flagged ambiguities
