@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation'
 import { fetchClientJobRules } from '@/lib/pricing/lookup'
 import { durationMinutes, parseDollarsToCents } from '@/lib/pricing/money'
 import { type ClientJobRule, pickEffectiveRule, resolveAppointmentPrice } from '@/lib/pricing/resolve'
+import { getBusinessDate } from '@/lib/schedule'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
@@ -510,11 +511,7 @@ export async function updateInvoice(
 }
 
 function todayDateString() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return getBusinessDate(new Date())
 }
 
 export async function issueInvoice(id: string): Promise<InvoiceActionResult> {

@@ -10,6 +10,7 @@ import {
 	voidInvoice,
 } from '@/lib/actions/invoices'
 import { formatCents, formatRate } from '@/lib/pricing/money'
+import { formatBusinessDateTime, getBusinessDate } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 
 type InvoiceDetailPageProps = {
@@ -80,11 +81,7 @@ function formatDateTime(date: string, time: string) {
 }
 
 function isPastDate(value: string) {
-	const [year, month, day] = value.split('-').map(Number)
-	const dueDate = new Date(year, month - 1, day)
-	const today = new Date()
-	today.setHours(0, 0, 0, 0)
-	return dueDate.getTime() < today.getTime()
+	return value < getBusinessDate(new Date())
 }
 
 function effectiveStatus(invoice: InvoiceDetailRow) {
@@ -299,7 +296,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 							</div>
 							<div>
 								<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Created</p>
-								<p className="mt-1 text-sm text-neutral-700">{new Date(invoice.created_at).toLocaleString('en-US')}</p>
+								<p className="mt-1 text-sm text-neutral-700">{formatBusinessDateTime(new Date(invoice.created_at))}</p>
 							</div>
 						</div>
 
