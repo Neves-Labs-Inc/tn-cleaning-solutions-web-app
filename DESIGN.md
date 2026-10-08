@@ -303,7 +303,7 @@ Each surface and each async action specifies **loading, empty, error, success**.
 | Schedule, no appointments at all | No appointments yet | When you're added to a stop it will show up here. | — |
 | Schedule, "Upcoming" with only today | Nothing after today | You're all caught up. | — |
 | Schedule, "Recent" | No recent stops | Stops from the last 7 days will show here. | — |
-| Time Sheets, month empty | No sessions this month | Clock in on an appointment and it will appear here. | Go to Schedule |
+| Time Sheets, month empty | No sessions in {Month YYYY} | Clock in on an appointment and it will appear here. | Go to Schedule |
 | Time Sheets, search no match | No matches | Try a different date, client, or job. | Clear search |
 | Crew list on a stop | Just you on this stop | — | — |
 | Admin lists | No {things} yet | — | New {thing} |

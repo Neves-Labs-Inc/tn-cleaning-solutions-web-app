@@ -46,7 +46,7 @@ export default function StatusBadge({
       variant="outline"
       data-tone={tone}
       className={cn(
-        "h-6 gap-1 px-2.5 text-xs font-medium tracking-tight transition-colors duration-base [&>svg]:size-3.5!",
+        "gap-1 font-medium tracking-tight transition-colors duration-base",
         TONE_CLASSES[tone],
         className,
       )}

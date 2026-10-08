@@ -63,14 +63,21 @@
 }
 
 /* Tailwind has no --duration-* theme namespace, so these are explicit utilities. */
+/* --tw-duration is what tw-animate-css reads, so animate-in honors these too. */
 @utility duration-fast {
+  --tw-duration: var(--duration-fast);
   transition-duration: var(--duration-fast);
+  animation-duration: var(--duration-fast);
 }
 @utility duration-base {
+  --tw-duration: var(--duration-base);
   transition-duration: var(--duration-base);
+  animation-duration: var(--duration-base);
 }
 @utility duration-slow {
+  --tw-duration: var(--duration-slow);
   transition-duration: var(--duration-slow);
+  animation-duration: var(--duration-slow);
 }
 
 :root {
@@ -187,6 +194,20 @@
   --status-danger: oklch(0.64 0.21 25 / 0.15);
   --status-danger-foreground: oklch(0.82 0.10 20);
   --status-danger-border: oklch(0.64 0.21 25 / 0.35);
+}
+
+/* vaul ships 0.5s; DESIGN §13: 200ms in / 140ms out */
+/* vaul injects its <style> after ours at runtime and its overlay rule is (0,2,0); the extra
+   [data-vaul-snap-points] keeps these at (0,3,0) so they win regardless of order. */
+[data-vaul-drawer][data-vaul-snap-points][data-state="open"],
+[data-vaul-overlay][data-vaul-snap-points][data-state="open"] {
+  animation-duration: var(--duration-base);
+  animation-timing-function: var(--ease-out-quart);
+}
+[data-vaul-drawer][data-vaul-snap-points][data-state="closed"],
+[data-vaul-overlay][data-vaul-snap-points][data-state="closed"] {
+  animation-duration: 140ms;
+  animation-timing-function: var(--ease-in-quart);
 }
 
 /* Reduced motion: stop everything that moves, keep opacity crossfades perceivable. */

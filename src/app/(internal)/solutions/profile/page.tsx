@@ -59,10 +59,7 @@ export default async function ProfilePage() {
                         </dd>
                         <dt className="text-xs font-medium text-muted-foreground">Role</dt>
                         <dd>
-                            <Badge
-                                variant={role === 'admin' ? 'default' : 'secondary'}
-                                className="h-6 text-xs"
-                            >
+                            <Badge variant={role === 'admin' ? 'default' : 'secondary'}>
                                 {formatRole(role)}
                             </Badge>
                         </dd>

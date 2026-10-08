@@ -87,7 +87,7 @@ export function ScheduleTodayCard({ stop }: { stop: ScheduleStop }) {
 								<span className="min-w-0 flex-1 text-sm font-medium break-words text-foreground">
 									{member.full_name}
 									{isYou ? (
-										<Badge variant="secondary" className="ml-2 h-auto px-2 py-0.5 text-xs">
+										<Badge variant="secondary" className="ml-2">
 											You
 										</Badge>
 									) : null}

@@ -19,10 +19,10 @@ export default function ScheduleError({
 
 	return (
 		<div className="space-y-4">
-			<Alert variant="destructive" className="text-sm">
+			<Alert variant="destructive">
 				<AlertCircle aria-hidden="true" />
 				<AlertTitle>Couldn&apos;t load your schedule</AlertTitle>
-				<AlertDescription className="text-sm">
+				<AlertDescription>
 					We could not load your assignments right now. Please try again in a moment or contact admin if the problem continues.
 				</AlertDescription>
 			</Alert>

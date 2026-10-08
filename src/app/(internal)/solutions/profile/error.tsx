@@ -15,7 +15,7 @@ export default function ProfileError({
         <div className="mx-auto max-w-2xl space-y-4">
             <Alert variant="destructive">
                 <AlertCircle aria-hidden="true" />
-                <AlertTitle className="text-sm">Couldn&apos;t load your profile</AlertTitle>
+                <AlertTitle>Couldn&apos;t load your profile</AlertTitle>
                 <AlertDescription>Something went wrong on our side.</AlertDescription>
             </Alert>
             <Button variant="outline" onClick={() => unstable_retry()}>

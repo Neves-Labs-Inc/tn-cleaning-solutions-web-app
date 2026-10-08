@@ -40,11 +40,11 @@ function ScheduleAlert({ title, description, isWarning = false }: { title: strin
 	return (
 		<Alert
 			variant={isWarning ? 'default' : 'destructive'}
-			className={isWarning ? 'border-status-warning-border bg-status-warning text-sm text-status-warning-foreground' : 'text-sm'}
+			className={isWarning ? 'border-status-warning-border bg-status-warning text-status-warning-foreground' : undefined}
 		>
 			<AlertCircle aria-hidden="true" />
 			<AlertTitle>{title}</AlertTitle>
-			<AlertDescription className={isWarning ? 'text-sm text-status-warning-foreground' : 'text-sm'}>{description}</AlertDescription>
+			<AlertDescription className={isWarning ? 'text-status-warning-foreground' : undefined}>{description}</AlertDescription>
 		</Alert>
 	)
 }

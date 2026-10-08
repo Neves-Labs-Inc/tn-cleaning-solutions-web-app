@@ -86,7 +86,7 @@ export function PasswordForm() {
               className="mt-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart"
             >
               <AlertCircle aria-hidden="true" />
-              <AlertTitle className="text-sm">{state.error}</AlertTitle>
+              <AlertTitle>{state.error}</AlertTitle>
             </Alert>
           ) : null}
 

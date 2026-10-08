@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { CheckCircle2, CircleAlert, Clock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -25,6 +25,10 @@ type ClockActionsProps = {
 
 const NETWORK_ERROR_MESSAGE = "Couldn't reach the server. Check your connection and try again."
 
+// The Work completed box renders after the refresh lands; wait out the sheet's 140ms exit so the
+// focus trap has released.
+const FOCUS_RETURN_DELAY_MS = 200
+
 // Both variants are w-full with no margin; the bar's padding comes from its sticky wrapper.
 const ROOT_CLASSES: Record<NonNullable<ClockActionsProps['variant']>, string> = {
 	inline: 'w-full space-y-3',
@@ -36,12 +40,32 @@ export function ClockActions({ appointmentEmployeeId, clockStatus, appointmentSt
 	const [isPending, startTransition] = useTransition()
 	const [error, setError] = useState<string | null>(null)
 	const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+	const clockOutButtonRef = useRef<HTMLButtonElement>(null)
+	const completedRef = useRef<HTMLDivElement>(null)
+	const previousClockStatusRef = useRef(clockStatus)
 
 	const isDisabled = appointmentStatus === 'completed' || appointmentStatus === 'cancelled'
 	const disabledMessage = `This appointment is ${appointmentStatus}. Clock actions are disabled.`
 	// After a refused clock the refresh flips isDisabled, and the standing notice then says the
 	// same thing as the inline error, so the error yields to it.
 	const shownError = isDisabled && error === disabledMessage ? null : error
+
+	// Fires when the sheet unmounts for every close path (vaul's onAnimationEnd and onOpenChange skip the
+	// programmatic close), and replaces Radix's default return to a trigger this drawer does not have.
+	const handleDrawerCloseAutoFocus = (event: Event) => {
+		event.preventDefault()
+		;(completedRef.current ?? clockOutButtonRef.current)?.focus()
+	}
+
+	// The Clock Out button unmounts on success, so the "Work completed" box takes focus once it renders.
+	useEffect(() => {
+		const hasJustClockedOut = previousClockStatusRef.current === 'clocked_in' && clockStatus === 'clocked_out'
+		previousClockStatusRef.current = clockStatus
+		if (!hasJustClockedOut) return
+
+		const timer = setTimeout(() => completedRef.current?.focus(), FOCUS_RETURN_DELAY_MS)
+		return () => clearTimeout(timer)
+	}, [clockStatus])
 
 	const runClockAction = (action: (id: string) => Promise<ClockActionState>, getSuccessMessage: () => string) => {
 		setError(null)
@@ -87,21 +111,26 @@ export function ClockActions({ appointmentEmployeeId, clockStatus, appointmentSt
 			) : null}
 
 			{clockStatus === 'clocked_in' ? (
-				<Button type="button" size="lg" variant="secondary" className="w-full" onClick={() => setIsDrawerOpen(true)} disabled={isDisabled}>
+				<Button ref={clockOutButtonRef} type="button" size="lg" variant="secondary" className="w-full" onClick={() => setIsDrawerOpen(true)} disabled={isDisabled}>
 					<CheckCircle2 aria-hidden="true" />
 					Clock Out
 				</Button>
 			) : null}
 
 			{clockStatus === 'clocked_out' ? (
-				<div role="status" className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-border bg-muted text-sm font-medium text-foreground">
+				<div
+					ref={completedRef}
+					tabIndex={-1}
+					role="status"
+					className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-border bg-muted text-sm font-medium text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+				>
 					<CheckCircle2 className="size-4 text-muted-foreground" aria-hidden="true" />
 					Work completed
 				</div>
 			) : null}
 
 			{shownError ? (
-				<Alert variant="destructive" className="text-sm animate-in fade-in-0 slide-in-from-top-1 duration-200">
+				<Alert variant="destructive" className="animate-in fade-in-0 slide-in-from-top-1 duration-base ease-out-quart">
 					<CircleAlert aria-hidden="true" />
 					<AlertTitle className="font-medium">{shownError}</AlertTitle>
 				</Alert>
@@ -110,10 +139,10 @@ export function ClockActions({ appointmentEmployeeId, clockStatus, appointmentSt
 			{isDisabled ? <p className="text-sm text-muted-foreground">{disabledMessage}</p> : null}
 
 			<Drawer open={isDrawerOpen} onOpenChange={handleDrawerOpenChange} dismissible={!isPending} autoFocus>
-				<DrawerContent className="sm:mx-auto sm:max-w-md">
+				<DrawerContent className="sm:mx-auto sm:max-w-md" onCloseAutoFocus={handleDrawerCloseAutoFocus}>
 					<DrawerHeader>
-						<DrawerTitle className="text-lg font-semibold tracking-tight">Confirm Clock out?</DrawerTitle>
-						<DrawerDescription className="text-sm leading-6">
+						<DrawerTitle>Confirm Clock out?</DrawerTitle>
+						<DrawerDescription>
 							{jobName ? `You can't clock back in to ${jobName} after clocking out.` : "You can't clock back in after clocking out."}
 						</DrawerDescription>
 					</DrawerHeader>
