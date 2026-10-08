@@ -80,7 +80,7 @@ The amount frozen on an appointment's live invoice line. It wins over the Live p
 _Avoid_: billed price cache
 
 **Unpriced**:
-An appointment with no Job, so no Live price can be worked out. It is never billed as $0.
+An appointment with no Job, so no Live price can be worked out. It is never issued at $0: an Invoice run puts it on a draft as a $0 line, and that draft can't be issued until the line is priced.
 
 ### Invoicing
 
@@ -88,7 +88,14 @@ An appointment with no Job, so no Live price can be worked out. It is never bill
 An appointment's line on an invoice that has not been voided. An appointment has at most one Live claim.
 
 **Billable appointment**:
-An appointment that is not cancelled, has no Live claim, and is not Unpriced.
+An appointment that is not cancelled, has no Live claim, and is not Unpriced. This is what the manual invoice flow can add; an Invoice run also takes Unpriced ones.
+
+**Billing period**:
+The span one automatic invoice covers: weekly, biweekly or monthly, set once for the whole business. Weeks start Sunday, Central time. A change takes effect immediately.
+_Avoid_: billing cycle (implies a per-client setting)
+
+**Invoice run**:
+The automatic pass, made after a Billing period ends, that creates one draft invoice per active client from their completed appointments that are not cancelled and have no Live claim, scheduled on or before the period's end. Unpriced ones go on as $0 lines. Late visits are picked up by the next run; a run never touches an existing draft and never bills a visit twice. Its drafts carry an "automatic" badge and are issued by an admin, one at a time or in bulk.
 
 ## Relationships
 
