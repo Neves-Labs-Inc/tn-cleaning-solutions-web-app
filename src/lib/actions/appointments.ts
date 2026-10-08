@@ -645,6 +645,16 @@ export async function updateAppointment(
       return { success: false, error: 'Appointment not found.' }
     }
 
+    // The status the form displayed, not the one read just now: a Cleaner's clock can move the
+    // status while the form is open, and saving the form's stale value would silently undo it.
+    const expectedStatus = String(formData.get('expected_status') ?? existingAppointment.status)
+    if (expectedStatus !== existingAppointment.status) {
+      return {
+        success: false,
+        error: 'The appointment changed while you were editing it. Refresh and try again.',
+      }
+    }
+
     if (existingAppointment.status === 'completed') {
       return {
         success: false,
@@ -731,7 +741,7 @@ export async function updateAppointment(
         })
         .eq('id', id)
         .eq('is_archived', false)
-        .eq('status', existingAppointment.status)
+        .eq('status', expectedStatus)
         .select(
           'id, client_id, job_id, recurrence_series_id, location_id, scheduled_date, scheduled_start_time, scheduled_end_time, price_override_cents, notes'
         )

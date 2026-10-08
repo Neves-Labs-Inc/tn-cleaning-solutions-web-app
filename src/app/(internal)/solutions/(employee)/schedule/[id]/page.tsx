@@ -1,16 +1,18 @@
-import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import { ArrowLeft, Calendar, CheckCircle, Clock, Phone, User } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
+import { MapPin, Phone } from 'lucide-react'
 
 import { ClockActions } from '@/components/employee/clock-actions'
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { CrewRow, type CrewMember } from '@/components/employee/crew-row'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import StatusBadge, { appointmentStatusBadge, clockStatusBadge } from '@/components/ui/status-badge'
+import { buildMapsUrl, getClockStatus } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 import { cn } from '@/lib/utils'
 import type { Views } from '@/types/database'
 
 type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
-type ClockStatus = 'clocked_in' | 'clocked_out' | 'not_started'
 
 type EmployeeSummary = {
 	id: string
@@ -52,79 +54,12 @@ type TeamMemberRecord = {
 	employees_employee_view: Pick<Views<'employees_employee_view'>, 'id' | 'full_name' | 'phone'>
 }
 
-function getClockStatus(clockedInAt: string | null, clockedOutAt: string | null): ClockStatus {
-	if (clockedOutAt) {
-		return 'clocked_out'
-	}
-
-	if (clockedInAt) {
-		return 'clocked_in'
-	}
-
-	return 'not_started'
-}
-
-function formatDateLabel(dateString: string) {
-	return format(parseISO(dateString), 'EEE, MMM d')
-}
+const DATE_FORMAT = 'EEE, MMM d'
+const TIME_FORMAT = 'h:mm a'
+const LINK_BUTTON_CLASSES = 'h-auto min-h-11 w-full justify-start py-2 text-left whitespace-normal wrap-anywhere active:bg-muted active:scale-[0.98]'
 
 function formatTimeLabel(dateString: string, timeString: string) {
-	return format(new Date(`${dateString}T${timeString}`), 'h:mm a')
-}
-
-function StatusBadge({ status }: { status: AppointmentStatus }) {
-	const styles = {
-		scheduled: 'border-blue-200 bg-blue-50 text-blue-700',
-		in_progress: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-		completed: 'border-neutral-200 bg-neutral-100 text-neutral-600',
-		cancelled: 'border-red-200 bg-red-50 text-red-700',
-	}
-
-	const labels = {
-		scheduled: 'Scheduled',
-		in_progress: 'In Progress',
-		completed: 'Completed',
-		cancelled: 'Cancelled',
-	}
-
-	return <span className={cn('rounded-full border px-2 py-1 text-xs font-medium tracking-tight', styles[status])}>{labels[status]}</span>
-}
-
-function ClockStatusPill({
-	status,
-	clockedInAt,
-	clockedOutAt,
-	isCurrentUser = false,
-}: {
-	status: ClockStatus
-	clockedInAt: string | null
-	clockedOutAt: string | null
-	isCurrentUser?: boolean
-}) {
-	const styles = {
-		clocked_in: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-		clocked_out: 'border-neutral-200 bg-neutral-100 text-neutral-600',
-		not_started: 'border-amber-200 bg-amber-50 text-amber-700',
-	}
-
-	const labels = {
-		clocked_in: clockedInAt ? `Clocked in at ${format(new Date(clockedInAt), 'h:mm a')}` : 'Clocked in',
-		clocked_out: clockedOutAt ? `Clocked out at ${format(new Date(clockedOutAt), 'h:mm a')}` : 'Clocked out',
-		not_started: 'Not started',
-	}
-
-	return (
-		<span
-			className={cn(
-				'inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[0.7rem] font-medium tracking-tight',
-				styles[status],
-				isCurrentUser && 'ring-1 ring-emerald-500/20'
-			)}
-		>
-			{status === 'clocked_in' ? <CheckCircle className="size-3" aria-hidden="true" /> : <Clock className="size-3" aria-hidden="true" />}
-			{labels[status]}
-		</span>
-	)
+	return format(new Date(`${dateString}T${timeString}`), TIME_FORMAT)
 }
 
 export default async function AppointmentDetailPage({
@@ -209,7 +144,7 @@ export default async function AppointmentDetailPage({
 		)
 		.eq('appointment_id', appointment.appointment_id)
 
-	const teamMembers = ((teamRows ?? []) as unknown as TeamMemberRecord[]).map((member) => ({
+	const teamMembers: CrewMember[] = ((teamRows ?? []) as unknown as TeamMemberRecord[]).map((member) => ({
 		id: member.employees_employee_view.id,
 		full_name: member.employees_employee_view.full_name,
 		phone: member.employees_employee_view.phone,
@@ -229,139 +164,91 @@ export default async function AppointmentDetailPage({
 		})
 	}
 
-	const client = appointment.appointments.clients
-	const job = appointment.appointments.jobs
+	const scheduled = appointment.appointments
+	const client = scheduled.clients
+	const job = scheduled.jobs
+	const address = scheduled.client_locations?.address ?? null
 	const currentMember = teamMembers.find((member) => member.id === currentEmployee.id)
 	const currentClockStatus = getClockStatus(currentMember?.clocked_in_at ?? null, currentMember?.clocked_out_at ?? null)
+	const statusBadge = appointmentStatusBadge(scheduled.status)
+	const yourBadge = clockStatusBadge(currentClockStatus, currentMember?.clocked_in_at ?? null, currentMember?.clocked_out_at ?? null)
+	// You first, then everyone else in fetched order (sort is stable).
+	const orderedCrew = [...teamMembers].sort((a, b) => Number(b.id === currentEmployee.id) - Number(a.id === currentEmployee.id))
 
 	return (
-		<div className="space-y-6">
-			<div className="flex items-center justify-between gap-4">
-				<Link
-					href="/solutions/schedule"
-					className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:border-emerald-300 hover:bg-emerald-50"
-				>
-					<ArrowLeft className="size-3.5" aria-hidden="true" />
-					Back to schedule
-				</Link>
-				<StatusBadge status={appointment.appointments.status} />
+		<div className="mx-auto grid max-w-2xl grid-cols-1 animate-in gap-6 fade-in-0 duration-slow lg:max-w-4xl lg:grid-cols-2 lg:gap-8">
+			<div className="space-y-3 md:row-start-1 lg:col-span-2">
+				<h1 className="text-2xl font-semibold tracking-tight text-balance wrap-anywhere text-foreground">{job.name}</h1>
+				<StatusBadge tone={statusBadge.tone}>{statusBadge.label}</StatusBadge>
+				<p className="text-sm text-muted-foreground tabular-nums">
+					{format(parseISO(scheduled.scheduled_date), DATE_FORMAT)} · {formatTimeLabel(scheduled.scheduled_date, scheduled.scheduled_start_time)} –{' '}
+					{formatTimeLabel(scheduled.scheduled_date, scheduled.scheduled_end_time)}
+				</p>
 			</div>
 
-			<section className="rounded-3xl border border-emerald-200/80 bg-white/90 p-6 shadow-sm shadow-emerald-950/5 sm:p-8">
-				<div className="space-y-3">
-					<p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-700">Appointment detail</p>
-					<h1 className="text-3xl font-semibold tracking-tight text-neutral-950">{job.name}</h1>
-					<p className="text-sm leading-6 text-neutral-600">
-						{formatDateLabel(appointment.appointments.scheduled_date)} · {formatTimeLabel(appointment.appointments.scheduled_date, appointment.appointments.scheduled_start_time)} - {formatTimeLabel(appointment.appointments.scheduled_date, appointment.appointments.scheduled_end_time)}
-					</p>
-				</div>
-			</section>
-
-			<div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-				<Card className="border-emerald-100 bg-white/95 shadow-sm shadow-emerald-950/5">
-					<CardHeader className="border-b border-emerald-50 pb-4">
-						<div className="flex items-center gap-2 text-sm text-neutral-600">
-							<Calendar className="size-4 text-emerald-600" aria-hidden="true" />
-							<span>{formatDateLabel(appointment.appointments.scheduled_date)}</span>
-						</div>
+			<div className="space-y-6 lg:col-start-1 lg:row-start-3">
+				<Card className="shadow-sm">
+					<CardHeader>
+						<CardTitle className="text-base font-semibold wrap-anywhere">{client.name}</CardTitle>
 					</CardHeader>
-					<CardContent className="space-y-5 py-4">
-						<div className="space-y-2">
-							<h2 className="text-base font-semibold text-neutral-950">{client.name}</h2>
-							{appointment.appointments.client_locations ? (
-								<p className="text-sm text-neutral-600">
-									{appointment.appointments.client_locations.address}
-								</p>
+					{address || client.phone ? (
+						<CardContent className="grid gap-2 text-sm leading-6 sm:grid-cols-2">
+							{address ? (
+								<Button variant="outline" className={LINK_BUTTON_CLASSES} render={<a href={buildMapsUrl(address)} target="_blank" rel="noopener" />} nativeButton={false}>
+									<MapPin aria-hidden="true" />
+									{address}
+								</Button>
 							) : null}
 							{client.phone ? (
-								<a href={`tel:${client.phone}`} className="inline-flex items-center gap-2 text-sm text-emerald-700 transition-colors hover:text-emerald-800">
-									<Phone className="size-4" aria-hidden="true" />
-									<span>{client.phone}</span>
-								</a>
+								<Button variant="outline" className={LINK_BUTTON_CLASSES} render={<a href={`tel:${client.phone}`} />} nativeButton={false}>
+									<Phone aria-hidden="true" />
+									{client.phone}
+								</Button>
 							) : null}
-						</div>
-
-						<div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3">
-							<p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Notes</p>
-							<p className="mt-2 text-sm leading-6 text-neutral-700">{appointment.appointments.notes || 'No notes were added for this appointment.'}</p>
-						</div>
-					</CardContent>
+						</CardContent>
+					) : null}
 				</Card>
 
-				<Card className="border-emerald-100 bg-white/95 shadow-sm shadow-emerald-950/5">
-					<CardHeader className="border-b border-emerald-50 pb-4">
-						<div className="flex items-center gap-2 text-sm text-neutral-600">
-							<User className="size-4 text-emerald-600" aria-hidden="true" />
-							<span>Team members and clock status</span>
-						</div>
+				<Card className="shadow-sm">
+					<CardHeader>
+						<CardTitle className="text-base font-semibold">Notes</CardTitle>
 					</CardHeader>
-					<CardContent className="space-y-4 py-4">
-						<div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3">
-							<p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Your clock status</p>
-							<p className="mt-1 text-sm text-neutral-700">
-								{currentClockStatus === 'clocked_in'
-									? 'You are currently clocked in on this appointment.'
-									: currentClockStatus === 'clocked_out'
-										? 'You have clocked out of this appointment.'
-										: 'You have not started this appointment yet.'}
-							</p>
-							<div className="mt-3">
-								<ClockStatusPill
-									status={currentClockStatus}
-									clockedInAt={currentMember?.clocked_in_at ?? null}
-									clockedOutAt={currentMember?.clocked_out_at ?? null}
-									isCurrentUser
-								/>
-							</div>
-							<div className="mt-4">
-								<ClockActions
-									appointmentEmployeeId={currentAssignmentId}
-									clockStatus={currentClockStatus}
-									appointmentStatus={appointment.appointments.status}
-								/>
-							</div>
-						</div>
-
-						<div className="space-y-2 border-t border-emerald-50 pt-4">
-							{teamMembers.map((member) => {
-								const isCurrentUser = member.id === currentEmployee.id
-								return (
-									<div
-										key={member.id}
-										className={cn(
-											'flex items-center justify-between gap-3 rounded-2xl border px-3 py-3',
-											isCurrentUser ? 'border-emerald-200 bg-emerald-50/70' : 'border-neutral-200 bg-white'
-										)}
-									>
-										<div className="min-w-0 space-y-1">
-											<div className="flex items-center gap-2">
-												<User className={cn('size-4', isCurrentUser ? 'text-emerald-600' : 'text-neutral-400')} aria-hidden="true" />
-												<span className={cn('text-sm font-medium text-neutral-900', isCurrentUser && 'font-semibold text-emerald-800')}>
-													{member.full_name}
-												</span>
-												{isCurrentUser ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-emerald-700">You</span> : null}
-											</div>
-											{member.phone ? (
-												<a href={`tel:${member.phone}`} className="inline-flex items-center gap-1.5 text-xs text-neutral-500 transition-colors hover:text-emerald-700">
-													<Phone className="size-3.5" aria-hidden="true" />
-													<span>{member.phone}</span>
-												</a>
-											) : (
-												<p className="text-xs text-neutral-400">No phone on file</p>
-											)}
-										</div>
-										<ClockStatusPill
-											status={member.clockStatus}
-											clockedInAt={member.clocked_in_at}
-											clockedOutAt={member.clocked_out_at}
-											isCurrentUser={isCurrentUser}
-										/>
-									</div>
-								)
-							})}
-						</div>
+					<CardContent>
+						<p className={cn('text-base leading-7 wrap-anywhere whitespace-pre-line', scheduled.notes ? 'text-foreground' : 'text-muted-foreground')}>
+							{scheduled.notes || 'No notes were added for this appointment.'}
+						</p>
 					</CardContent>
 				</Card>
+			</div>
+
+			<Card className="gap-0 p-0 shadow-sm lg:col-start-2 lg:row-start-3 lg:self-start">
+				<CardHeader className="px-4 py-4 sm:px-5">
+					<CardTitle className="text-base font-semibold">Crew ({orderedCrew.length})</CardTitle>
+				</CardHeader>
+				<ul className="divide-y divide-border border-t">
+					{orderedCrew.map((member) => (
+						<CrewRow key={member.id} member={member} isCurrentUser={member.id === currentEmployee.id} />
+					))}
+				</ul>
+			</Card>
+
+			{/* Last in the DOM so sticky pins it under the scrolling crew list; lg:row-start-2 moves it under the summary. */}
+			<div className="sticky bottom-[calc(3.5rem+var(--safe-bottom))] z-30 -mx-4 border-t bg-background/95 px-4 py-3 shadow-lg backdrop-blur sm:-mx-6 md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:row-start-2 md:shadow-none lg:col-span-2">
+				<div className="md:max-w-sm">
+					<p className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
+						Your status
+						<StatusBadge key={currentClockStatus} tone={yourBadge.tone} icon={yourBadge.icon} className="animate-in zoom-in-95 duration-base">
+							{yourBadge.label}
+						</StatusBadge>
+					</p>
+					<ClockActions
+						variant="bar"
+						appointmentEmployeeId={currentAssignmentId}
+						clockStatus={currentClockStatus}
+						appointmentStatus={scheduled.status}
+						jobName={job.name}
+					/>
+				</div>
 			</div>
 		</div>
 	)

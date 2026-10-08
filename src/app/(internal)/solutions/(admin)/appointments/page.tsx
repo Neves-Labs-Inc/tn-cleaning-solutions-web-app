@@ -5,6 +5,7 @@ import type { AppointmentSummary } from '@/components/admin/appointments-types'
 import { fetchClientJobRules } from '@/lib/pricing/lookup'
 import { durationMinutes } from '@/lib/pricing/money'
 import { pickEffectiveRule, resolveAppointmentPrice, type ClientJobRule } from '@/lib/pricing/resolve'
+import { toBusinessWallClock } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 
 type AppointmentsPageProps = {
@@ -57,7 +58,7 @@ function parseYear(value: string | undefined, fallback: number) {
 }
 
 export default async function AppointmentsPage({ searchParams }: AppointmentsPageProps) {
-  const now = new Date()
+  const now = toBusinessWallClock(new Date())
   const params = await searchParams
 
   const month = parseMonth(normalizeParam(params.month), now.getMonth() + 1)

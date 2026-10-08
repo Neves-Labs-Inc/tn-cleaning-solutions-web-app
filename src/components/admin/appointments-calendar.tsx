@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { useMemo } from 'react'
-import { addMonths, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
+import { addMonths, endOfMonth, endOfWeek, format, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
 import type { AppointmentSummary } from '@/components/admin/appointments-types'
 import { Button } from '@/components/ui/button'
+import { getBusinessDate } from '@/lib/schedule'
 import { cn } from '@/lib/utils'
 
 type AppointmentsCalendarProps = {
@@ -45,7 +46,7 @@ export function AppointmentsCalendar({ appointments, month, year }: Appointments
 
   const monthDate = new Date(year, month - 1, 1)
   const monthLabel = format(monthDate, 'MMMM yyyy')
-  const today = new Date()
+  const todayKey = getBusinessDate(new Date())
 
   const days = useMemo(() => {
     const start = startOfWeek(startOfMonth(monthDate), { weekStartsOn: 0 })
@@ -129,7 +130,7 @@ export function AppointmentsCalendar({ appointments, month, year }: Appointments
           const dayKey = toDateString(day)
           const dayAppointments = appointmentsByDay.get(dayKey) ?? []
           const inCurrentMonth = isSameMonth(day, monthDate)
-          const isToday = isSameDay(day, today)
+          const isToday = dayKey === todayKey
 
           return (
             <div

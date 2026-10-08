@@ -184,7 +184,9 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
             This appointment cannot be edited because it has been cancelled. Reopen it to make changes.
           </section>
         ) : (
+          // Keyed on the status so a clock-driven change remounts the uncontrolled status select instead of leaving it stale.
           <AppointmentForm
+            key={typedAppointment.status}
             clients={(clients ?? []).map((client) => ({
               id: client.id,
               name: client.name,

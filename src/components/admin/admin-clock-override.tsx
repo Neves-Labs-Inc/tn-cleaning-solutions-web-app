@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { updateAppointmentEmployeeAdminNotes, updateClockTime } from '@/lib/actions/appointments'
+import { fromBusinessWallClock, toBusinessWallClock } from '@/lib/schedule'
 
 type AdminClockOverrideProps = {
   appointmentEmployees: Array<{
@@ -26,12 +27,13 @@ type RowFeedback = {
   message: string
 } | null
 
+// The datetime-local fields are Eastern wall time regardless of the browser's zone.
 function toDateTimeLocalValue(value: string | null) {
   if (!value) {
     return ''
   }
 
-  return format(parseISO(value), "yyyy-MM-dd'T'HH:mm")
+  return format(toBusinessWallClock(parseISO(value)), "yyyy-MM-dd'T'HH:mm")
 }
 
 function toIsoValue(value: string) {
@@ -39,7 +41,7 @@ function toIsoValue(value: string) {
     return null
   }
 
-  return new Date(value).toISOString()
+  return fromBusinessWallClock(new Date(value)).toISOString()
 }
 
 function EmployeeClockRow({

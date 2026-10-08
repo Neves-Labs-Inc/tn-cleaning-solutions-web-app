@@ -1,7 +1,9 @@
 import Link from 'next/link'
+import { addDays, format } from 'date-fns'
 import { AlertCircle, CalendarDays, CheckCircle, FileText, Users } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase/server'
+import { toBusinessWallClock } from '@/lib/schedule'
 import { 
     formatCurrency, 
     formatCreatedAtDate, 
@@ -26,14 +28,10 @@ import StatCard from '@/components/dashboard/statCard'
 export default async function DashboardPage() {
     const supabase = await createClient()
 
-    const today = new Date().toISOString().split('T')[0]
-    const todayDate = new Date()
-    const sevenDaysOut = new Date(todayDate)
-    sevenDaysOut.setDate(sevenDaysOut.getDate() + 7)
-    const sevenDaysOutStr = sevenDaysOut.toISOString().split('T')[0]
-    const tomorrowDate = new Date(todayDate)
-    tomorrowDate.setDate(tomorrowDate.getDate() + 1)
-    const tomorrowStr = tomorrowDate.toISOString().split('T')[0]
+    const now = toBusinessWallClock(new Date())
+    const today = format(now, 'yyyy-MM-dd')
+    const tomorrowStr = format(addDays(now, 1), 'yyyy-MM-dd')
+    const sevenDaysOutStr = format(addDays(now, 7), 'yyyy-MM-dd')
 
     const [
         todayAppointmentsResult,

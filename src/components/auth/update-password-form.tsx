@@ -1,13 +1,14 @@
 'use client'
 
+import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
-import { useActionState } from 'react'
-import { useFormStatus } from 'react-dom'
+import { useActionState, useEffect } from 'react'
 
+import { Alert, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { PasswordInput } from '@/components/ui/password-input'
-import { cn } from '@/lib/utils'
+import SubmitButton from '@/components/ui/submit-button'
 
 export type UpdatePasswordActionState = {
   status: 'editing' | 'invalid-link' | 'updated'
@@ -26,11 +27,8 @@ const initialState: UpdatePasswordActionState = {
   fieldErrors: {},
 }
 
-const submitButtonClassName =
-  'h-11 w-full rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(5,150,105,0.18)] transition-all hover:bg-emerald-700 hover:shadow-[0_16px_34px_rgba(5,150,105,0.22)]'
-
-const passwordInputClassName =
-  'h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20'
+const ALERT_ENTER_CLASSES =
+  'animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart'
 
 type UpdatePasswordFormProps = {
   code: string | null
@@ -42,74 +40,82 @@ type UpdatePasswordFormProps = {
 
 export const UpdatePasswordForm = ({ code, action }: UpdatePasswordFormProps) => {
   const [state, formAction] = useActionState(action, initialState)
-  let content
+
+  useEffect(() => {
+    const firstInvalidId = state.fieldErrors.password
+      ? 'password'
+      : state.fieldErrors.confirmPassword
+        ? 'confirmPassword'
+        : null
+    if (firstInvalidId) {
+      document.getElementById(firstInvalidId)?.focus()
+    }
+  }, [state])
 
   if (!code || state.status === 'invalid-link') {
-    content = (
+    return (
       <div className="space-y-4">
-        <div
-          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm leading-6 text-red-700"
+        <Alert
+          variant="destructive"
           role="alert"
+          aria-live="polite"
+          className={ALERT_ENTER_CLASSES}
         >
-          This password reset link is invalid, expired, or has already been used.
-        </div>
+          <AlertCircle aria-hidden="true" />
+          <AlertTitle>
+            This password reset link is invalid, expired, or has already been used.
+          </AlertTitle>
+        </Alert>
 
-        <p className="text-sm leading-6 text-neutral-600">
+        <p className="text-sm leading-6 text-muted-foreground">
           Request a new link and open it in the same browser you requested it
           from.
         </p>
 
-        <Link
-          href="/forgot-password"
-          className={cn(
-            'inline-flex items-center justify-center',
-            submitButtonClassName
-          )}
+        <Button
+          size="lg"
+          className="w-full active:scale-[0.98]"
+          render={<Link href="/forgot-password" />}
+          nativeButton={false}
         >
           Request a new link
-        </Link>
+        </Button>
       </div>
     )
-  } else if (state.status === 'updated') {
-    content = (
-      <div className="space-y-4" role="status" aria-live="polite">
-        <p className="text-sm leading-6 text-neutral-600">
+  }
+
+  if (state.status === 'updated') {
+    return (
+      <div
+        className="animate-in space-y-4 fade-in-0 duration-base ease-out-quart"
+        role="status"
+        aria-live="polite"
+      >
+        <p className="text-sm leading-6 text-muted-foreground">
           Your password has been updated and you are signed in.
         </p>
 
-        <Link
-          href="/solutions"
-          className={cn(
-            'inline-flex items-center justify-center',
-            submitButtonClassName
-          )}
+        <Button
+          size="lg"
+          className="w-full active:scale-[0.98]"
+          render={<Link href="/solutions" />}
+          nativeButton={false}
         >
           Continue to the portal
-        </Link>
+        </Button>
       </div>
     )
-  } else {
-    content = (
-      <form action={formAction} className="space-y-4">
-        <input type="hidden" name="code" value={code} />
+  }
 
-        {state.error && (
-          <div
-            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
-            role="alert"
-            aria-live="polite"
-          >
-            {state.error}
-          </div>
-        )}
+  return (
+    <form action={formAction}>
+      <input type="hidden" name="code" value={code} />
 
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="password"
-            className="text-sm font-medium text-neutral-700"
-          >
+      <FieldGroup>
+        <Field data-invalid={Boolean(state.fieldErrors.password)}>
+          <FieldLabel htmlFor="password" className="text-sm font-medium">
             New password
-          </Label>
+          </FieldLabel>
           <PasswordInput
             id="password"
             name="password"
@@ -120,28 +126,19 @@ export const UpdatePasswordForm = ({ code, action }: UpdatePasswordFormProps) =>
             aria-describedby={
               state.fieldErrors.password ? 'password-error' : undefined
             }
-            className={passwordInputClassName}
             placeholder="At least 8 characters"
           />
           {state.fieldErrors.password && (
-            <p
-              id="password-error"
-              className="text-xs text-red-600"
-              role="alert"
-              aria-live="polite"
-            >
+            <FieldError id="password-error" className="text-sm">
               {state.fieldErrors.password}
-            </p>
+            </FieldError>
           )}
-        </div>
+        </Field>
 
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="confirmPassword"
-            className="text-sm font-medium text-neutral-700"
-          >
+        <Field data-invalid={Boolean(state.fieldErrors.confirmPassword)}>
+          <FieldLabel htmlFor="confirmPassword" className="text-sm font-medium">
             Confirm new password
-          </Label>
+          </FieldLabel>
           <PasswordInput
             id="confirmPassword"
             name="confirmPassword"
@@ -153,44 +150,43 @@ export const UpdatePasswordForm = ({ code, action }: UpdatePasswordFormProps) =>
                 ? 'confirm-password-error'
                 : undefined
             }
-            className={passwordInputClassName}
             placeholder="Re-enter your new password"
           />
           {state.fieldErrors.confirmPassword && (
-            <p
-              id="confirm-password-error"
-              className="text-xs text-red-600"
-              role="alert"
-              aria-live="polite"
-            >
+            <FieldError id="confirm-password-error" className="text-sm">
               {state.fieldErrors.confirmPassword}
-            </p>
+            </FieldError>
           )}
-        </div>
+        </Field>
+      </FieldGroup>
 
-        <SubmitButton />
+      {state.error ? (
+        <Alert
+          variant="destructive"
+          role="alert"
+          aria-live="polite"
+          className={`mt-4 ${ALERT_ENTER_CLASSES}`}
+        >
+          <AlertCircle aria-hidden="true" />
+          <AlertTitle>{state.error}</AlertTitle>
+        </Alert>
+      ) : null}
 
-        <p className="text-center text-sm text-neutral-500">
-          <Link
-            href="/login"
-            className="font-medium text-emerald-700 transition-colors hover:text-emerald-800"
-          >
-            Back to login
-          </Link>
-        </p>
-      </form>
-    )
-  }
+      <SubmitButton
+        label="Update password"
+        pendingLabel="Updating..."
+        size="lg"
+        className="mt-6 w-full active:scale-[0.98]"
+      />
 
-  return content
-}
-
-const SubmitButton = () => {
-  const { pending } = useFormStatus()
-
-  return (
-    <Button type="submit" disabled={pending} className={submitButtonClassName}>
-      {pending ? 'Updating...' : 'Update password'}
-    </Button>
+      <p className="mt-2 text-center text-sm text-muted-foreground">
+        <Link
+          href="/login"
+          className="-mx-1 inline-flex min-h-11 items-center rounded-sm px-1 text-sm font-medium text-primary transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none active:text-primary/70 md:hover:text-primary/80 md:hover:underline md:hover:underline-offset-4"
+        >
+          Back to login
+        </Link>
+      </p>
+    </form>
   )
 }

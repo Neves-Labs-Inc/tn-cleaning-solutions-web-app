@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 
 import { AppointmentForm } from '@/components/admin/appointment-form'
 import { AppointmentScheduleContext } from '@/components/admin/new-appointment-schedule-context'
+import { toBusinessWallClock } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 
 type NewAppointmentPageProps = {
@@ -38,7 +39,7 @@ function parseYear(value: string | undefined, fallback: number) {
 export default async function NewAppointmentPage({ searchParams }: NewAppointmentPageProps) {
   const params = await searchParams
   const defaultDate = normalizeParam(params.date)
-  const fallbackDate = isDateValue(defaultDate) ? new Date(`${defaultDate}T00:00:00`) : new Date()
+  const fallbackDate = isDateValue(defaultDate) ? new Date(`${defaultDate}T00:00:00`) : toBusinessWallClock(new Date())
   const selectedMonth = parseMonth(normalizeParam(params.month), fallbackDate.getMonth() + 1)
   const selectedYear = parseYear(normalizeParam(params.year), fallbackDate.getFullYear())
 

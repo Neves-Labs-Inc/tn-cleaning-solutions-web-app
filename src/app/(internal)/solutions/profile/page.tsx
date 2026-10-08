@@ -1,23 +1,18 @@
+import { LogOut } from 'lucide-react'
 import { redirect } from 'next/navigation'
 
 import { PasswordForm } from '@/components/profile/password-form'
 import { ProfileForm } from '@/components/profile/profile-form'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import PageHeader from '@/components/ui/page-header'
+import SubmitButton from '@/components/ui/submit-button'
 import { createClient } from '@/lib/supabase/server'
 
-function RoleBadge({ role }: { role: string }) {
-    const isAdmin = role === 'admin'
+import signOutAction from '../signOutAction'
 
-    return (
-        <span
-            className={
-                isAdmin
-                    ? 'inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-emerald-700'
-                    : 'inline-flex items-center rounded-full bg-neutral-100 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-neutral-600'
-            }
-        >
-            {role}
-        </span>
-    )
+function formatRole(role: string): string {
+    return role.charAt(0).toUpperCase() + role.slice(1)
 }
 
 export default async function ProfilePage() {
@@ -43,55 +38,36 @@ export default async function ProfilePage() {
     }).format(new Date(user.created_at))
 
     return (
-        <div className="mx-auto max-w-2xl space-y-8">
-            <section className="relative overflow-hidden rounded-[1.75rem] border border-emerald-100 bg-white/95 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.06)] sm:p-8">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.12),transparent_35%),linear-gradient(135deg,rgba(16,185,129,0.05),transparent_58%)]" />
-                <div className="relative space-y-3">
-                    <p className="text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-emerald-700">
-                        Account center
-                    </p>
-                    <div className="space-y-2">
-                        <h1 className="text-3xl font-bold tracking-tight text-neutral-950">
-                            Profile
-                        </h1>
-                        <p className="max-w-xl text-sm leading-6 text-neutral-600 sm:text-base">
-                            Keep your contact details current and update your password from one
-                            focused workspace.
-                        </p>
-                    </div>
-                </div>
-            </section>
+        <div className="mx-auto max-w-2xl space-y-6 animate-in fade-in-0 duration-slow">
+            <PageHeader title="Profile" />
 
-            <section className="rounded-[1.75rem] border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5 sm:p-8">
-                <div className="flex items-start justify-between gap-4">
-                    <div>
-                        <h2 className="text-lg font-semibold tracking-tight text-neutral-950">
-                            Account information
-                        </h2>
-                        <p className="mt-1 text-sm text-neutral-600">
-                            Read-only details sourced from your authenticated session.
-                        </p>
-                    </div>
-                    <RoleBadge role={role} />
-                </div>
-
-                <dl className="mt-6 space-y-4 border-t border-emerald-100 pt-5">
-                    <div className="flex items-center justify-between gap-4">
-                        <dt className="text-sm text-neutral-600">Email</dt>
-                        <dd className="text-sm font-medium text-neutral-950">{user.email ?? 'Not available'}</dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                        <dt className="text-sm text-neutral-600">Role</dt>
-                        <dd>
-                            <RoleBadge role={role} />
+            <Card className="sm:py-5">
+                <CardHeader className="sm:px-5">
+                    <CardTitle className="text-lg font-semibold tracking-tight">Account</CardTitle>
+                </CardHeader>
+                <CardContent className="sm:px-5">
+                    <dl className="sm:items-baseline space-y-4 sm:grid sm:grid-cols-[auto_1fr] sm:gap-x-6 sm:gap-y-3 sm:space-y-0">
+                        <dt className="text-xs font-medium text-muted-foreground">Email</dt>
+                        <dd
+                            className={
+                                user.email
+                                    ? 'break-all text-sm text-foreground'
+                                    : 'text-sm text-muted-foreground'
+                            }
+                        >
+                            {user.email ?? 'Not available'}
                         </dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                        <dt className="text-sm text-neutral-600">Account created</dt>
-                        <dd className="text-sm font-medium text-neutral-950">{accountCreatedAt}</dd>
-                    </div>
-                </dl>
-            </section>
+                        <dt className="text-xs font-medium text-muted-foreground">Role</dt>
+                        <dd>
+                            <Badge variant={role === 'admin' ? 'default' : 'secondary'}>
+                                {formatRole(role)}
+                            </Badge>
+                        </dd>
+                        <dt className="text-xs font-medium text-muted-foreground">Account created</dt>
+                        <dd className="text-sm text-foreground">{accountCreatedAt}</dd>
+                    </dl>
+                </CardContent>
+            </Card>
 
             <ProfileForm
                 fullName={employee?.full_name ?? ''}
@@ -99,6 +75,17 @@ export default async function ProfilePage() {
             />
 
             <PasswordForm />
+
+            <form action={signOutAction}>
+                <SubmitButton
+                    label="Sign out"
+                    pendingLabel="Signing out…"
+                    variant="outline"
+                    size="lg"
+                    className="w-full"
+                    icon={<LogOut aria-hidden="true" />}
+                />
+            </form>
         </div>
     )
 }
