@@ -4,7 +4,7 @@ import { ChevronRight, MapPin, Phone } from 'lucide-react'
 import { ClockActions } from '@/components/employee/clock-actions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import StatusBadge, { appointmentStatusBadge, clockStatusBadge } from '@/components/ui/status-badge'
 import { buildMapsUrl, formatTimeRange } from '@/lib/schedule'
 import { cn } from '@/lib/utils'
@@ -43,6 +43,16 @@ export function ScheduleTodayCard({ stop }: { stop: ScheduleStop }) {
 					</div>
 				</Link>
 			</CardHeader>
+
+			<CardContent>
+				<ClockActions
+					variant="inline"
+					jobName={stop.jobName}
+					appointmentEmployeeId={stop.assignmentId}
+					appointmentStatus={stop.status}
+					clockStatus={stop.you.clockStatus}
+				/>
+			</CardContent>
 
 			<CardContent className="space-y-3">
 				{description ? <p className="text-sm leading-6 break-words text-foreground">{description}</p> : null}
@@ -113,16 +123,6 @@ export function ScheduleTodayCard({ stop }: { stop: ScheduleStop }) {
 					})}
 				</ul>
 			</CardContent>
-
-			<CardFooter className="pt-1">
-				<ClockActions
-					variant="inline"
-					jobName={stop.jobName}
-					appointmentEmployeeId={stop.assignmentId}
-					appointmentStatus={stop.status}
-					clockStatus={stop.you.clockStatus}
-				/>
-			</CardFooter>
 		</Card>
 	)
 }
