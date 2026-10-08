@@ -87,5 +87,6 @@ export function fromBusinessWallClock(wallClock: Date): Date {
   })
   const firstPass = guess - (toUtcMillis(readWallClock(new Date(guess))) - guess)
   const result = guess - (toUtcMillis(readWallClock(new Date(firstPass))) - firstPass)
-  return new Date(result)
+  // In the skipped spring-forward hour no instant reads back as `guess`; keep the pre-transition offset, which lands one hour later.
+  return new Date(toUtcMillis(readWallClock(new Date(result))) === guess ? result : firstPass)
 }

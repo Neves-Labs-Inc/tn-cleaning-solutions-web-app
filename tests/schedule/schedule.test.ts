@@ -289,6 +289,12 @@ test('fromBusinessWallClock: round-trips toBusinessWallClock across DST', () => 
   }
 })
 
+test('fromBusinessWallClock: the skipped spring-forward hour lands one hour later in any process zone', () => {
+  // 02:30 does not exist in Eastern on 8 Mar 2026; zones with their own gap already normalise it to 03:30 locally.
+  assert.equal(fromBusinessWallClock(new Date(2026, 2, 8, 2, 30)).toISOString(), '2026-03-08T07:30:00.000Z')
+  assert.equal(fromBusinessWallClock(new Date(2026, 2, 8, 3, 30)).toISOString(), '2026-03-08T07:30:00.000Z')
+})
+
 test('fromBusinessWallClock: the repeated fall-back hour resolves to the earlier EDT instant', () => {
   assert.equal(fromBusinessWallClock(new Date(2026, 10, 1, 1, 30)).toISOString(), '2026-11-01T05:30:00.000Z')
 })
