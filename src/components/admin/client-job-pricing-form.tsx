@@ -14,6 +14,7 @@ import {
   updateClientJobPricing,
 } from '@/lib/actions/client-job-pricing'
 import { formatRate } from '@/lib/pricing/money'
+import { getBusinessDate } from '@/lib/schedule'
 
 export type ClientJobPricingFormProps = {
   clientId: string
@@ -183,9 +184,5 @@ function describedBy(field: FieldName, message?: string, hasHelp = false) {
 }
 
 function todayDateString() {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-
-  return `${now.getFullYear()}-${month}-${day}`
+  return getBusinessDate(new Date())
 }
