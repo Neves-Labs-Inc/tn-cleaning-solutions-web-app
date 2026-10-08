@@ -3,6 +3,7 @@ import { Briefcase, CheckCircle, Clock } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
 import { WorkSessionsList } from '@/components/employee/work-sessions-list'
+import { toBusinessWallClock } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 import { BackButton } from '@/components/ui/back-button'
 
@@ -89,7 +90,7 @@ function compareRecords(left: TimeSheetRecord, right: TimeSheetRecord) {
 function parseMonth(month: string | string[] | undefined) {
 	const firstValue = Array.isArray(month) ? month[0] : month
 	if (!firstValue || !/^\d{4}-\d{2}$/.test(firstValue)) {
-		return format(new Date(), 'yyyy-MM')
+		return format(toBusinessWallClock(new Date()), 'yyyy-MM')
 	}
 
 	return firstValue
@@ -224,7 +225,7 @@ export default async function AdminEmployeeTimeSheetsPage({
 				</div>
 			</section>
 
-			<WorkSessionsList records={records} />
+			<WorkSessionsList records={records} monthLabel={format(selectedDate, 'MMMM yyyy')} now={new Date().toISOString()} />
 		</div>
 	)
 }

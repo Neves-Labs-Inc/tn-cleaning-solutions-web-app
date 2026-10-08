@@ -1,3 +1,5 @@
+import { formatBusinessDate } from '@/lib/schedule'
+
 
 export type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
 export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'void'
@@ -87,11 +89,7 @@ export function parseDateOnly(value: string): Date {
 }
 
 export function formatCreatedAtDate(value: string): string {
-    return new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-    }).format(new Date(value))
+    return formatBusinessDate(new Date(value))
 }
 
 export function formatDateLabel(value: string): string {

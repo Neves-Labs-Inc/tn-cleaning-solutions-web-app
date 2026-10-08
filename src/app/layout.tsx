@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Nunito_Sans } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,14 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "TN Cleaning Solutions"
+};
+
+// viewportFit: 'cover' lets the app paint under the notch; safe-area insets
+// (--safe-top / --safe-bottom in globals.css) are only non-zero with it.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

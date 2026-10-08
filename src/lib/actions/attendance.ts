@@ -17,6 +17,8 @@ const clockOutcomeErrors: Record<string, string> = {
 	already_clocked_in: 'Already clocked in',
 	already_clocked_out: 'Already clocked out',
 	clock_out_before_clock_in: 'Must clock in before clocking out',
+	appointment_completed: 'This appointment is completed. Clock actions are disabled.',
+	appointment_cancelled: 'This appointment is cancelled. Clock actions are disabled.',
 }
 
 export async function clockIn(appointmentEmployeeId: string): Promise<ClockActionState> {

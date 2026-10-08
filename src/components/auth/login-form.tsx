@@ -1,13 +1,14 @@
 'use client'
 
+import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
-import { useActionState } from 'react'
-import { useFormStatus } from 'react-dom'
+import { useActionState, useEffect, useState } from 'react'
 
-import { Button } from '@/components/ui/button'
+import { Alert, AlertTitle } from '@/components/ui/alert'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { PasswordInput } from '@/components/ui/password-input'
+import SubmitButton from '@/components/ui/submit-button'
 
 export type LoginActionState = {
   error: string | null
@@ -29,94 +30,102 @@ type LoginFormProps = {
   ) => Promise<LoginActionState>
 }
 
-function SubmitButton() {
-  const { pending } = useFormStatus()
-
-  return (
-    <Button
-      type="submit"
-      disabled={pending}
-      className="h-11 w-full rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(5,150,105,0.18)] transition-all hover:bg-emerald-700 hover:shadow-[0_16px_34px_rgba(5,150,105,0.22)]"
-    >
-      {pending ? 'Signing in...' : 'Sign in'}
-    </Button>
-  )
-}
-
 export function LoginForm({ action }: LoginFormProps) {
   const [state, formAction] = useActionState(action, initialState)
+  // Controlled so a failed submit does not wipe the email (React resets uncontrolled inputs); never the password.
+  const [email, setEmail] = useState('')
+
+  useEffect(() => {
+    const firstInvalidId = state.fieldErrors.email
+      ? 'email'
+      : state.fieldErrors.password
+        ? 'password'
+        : null
+    if (firstInvalidId) {
+      document.getElementById(firstInvalidId)?.focus()
+    }
+  }, [state])
 
   return (
-    <form action={formAction} className="space-y-4">
-      {state.error ? (
-        <div
-          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
-          role="alert"
-          aria-live="polite"
-        >
-          {state.error}
-        </div>
-      ) : null}
+    <form action={formAction}>
+      <FieldGroup>
+        <Field data-invalid={Boolean(state.fieldErrors.email)}>
+          <FieldLabel htmlFor="email" className="text-sm font-medium">
+            Email
+          </FieldLabel>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            enterKeyHint="next"
+            autoFocus
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+            aria-invalid={Boolean(state.fieldErrors.email)}
+            aria-describedby={state.fieldErrors.email ? 'email-error' : undefined}
+            placeholder="admin@tncleaningsolutions.com"
+          />
+          {state.fieldErrors.email && (
+            <FieldError id="email-error" className="text-sm">
+              {state.fieldErrors.email}
+            </FieldError>
+          )}
+        </Field>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="email" className="text-sm font-medium text-neutral-700">
-          Email
-        </Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          autoFocus
-          required
-          aria-invalid={Boolean(state.fieldErrors.email)}
-          aria-describedby={state.fieldErrors.email ? 'email-error' : undefined}
-          className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-          placeholder="admin@tncleaningsolutions.com"
-        />
-        {state.fieldErrors.email && (
-          <p id="email-error" className="text-xs text-red-600">
-            {state.fieldErrors.email}
-          </p>
-        )}
-      </div>
+        <Field data-invalid={Boolean(state.fieldErrors.password)}>
+          <FieldLabel htmlFor="password" className="text-sm font-medium">
+            Password
+          </FieldLabel>
+          <PasswordInput
+            id="password"
+            name="password"
+            autoComplete="current-password"
+            enterKeyHint="go"
+            required
+            aria-invalid={Boolean(state.fieldErrors.password)}
+            aria-describedby={state.fieldErrors.password ? 'password-error' : undefined}
+            placeholder="Enter your password"
+          />
+          {state.fieldErrors.password && (
+            <FieldError id="password-error" className="text-sm">
+              {state.fieldErrors.password}
+            </FieldError>
+          )}
+        </Field>
+      </FieldGroup>
 
-      <div className="space-y-1.5">
-        <Label
-          htmlFor="password"
-          className="text-sm font-medium text-neutral-700"
-        >
-          Password
-        </Label>
-        <PasswordInput
-          id="password"
-          name="password"
-          autoComplete="current-password"
-          required
-          aria-invalid={Boolean(state.fieldErrors.password)}
-          aria-describedby={state.fieldErrors.password ? 'password-error' : undefined}
-          className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-          placeholder="Enter your password"
-        />
-        {state.fieldErrors.password && (
-          <p id="password-error" className="text-xs text-red-600">
-            {state.fieldErrors.password}
-          </p>
-        )}
-      </div>
-
-      <div className="flex items-center justify-end pt-0.5">
+      <div className="-my-1 flex justify-end">
         <Link
           href="/forgot-password"
-          className="text-sm font-medium text-emerald-700 transition-colors hover:text-emerald-800"
+          className="-mx-1 inline-flex min-h-11 items-center rounded-sm px-1 text-sm font-medium text-primary transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none active:text-primary/70 md:hover:text-primary/80 md:hover:underline md:hover:underline-offset-4"
         >
           Forgot password?
         </Link>
       </div>
 
-      <SubmitButton />
+      {state.error ? (
+        <Alert
+          variant="destructive"
+          role="alert"
+          aria-live="polite"
+          className="mt-4 animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart"
+        >
+          <AlertCircle aria-hidden="true" />
+          <AlertTitle>{state.error}</AlertTitle>
+        </Alert>
+      ) : null}
 
-      <p className="text-center text-xs leading-relaxed text-neutral-500">
+      <SubmitButton
+        label="Sign in"
+        pendingLabel="Signing in..."
+        size="lg"
+        className="mt-6 w-full active:scale-[0.98]"
+      />
+
+      <p className="mt-4 text-center text-sm text-muted-foreground">
         Need access? Contact your operations lead.
       </p>
     </form>

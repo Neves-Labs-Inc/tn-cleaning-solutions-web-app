@@ -8,6 +8,7 @@ import {
 } from '@/components/admin/client-job-pricing-list'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/server'
+import { getBusinessDate } from '@/lib/schedule'
 
 type ClientJobPricingPageProps = {
   params: Promise<{ id: string }>
@@ -97,10 +98,5 @@ function toRow(row: PricingQueryRow): ClientJobPricingRow {
 }
 
 function todayDateString() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-
-  return `${year}-${month}-${day}`
+  return getBusinessDate(new Date())
 }
