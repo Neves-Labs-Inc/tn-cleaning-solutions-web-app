@@ -114,8 +114,9 @@ export function AppointmentForm({
     [jobs, selectedJobId]
   )
 
-  const resolvedRateClientId = appointment?.client_id ?? null
-  const clientRateIsStale = resolvedRateClientId !== null && selectedClientId !== resolvedRateClientId
+  // The client rate was resolved for the saved client and Job only; any other pick resolves on save.
+  const clientRateIsStale =
+    appointment !== undefined && (selectedClientId !== appointment.client_id || selectedJobId !== appointment.job_id)
 
   const rateHint = useMemo(() => {
     let hint: string | null = null

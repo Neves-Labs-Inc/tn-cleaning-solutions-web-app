@@ -6,14 +6,13 @@ import { notFound } from 'next/navigation'
 import { AdminClockOverride } from '@/components/admin/admin-clock-override'
 import { Button } from '@/components/ui/button'
 import { cancelAppointment, uncancelAppointment } from '@/lib/actions/appointments'
-import { fetchClientJobRules } from '@/lib/pricing/lookup'
-import { durationMinutes, formatCents, formatRate } from '@/lib/pricing/money'
 import {
-  pickEffectiveRule,
-  resolveAppointmentPrice,
-  type PriceSource,
-  type ResolvedPrice,
-} from '@/lib/pricing/resolve'
+  APPOINTMENT_PRICE_COLUMNS,
+  priceAppointments,
+  type DisplayPrice,
+  type PriceableAppointment,
+} from '@/lib/pricing'
+import { formatCents, formatRate, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { formatBusinessDateTime } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 import { cn } from '@/lib/utils'
@@ -22,17 +21,9 @@ type AppointmentDetailPageProps = {
   params: Promise<{ id: string }>
 }
 
-type AppointmentDetailRow = {
-  id: string
-  client_id: string
-  job_id: string
-  scheduled_date: string
-  scheduled_start_time: string
-  scheduled_end_time: string
+type AppointmentDetailRow = PriceableAppointment & {
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
   notes: string
-  price_override_cents: number | null
-  billed_price_cents: number | null
   is_archived: boolean
   clients: {
     id: string
@@ -43,7 +34,6 @@ type AppointmentDetailRow = {
   jobs: {
     id: string
     name: string
-    hourly_rate_cents: number
     estimated_duration_minutes: number | null
     description: string | null
   } | null
@@ -121,10 +111,10 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
     .from('appointments')
     .select(
       `
-        id, client_id, job_id, scheduled_date, scheduled_start_time, scheduled_end_time,
-        status, notes, price_override_cents, billed_price_cents, is_archived,
+        ${APPOINTMENT_PRICE_COLUMNS},
+        status, notes, is_archived,
         clients!inner ( id, name, phone, email ),
-        jobs!inner ( id, name, hourly_rate_cents, estimated_duration_minutes, description ),
+        jobs!inner ( id, name, estimated_duration_minutes, description ),
         client_locations ( id, label, address ),
         recurrence_series ( id, frequency, start_date, end_date, max_occurrences, is_active ),
         appointment_employees (
@@ -142,18 +132,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
     notFound()
   }
 
-  let priceView: PriceView
-
-  if (appointment.billed_price_cents === null) {
-    priceView = await resolvedPriceView(supabase, appointment)
-  } else {
-    priceView = {
-      amount: formatCents(appointment.billed_price_cents),
-      breakdown: null,
-      label: 'Invoiced',
-      isUnavailable: false,
-    }
-  }
+  const priceView = await loadPriceView(supabase, appointment)
 
   async function handleCancelAppointment() {
     'use server'
@@ -399,38 +378,21 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
   )
 }
 
-async function resolvedPriceView(
+async function loadPriceView(
   supabase: Awaited<ReturnType<typeof createClient>>,
   appointment: AppointmentDetailRow
 ): Promise<PriceView> {
   let view: PriceView
 
   try {
-    const rulesByPair = await fetchClientJobRules(supabase, [
-      { clientId: appointment.client_id, jobId: appointment.job_id },
-    ])
-    const resolved = resolveAppointmentPrice({
-      job: { hourly_rate_cents: appointment.jobs?.hourly_rate_cents ?? 0 },
-      rule: pickEffectiveRule(
-        rulesByPair.get(`${appointment.client_id}:${appointment.job_id}`) ?? [],
-        appointment.scheduled_date
-      ),
-      minutes: durationMinutes(appointment.scheduled_start_time, appointment.scheduled_end_time),
-      appointmentOverrideCents: appointment.price_override_cents,
-    })
-
-    view = {
-      amount: formatCents(resolved.amount_cents),
-      breakdown: rateBreakdown(resolved),
-      label: priceSourceLabel(resolved.source),
-      isUnavailable: false,
-    }
+    const priced = await priceAppointments(supabase, [appointment])
+    view = toPriceView(priced.get(appointment.id)?.display ?? { source: 'unpriced' })
   } catch (thrown) {
-    console.error('Error fetching client job pricing:', thrown)
+    console.error('Error pricing appointment:', appointment.id, thrown)
     view = {
       amount: 'Unavailable',
       breakdown: null,
-      label: 'This client’s negotiated rates could not be loaded, so no price is shown.',
+      label: 'This appointment’s price could not be loaded, so no price is shown.',
       isUnavailable: true,
     }
   }
@@ -438,19 +400,44 @@ async function resolvedPriceView(
   return view
 }
 
-function rateBreakdown(resolved: ResolvedPrice) {
+function toPriceView(display: DisplayPrice): PriceView {
+  let view: PriceView
+
+  if (display.source === 'unpriced') {
+    view = {
+      amount: UNPRICED_LABEL,
+      breakdown: null,
+      label: 'Unpriced: this appointment has no Job, so no price can be worked out.',
+      isUnavailable: true,
+    }
+  } else if (display.source === 'billed') {
+    view = { amount: formatCents(display.amount_cents), breakdown: null, label: 'Invoiced', isUnavailable: false }
+  } else {
+    view = {
+      amount: formatCents(display.amount_cents),
+      breakdown: rateBreakdown(display.rate_cents, display.minutes, display.headcount),
+      label: priceSourceLabel(display.source),
+      isUnavailable: false,
+    }
+  }
+
+  return view
+}
+
+function rateBreakdown(rateCents: number | null, totalMinutes: number | null, headcount: number) {
   let breakdown: string | null = null
 
-  if (resolved.rate_cents !== null && resolved.minutes !== null) {
-    const hours = Math.floor(resolved.minutes / 60)
-    const minutes = resolved.minutes % 60
-    breakdown = `${formatRate(resolved.rate_cents)} × ${hours}h ${minutes}m`
+  if (rateCents !== null && totalMinutes !== null) {
+    const hours = Math.floor(totalMinutes / 60)
+    const minutes = totalMinutes % 60
+    const crew = headcount > 1 ? ` × ${headcount} cleaners` : ''
+    breakdown = `${formatRate(rateCents)} × ${hours}h ${minutes}m${crew}`
   }
 
   return breakdown
 }
 
-function priceSourceLabel(source: PriceSource) {
+function priceSourceLabel(source: 'appointment_override' | 'client_job_pricing' | 'job') {
   let label: string
 
   if (source === 'appointment_override') {

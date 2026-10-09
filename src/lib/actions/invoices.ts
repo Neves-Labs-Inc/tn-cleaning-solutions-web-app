@@ -3,9 +3,13 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-import { fetchClientJobRules } from '@/lib/pricing/lookup'
-import { durationMinutes, parseDollarsToCents } from '@/lib/pricing/money'
-import { type ClientJobRule, pickEffectiveRule, resolveAppointmentPrice } from '@/lib/pricing/resolve'
+import {
+  APPOINTMENT_PRICE_COLUMNS,
+  priceAppointments,
+  type PriceableAppointment,
+  type PricedAppointment,
+} from '@/lib/pricing'
+import { parseDollarsToCents } from '@/lib/pricing/money'
 import { getBusinessDate } from '@/lib/schedule'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -28,17 +32,9 @@ type ParsedInvoiceInput = {
   selections: Array<{ appointmentId: string; priceCents: number }>
 }
 
-type AppointmentPriceRow = {
-  id: string
-  client_id: string
-  job_id: string
+type AppointmentPriceRow = PriceableAppointment & {
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
   is_archived: boolean
-  price_override_cents: number | null
-  scheduled_date: string
-  scheduled_start_time: string
-  scheduled_end_time: string
-  jobs: { hourly_rate_cents: number }
 }
 
 type InvoiceLine = {
@@ -149,9 +145,8 @@ async function fetchAppointmentsForPricing(appointmentIds: string[]): Promise<
     .from('appointments')
     .select(
       `
-        id, client_id, job_id, status, is_archived, price_override_cents,
-        scheduled_date, scheduled_start_time, scheduled_end_time,
-        jobs!inner(hourly_rate_cents)
+        ${APPOINTMENT_PRICE_COLUMNS},
+        status, is_archived
       `
     )
     .in('id', appointmentIds)
@@ -199,37 +194,36 @@ async function buildInvoiceLines(
     selected.push({ priceCents: selection.priceCents, appointment })
   }
 
-  let rulesByPair: Map<string, ClientJobRule[]>
+  let pricesById: Map<string, PricedAppointment>
   try {
-    rulesByPair = await fetchClientJobRules(
+    pricesById = await priceAppointments(
       createAdminClient(),
-      selected.map(({ appointment }) => ({
-        clientId: appointment.client_id,
-        jobId: appointment.job_id,
-      }))
+      selected.map(({ appointment }) => appointment)
     )
-  } catch {
-    return { success: false, error: 'Failed to load client pricing rules.' }
+  } catch (thrown) {
+    console.error('Error pricing invoice appointments:', thrown)
+    return { success: false, error: 'Failed to load appointment prices.' }
   }
 
   const lines: InvoiceLine[] = []
   let totalCents = 0
 
   for (const { priceCents, appointment } of selected) {
-    const rules = rulesByPair.get(`${appointment.client_id}:${appointment.job_id}`) ?? []
-    const resolved = resolveAppointmentPrice({
-      job: appointment.jobs,
-      rule: pickEffectiveRule(rules, appointment.scheduled_date),
-      minutes: durationMinutes(appointment.scheduled_start_time, appointment.scheduled_end_time),
-      appointmentOverrideCents: appointment.price_override_cents,
-    })
-    const matchesResolved = priceCents === resolved.amount_cents
+    const live = pricesById.get(appointment.id)?.live
+    // An Unpriced visit is never billed, not even at a typed amount, until it has a Job.
+    if (!live || live.source === 'unpriced') {
+      return { success: false, error: 'One or more selected appointments have no Job, so they cannot be priced.' }
+    }
+
+    // No line column holds the crew size, so a multi-Cleaner line freezes no rate or minutes:
+    // rate × minutes would not add up to its billed amount.
+    const canFreezeBreakdown = priceCents === live.amount_cents && live.headcount === 1
 
     lines.push({
       appointment_id: appointment.id,
       billed_amount_cents: priceCents,
-      billed_rate_cents: matchesResolved ? resolved.rate_cents : null,
-      billed_minutes: matchesResolved ? resolved.minutes : null,
+      billed_rate_cents: canFreezeBreakdown ? live.rate_cents : null,
+      billed_minutes: canFreezeBreakdown ? live.minutes : null,
     })
 
     totalCents += priceCents

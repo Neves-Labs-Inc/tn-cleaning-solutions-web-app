@@ -5,8 +5,14 @@ import type { PostgrestError } from '@supabase/supabase-js'
 
 import { AppointmentForm } from '@/components/admin/appointment-form'
 import { AppointmentScheduleContext } from '@/components/admin/new-appointment-schedule-context'
-import { fetchClientJobRules } from '@/lib/pricing/lookup'
-import { pickEffectiveRule, type ClientJobRule } from '@/lib/pricing/resolve'
+import {
+  APPOINTMENT_PRICE_COLUMNS,
+  priceAppointments,
+  type DisplayPrice,
+  type PriceableAppointment,
+  type PricedAppointment,
+} from '@/lib/pricing'
+import { formatCents, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
 
 type EditAppointmentPageProps = {
@@ -21,16 +27,9 @@ type RecurrenceSeriesRow = {
   max_occurrences: number | null
 }
 
-type AppointmentRow = {
-  id: string
-  client_id: string
-  job_id: string
+type AppointmentRow = PriceableAppointment & {
   location_id: string | null
   recurrence_series_id: string | null
-  scheduled_date: string
-  scheduled_start_time: string
-  scheduled_end_time: string
-  price_override_cents: number | null
   notes: string
   status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
   is_archived: boolean
@@ -51,8 +50,8 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
       .from('appointments')
       .select(
         `
-          id, client_id, job_id, location_id, recurrence_series_id, scheduled_date, scheduled_start_time,
-          scheduled_end_time, price_override_cents, notes, status, is_archived,
+          ${APPOINTMENT_PRICE_COLUMNS},
+          location_id, recurrence_series_id, notes, status, is_archived,
           appointment_employees(employee_id)
         `
       )
@@ -80,7 +79,7 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
     notFound()
   }
 
-  const typedAppointment: AppointmentRow = appointment
+  const typedAppointment = appointment as unknown as AppointmentRow
   let recurrenceSeries: RecurrenceSeriesRow | null = null
   let recurrenceSeriesError: PostgrestError | null = null
 
@@ -100,31 +99,26 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
 
   const jobRows = jobs ?? []
 
-  let rulesByPair = new Map<string, ClientJobRule[]>()
-  let rulesErrorMessage: string | null = null
+  let price: PricedAppointment | null = null
+  let priceErrorMessage: string | null = null
 
   try {
-    rulesByPair = await fetchClientJobRules(
-      supabase,
-      jobRows.map((job) => ({ clientId: typedAppointment.client_id, jobId: job.id }))
-    )
+    price = (await priceAppointments(supabase, [typedAppointment])).get(typedAppointment.id) ?? null
   } catch (thrown) {
-    console.error('Error fetching client job pricing:', thrown)
-    rulesErrorMessage =
-      thrown instanceof Error ? thrown.message : 'Client pricing rules could not be loaded.'
+    console.error('Error pricing appointment:', typedAppointment.id, thrown)
+    priceErrorMessage = thrown instanceof Error ? thrown.message : 'The appointment price could not be loaded.'
   }
 
-  const loadErrorMessage = loadError?.message ?? rulesErrorMessage
+  const loadErrorMessage = loadError?.message ?? priceErrorMessage
 
+  // Only the appointment's own Job is priced, so only it can show this client's negotiated rate;
+  // the form says the rate applies on save for any other Job.
+  const clientRateCents = price?.live.source === 'client_job_pricing' ? price.live.rate_cents : null
   const formJobs = jobRows.map((job) => ({
     id: job.id,
     name: job.name,
     hourly_rate_cents: job.hourly_rate_cents,
-    client_rate_cents:
-      pickEffectiveRule(
-        rulesByPair.get(`${typedAppointment.client_id}:${job.id}`) ?? [],
-        typedAppointment.scheduled_date
-      )?.hourly_rate_cents ?? null,
+    client_rate_cents: job.id === typedAppointment.job_id ? clientRateCents : null,
   }))
 
   const appointmentFormAppointment = {
@@ -159,6 +153,12 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-neutral-950">Edit Appointments</h1>
             <p className="mt-2 text-sm text-neutral-600">Update schedule details and team assignments.</p>
+            {price ? (
+              <p className="mt-1 text-sm text-neutral-600">
+                Current price:{' '}
+                <span className="font-semibold text-neutral-900">{formatDisplayPrice(price.display)}</span>
+              </p>
+            ) : null}
           </div>
         </div>
       </section>
@@ -207,4 +207,8 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
       </div>
     </div>
   )
+}
+
+function formatDisplayPrice(display: DisplayPrice) {
+  return display.source === 'unpriced' ? UNPRICED_LABEL : formatCents(display.amount_cents)
 }

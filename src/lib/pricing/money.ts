@@ -20,6 +20,9 @@ export function parseDollarsToCents(raw: string): number | null {
   return cents
 }
 
+// Shown in place of an amount for an Unpriced visit, so it is never mistaken for $0.
+export const UNPRICED_LABEL = '—'
+
 export function formatCents(cents: number): string {
   return usdFormatter.format(cents / 100)
 }

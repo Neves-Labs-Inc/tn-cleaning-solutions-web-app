@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { SearchableMultiSelect } from '@/components/ui/searchable-multi-select'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { createInvoice, type InvoiceActionResult, updateInvoice } from '@/lib/actions/invoices'
-import { formatCents, formatRate } from '@/lib/pricing/money'
+import { formatCents, formatRate, UNPRICED_LABEL } from '@/lib/pricing/money'
 
 export type AppointmentOption = {
   id: string
@@ -20,9 +20,11 @@ export type AppointmentOption = {
   scheduled_date: string
   scheduled_start_time: string
   job_name: string
-  resolved_amount_cents: number
+  // null when the visit is Unpriced.
+  resolved_amount_cents: number | null
   resolved_rate_cents: number | null
   resolved_minutes: number | null
+  resolved_headcount: number
   price_override_cents: number | null
   location_label: string | null
   location_address: string | null
@@ -60,22 +62,27 @@ function SubmitButton({ isEditMode }: { isEditMode: boolean }) {
   )
 }
 
+// An Unpriced visit starts blank so it is never billed as $0 by default.
 function initialPriceForAppointment(appointment: AppointmentOption) {
-  return appointment.resolved_amount_cents / 100
+  return appointment.resolved_amount_cents === null ? '' : (appointment.resolved_amount_cents / 100).toFixed(2)
 }
 
 function priceHint({
   resolved_amount_cents,
   resolved_rate_cents,
   resolved_minutes,
+  resolved_headcount,
 }: AppointmentOption) {
   let hint: string
 
-  if (resolved_rate_cents === null || resolved_minutes === null) {
+  if (resolved_amount_cents === null) {
+    hint = UNPRICED_LABEL
+  } else if (resolved_rate_cents === null || resolved_minutes === null) {
     hint = formatCents(resolved_amount_cents)
   } else {
     const hours = Math.floor(resolved_minutes / 60)
-    hint = `${formatRate(resolved_rate_cents)} × ${hours}h ${resolved_minutes % 60}m = ${formatCents(resolved_amount_cents)}`
+    const crew = resolved_headcount > 1 ? ` × ${resolved_headcount} cleaners` : ''
+    hint = `${formatRate(resolved_rate_cents)} × ${hours}h ${resolved_minutes % 60}m${crew} = ${formatCents(resolved_amount_cents)}`
   }
 
   return hint
@@ -138,7 +145,7 @@ export function InvoiceForm({
   const priceValues = useMemo(() => {
     const values: Record<string, string> = {}
     for (const appointment of allAppointments) {
-      values[appointment.id] = initialPriceForAppointment(appointment).toFixed(2)
+      values[appointment.id] = initialPriceForAppointment(appointment)
     }
     return { ...values, ...priceEdits }
   }, [allAppointments, priceEdits])

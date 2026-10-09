@@ -2,23 +2,21 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
 import { InvoiceForm, type AppointmentOption } from '@/components/admin/invoice-form'
-import { fetchClientJobRules } from '@/lib/pricing/lookup'
-import { durationMinutes } from '@/lib/pricing/money'
-import { type ClientJobRule, pickEffectiveRule, resolveAppointmentPrice } from '@/lib/pricing/resolve'
+import {
+  APPOINTMENT_PRICE_COLUMNS,
+  priceAppointments,
+  type LivePrice,
+  type PriceableAppointment,
+  type PricedAppointment,
+} from '@/lib/pricing'
 import { createClient } from '@/lib/supabase/server'
 
 type NewInvoicePageProps = {
   searchParams: Promise<{ client_id?: string | string[] }>
 }
 
-type AppointmentRow = {
-  id: string
-  client_id: string
-  scheduled_date: string
-  scheduled_start_time: string
-  scheduled_end_time: string
-  price_override_cents: number | null
-  jobs: { id: string; name: string; hourly_rate_cents: number }
+type AppointmentRow = PriceableAppointment & {
+  jobs: { name: string } | null
   client_locations: { label: string; address: string } | null
   clients: { id: string; name: string } | null
 }
@@ -27,24 +25,31 @@ function normalizeParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value
 }
 
-function toAppointmentOption(row: AppointmentRow, rules: ClientJobRule[]): AppointmentOption {
-  const resolved = resolveAppointmentPrice({
-    job: row.jobs,
-    rule: pickEffectiveRule(rules, row.scheduled_date),
-    minutes: durationMinutes(row.scheduled_start_time, row.scheduled_end_time),
-    appointmentOverrideCents: row.price_override_cents,
-  })
+type LinePrice = Pick<
+  AppointmentOption,
+  'resolved_amount_cents' | 'resolved_rate_cents' | 'resolved_minutes' | 'resolved_headcount'
+>
 
+function livePriceOption(live: LivePrice): LinePrice {
+  return live.source === 'unpriced'
+    ? { resolved_amount_cents: null, resolved_rate_cents: null, resolved_minutes: null, resolved_headcount: 1 }
+    : {
+        resolved_amount_cents: live.amount_cents,
+        resolved_rate_cents: live.rate_cents,
+        resolved_minutes: live.minutes,
+        resolved_headcount: live.headcount,
+      }
+}
+
+function toAppointmentOption(row: AppointmentRow, price: LinePrice): AppointmentOption {
   return {
     id: row.id,
     client_id: row.client_id,
     client_name: row.clients?.name ?? 'Unknown client',
     scheduled_date: row.scheduled_date,
     scheduled_start_time: row.scheduled_start_time,
-    job_name: row.jobs.name,
-    resolved_amount_cents: resolved.amount_cents,
-    resolved_rate_cents: resolved.rate_cents,
-    resolved_minutes: resolved.minutes,
+    job_name: row.jobs?.name ?? 'Unknown job',
+    ...price,
     price_override_cents: row.price_override_cents,
     location_label: row.client_locations?.label ?? null,
     location_address: row.client_locations?.address ?? null,
@@ -73,9 +78,8 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePagePro
       .from('appointments')
       .select(
         `
-          id, client_id, scheduled_date, scheduled_start_time, scheduled_end_time,
-          price_override_cents,
-          jobs!inner ( id, name, hourly_rate_cents ),
+          ${APPOINTMENT_PRICE_COLUMNS},
+          jobs ( name ),
           client_locations ( label, address ),
           clients!inner ( id, name )
         `
@@ -91,20 +95,18 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePagePro
     (row) => !alreadyInvoiced.has(row.id)
   )
 
-  let rulesByPair = new Map<string, ClientJobRule[]>()
+  let pricesById = new Map<string, PricedAppointment>()
   if (!loadErrorMessage) {
     try {
-      rulesByPair = await fetchClientJobRules(
-        supabase,
-        candidateRows.map((row) => ({ clientId: row.client_id, jobId: row.jobs.id }))
-      )
-    } catch {
-      loadErrorMessage = 'Failed to load client pricing rules.'
+      pricesById = await priceAppointments(supabase, candidateRows)
+    } catch (thrown) {
+      console.error('Error pricing appointments:', thrown)
+      loadErrorMessage = 'Failed to load appointment prices.'
     }
   }
 
   const availableAppointments = candidateRows.map((row) =>
-    toAppointmentOption(row, rulesByPair.get(`${row.client_id}:${row.jobs.id}`) ?? [])
+    toAppointmentOption(row, livePriceOption(pricesById.get(row.id)?.live ?? { source: 'unpriced' }))
   )
 
   const orderedClients = [...(clients ?? [])]
