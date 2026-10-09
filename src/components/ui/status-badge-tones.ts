@@ -25,3 +25,22 @@ export function invoiceStatusBadge(status: InvoiceEffectiveStatus): StatusBadgeS
 export function lineStateBadge(state: LineState): StatusBadgeSpec | null {
   return LINE_STATE_BADGES[state]
 }
+
+type InvoiceFlagRow = {
+  effective_status: InvoiceEffectiveStatus
+  is_automatic: boolean
+  is_archived: boolean
+  has_unpriced?: boolean
+}
+
+// The pills an invoice row wears, in fixed order: status, Automatic, Archived, Unpriced. Every
+// invoice screen renders these through InvoiceBadges, so no page builds its own.
+export function invoiceFlagBadges(row: InvoiceFlagRow): StatusBadgeSpec[] {
+  const badges: Array<StatusBadgeSpec | null> = [
+    invoiceStatusBadge(row.effective_status),
+    row.is_automatic ? { tone: 'neutral', label: 'Automatic' } : null,
+    row.is_archived ? { tone: 'neutral', label: 'Archived' } : null,
+    row.has_unpriced ? lineStateBadge('unpriced') : null,
+  ]
+  return badges.filter((badge) => badge !== null)
+}

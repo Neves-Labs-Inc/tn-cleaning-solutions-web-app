@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { messageFor, type LedgerErrorCode } from '@/lib/invoices/errors'
+import { BULK_ISSUE_LIMIT } from '@/lib/invoices/view'
 import { InvoiceLedger, type BulkIssueOutcome, type LedgerResult, type PaymentInput } from '@/lib/invoices/ledger'
 import { createClient } from '@/lib/supabase/server'
 
@@ -17,7 +18,7 @@ const INVOICES_PATH = '/solutions/invoices'
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // Caps on what a form can post: a bulk issue runs a few queries per draft in series.
-const MAX_IDS = 200
+const MAX_IDS = BULK_ISSUE_LIMIT
 const MAX_NOTES_LENGTH = 2000
 const MAX_SHORT_TEXT_LENGTH = 200
 // The ledger logs the raw cause; the page gets no Postgres text.

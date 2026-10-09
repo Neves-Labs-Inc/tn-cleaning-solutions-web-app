@@ -265,6 +265,8 @@ Phones get **cards or list rows**, never a horizontally-scrolling table. The rul
 | Crew list | List rows with name, phone (as a tappable `tel:` button), clock pill | same |
 | Admin tables (invoices, time tracking) | Cards with the 3–4 most important fields; the rest behind the row's detail page | `Table` |
 
+Admin breakpoint: the sidebar (`w-68`) shows from `lg:`, leaving `main` about 690px at 1024. A table that needs more width than `main` has at `lg:` stays as cards below `xl:` and becomes a `Table` at `xl:` (the invoices list does this). Never drop columns or scroll the table sideways to fit it earlier.
+
 Grouping: lists longer than ~8 items are grouped under sticky date headers (`sticky top-14 z-10 bg-background py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground`). "Today" is always the first group and is visually stronger (`border-l-2 border-primary` on the group or a `success` pill on the header).
 
 Pagination on phones is "Load more" (`Button variant="outline" w-full`) or month navigation — never numbered pages.

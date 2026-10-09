@@ -200,3 +200,75 @@ export function groupUnbilled(visits: UnbilledVisit[]): UnbilledGroup[] {
 
   return [...groups.values()].sort((a, b) => a.clientName.localeCompare(b.clientName))
 }
+
+// --- Ledger list: URL filter, row shape (ticket 09) ---
+
+// listInvoices returns at most this many rows (PostgREST max_rows), so a list this long was cut off.
+export const INVOICE_LIST_LIMIT = 1000
+
+// The bulk-issue action rejects a post with more ids than this, so a selection stops here.
+export const BULK_ISSUE_LIMIT = 200
+
+const FILTER_STATUSES: InvoiceEffectiveStatus[] = ['draft', 'issued', 'overdue', 'paid', 'void']
+
+type SearchParamValue = string | string[] | undefined
+
+// What the ledger list needs per row; the client's contact details stay on the server.
+export type LedgerListRow = Omit<InvoiceViewRow, 'clients'> & { client_name: string }
+
+export type ClientOption = { id: string; name: string }
+
+// A repeated param is ambiguous, so it counts as absent.
+function singleParam(value: SearchParamValue): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function isFilterStatus(value: string): value is InvoiceEffectiveStatus {
+  return (FILTER_STATUSES as string[]).includes(value)
+}
+
+export function parseInvoiceFilter(params: Record<string, SearchParamValue>): InvoiceFilter {
+  const status = singleParam(params.status)
+
+  return {
+    query: singleParam(params.q).trim(),
+    status: isFilterStatus(status) ? status : 'all',
+    clientId: singleParam(params.client),
+    automaticOnly: singleParam(params.automatic) === '1',
+    showArchived: singleParam(params.archived) === '1',
+  }
+}
+
+// Defaults are omitted so the unfiltered list keeps a clean URL.
+export function invoiceFilterToSearchParams(filter: InvoiceFilter): URLSearchParams {
+  const params = new URLSearchParams()
+  if (filter.query) params.set('q', filter.query)
+  if (filter.status !== 'all') params.set('status', filter.status)
+  if (filter.clientId) params.set('client', filter.clientId)
+  if (filter.automaticOnly) params.set('automatic', '1')
+  if (filter.showArchived) params.set('archived', '1')
+  return params
+}
+
+export function isInvoiceFilterActive(filter: InvoiceFilter): boolean {
+  return invoiceFilterToSearchParams(filter).size > 0
+}
+
+// An archived draft is read-only, so only open drafts can join a bulk issue.
+export function isSelectableDraft(row: { status: InvoiceStatus; is_archived: boolean }): boolean {
+  return row.status === 'draft' && !row.is_archived
+}
+
+export function toLedgerListRow(row: InvoiceViewRow): LedgerListRow {
+  const { clients, ...rest } = row
+  return { ...rest, client_name: relationName(clients) || 'Unknown client' }
+}
+
+// Clients that have an invoice, A to Z: a client with none can't match a filter anyway.
+export function invoiceClientOptions(rows: InvoiceViewRow[]): ClientOption[] {
+  const byId = new Map(rows.map((row) => [row.client_id, relationName(row.clients)]))
+
+  return [...byId.entries()]
+    .map(([id, name]) => ({ id, name: name || 'Unknown client' }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
