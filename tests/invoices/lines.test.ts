@@ -2,7 +2,10 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
+  claimableStates,
+  defaultSelectedIds,
   draftTotalCents,
+  groupVisitsByDate,
   hasUnpricedLine,
   lineAmountCents,
   lineState,
@@ -93,4 +96,48 @@ test('a draft has an Unpriced line only when one of its visits is Unpriced', () 
     ]),
     true
   )
+})
+
+const BUSINESS_DATE = '2026-10-09'
+
+function claimable(id: string, scheduledDate: string, startTime = '09:00:00') {
+  return { id, scheduled_date: scheduledDate, scheduled_start_time: startTime }
+}
+
+test('visits up to and including the Business date start checked, future ones unchecked', () => {
+  const visits = [claimable('past', '2026-10-01'), claimable('today', BUSINESS_DATE), claimable('future', '2026-10-10')]
+
+  assert.deepEqual([...defaultSelectedIds(visits, BUSINESS_DATE)].sort(), ['past', 'today'])
+})
+
+test('an empty visit list selects nothing', () => {
+  assert.equal(defaultSelectedIds([], BUSINESS_DATE).size, 0)
+})
+
+test('visits split into Past and today (oldest first) and Upcoming (soonest first)', () => {
+  const visits = [
+    claimable('later', '2026-10-20'),
+    claimable('today-pm', BUSINESS_DATE, '13:00:00'),
+    claimable('old', '2026-09-01'),
+    claimable('today-am', BUSINESS_DATE, '09:00:00'),
+    claimable('soon', '2026-10-12'),
+  ]
+
+  const groups = groupVisitsByDate(visits, BUSINESS_DATE)
+
+  assert.deepEqual(
+    groups.past.map((visit) => visit.id),
+    ['old', 'today-am', 'today-pm']
+  )
+  assert.deepEqual(
+    groups.upcoming.map((visit) => visit.id),
+    ['soon', 'later']
+  )
+})
+
+test('a visit can be both Unpriced and Upcoming; a completed priced one has neither', () => {
+  assert.deepEqual(claimableStates({ status: 'scheduled', live: UNPRICED }), ['unpriced', 'upcoming'])
+  assert.deepEqual(claimableStates({ status: 'in_progress', live: priced(9000) }), ['upcoming'])
+  assert.deepEqual(claimableStates({ status: 'completed', live: UNPRICED }), ['unpriced'])
+  assert.deepEqual(claimableStates({ status: 'completed', live: priced(9000) }), [])
 })

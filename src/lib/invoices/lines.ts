@@ -33,3 +33,40 @@ export function draftTotalCents(entries: LineEntry[]): number {
 export function hasUnpricedLine(entries: LineEntry[]): boolean {
   return entries.some(({ line, visit }) => lineState(line, visit, DRAFT) === 'unpriced')
 }
+
+// Pills for a visit that isn't on a draft yet. Unpriced and Upcoming can both apply, so this is a
+// list; lineState picks one.
+export function claimableStates(visit: VisitFacts): LineState[] {
+  const states: LineState[] = []
+  if (visit.live.source === 'unpriced') {
+    states.push('unpriced')
+  }
+  if (visit.status !== 'completed' && visit.status !== 'cancelled') {
+    states.push('upcoming')
+  }
+  return states
+}
+
+type DatedVisit = { id: string; scheduled_date: string; scheduled_start_time: string }
+
+function byDateThenTime(a: DatedVisit, b: DatedVisit): number {
+  return a.scheduled_date.localeCompare(b.scheduled_date) || a.scheduled_start_time.localeCompare(b.scheduled_start_time)
+}
+
+// Past and today oldest first, Upcoming soonest first: both are ascending, so the oldest unbilled work
+// leads and the next visit leads the future.
+export function groupVisitsByDate<T extends DatedVisit>(
+  visits: T[],
+  businessDate: string
+): { past: T[]; upcoming: T[] } {
+  const sorted = [...visits].sort(byDateThenTime)
+  return {
+    past: sorted.filter((visit) => visit.scheduled_date <= businessDate),
+    upcoming: sorted.filter((visit) => visit.scheduled_date > businessDate),
+  }
+}
+
+// Visits up to today start checked; future visits are listed but left for the admin to opt into.
+export function defaultSelectedIds(visits: DatedVisit[], businessDate: string): Set<string> {
+  return new Set(visits.filter((visit) => visit.scheduled_date <= businessDate).map((visit) => visit.id))
+}

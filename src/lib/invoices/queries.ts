@@ -60,6 +60,10 @@ export type InvoiceDetail = {
 // A visit that may join a draft: not cancelled, not archived, no Live claim; any status or date.
 export type ClaimableVisit = VisitDetails & { state: LineState; amount_cents: number }
 
+// A client with at least one claimable visit. Inactive and archived clients are listed: their old
+// visits can still be billed.
+export type BillableClient = { id: string; name: string; is_active: boolean; is_archived: boolean }
+
 export type UnbilledVisitRow = UnbilledVisit & { job_name: string; location_label: string | null }
 
 export type Receivables = {
@@ -279,6 +283,39 @@ export async function listClaimableVisits(db: Db, clientId: string): Promise<Cla
     state: lineState(UNCLAIMED_LINE, visit, DRAFT),
     amount_cents: lineAmountCents(UNCLAIMED_LINE, visit, DRAFT),
   }))
+}
+
+// PostgREST caps a response at its max-rows setting, so the client list pages through the visits.
+const BILLABLE_PAGE_SIZE = 1000
+
+type BillableRow = { client_id: string; clients: Omit<BillableClient, 'id'> | null }
+
+// Only clients with a claimable visit (the same rule as listClaimableVisits), by name.
+export async function listBillableClients(db: Db): Promise<BillableClient[]> {
+  const byId = new Map<string, BillableClient>()
+
+  for (let from = 0, isLastPage = false; !isLastPage; from += BILLABLE_PAGE_SIZE) {
+    const { data, error } = await db
+      .from('appointments')
+      .select(`client_id, clients ( name, is_active, is_archived ), ${LIVE_CLAIM_EMBED}`)
+      .eq('live.is_archived', false)
+      .is('live.cancelled_at', null)
+      .is('live', null)
+      .neq('status', 'cancelled')
+      .eq('is_archived', false)
+      .order('id', { ascending: true })
+      .range(from, from + BILLABLE_PAGE_SIZE - 1)
+    if (error) throw error
+
+    for (const row of data as unknown as BillableRow[]) {
+      if (row.clients) {
+        byId.set(row.client_id, { id: row.client_id, ...row.clients })
+      }
+    }
+    isLastPage = data.length < BILLABLE_PAGE_SIZE
+  }
+
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 // Inputs for receivablesTotals, clientBalances, overdueInvoices and groupUnbilled in view.ts.

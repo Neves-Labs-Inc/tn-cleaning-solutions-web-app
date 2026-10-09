@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowLeft, CircleOff, Pencil, ReceiptText } from 'lucide-react'
+import { ArrowLeft, CircleOff, ReceiptText } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
 import { Button } from '@/components/ui/button'
@@ -137,7 +137,6 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 				]
 	)
 
-	const canEdit = invoice.status === 'draft'
 	const canIssue = invoice.status === 'draft'
 	const canMarkPaid = invoice.status === 'issued' || overdue
 	const canVoid = invoice.status === 'issued' || invoice.status === 'paid'
@@ -190,15 +189,6 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 					</div>
 
 					<div className="flex flex-wrap items-center gap-2">
-						{canEdit ? (
-							<Link href={`/solutions/invoices/${invoice.id}/edit`}>
-								<Button className="h-10 rounded-full bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700">
-									<Pencil className="size-4" aria-hidden="true" />
-									Edit
-								</Button>
-							</Link>
-						) : null}
-
 						{canIssue ? (
 							<form action={handleIssue}>
 								<input type="hidden" name="invoice_id" value={invoice.id} />

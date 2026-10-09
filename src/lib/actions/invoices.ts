@@ -1,7 +1,6 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 
 import { messageFor, type LedgerErrorCode } from '@/lib/invoices/errors'
 import { InvoiceLedger, type BulkIssueOutcome, type LedgerResult, type PaymentInput } from '@/lib/invoices/ledger'
@@ -105,6 +104,7 @@ function toActionResult<T>(result: LedgerResult<T>): InvoiceActionResult<T> {
   return { success: false, error, code: result.code }
 }
 
+// Returns the new id instead of redirecting, so the page can toast "Draft created" before it navigates.
 export async function createInvoice(_previous: unknown, formData: FormData): Promise<InvoiceActionResult<{ id: string }>> {
   const clientId = id(formData, 'client_id')
   const appointmentIds = ids(formData, 'appointment_ids')
@@ -119,7 +119,7 @@ export async function createInvoice(_previous: unknown, formData: FormData): Pro
   if (!result.ok) return toActionResult(result)
 
   revalidateInvoicing()
-  redirect(`${INVOICES_PATH}/${result.data.id}`)
+  return toActionResult(result)
 }
 
 // Takes the visits added and removed against what the page loaded, and always the current due

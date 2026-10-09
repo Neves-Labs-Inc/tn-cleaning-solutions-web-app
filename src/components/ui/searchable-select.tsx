@@ -21,6 +21,9 @@ type SearchableSelectProps = {
   searchPlaceholder?: string
   emptyMessage?: string
   className?: string
+  id?: string
+  'aria-invalid'?: boolean
+  'aria-describedby'?: string
 }
 
 export function SearchableSelect({
@@ -31,6 +34,9 @@ export function SearchableSelect({
   searchPlaceholder = 'Search...',
   emptyMessage = 'No results found.',
   className,
+  id,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false)
 
@@ -47,7 +53,10 @@ export function SearchableSelect({
         render={
           <Button
             variant="outline"
+            id={id}
             role="combobox"
+            aria-invalid={ariaInvalid}
+            aria-describedby={ariaDescribedBy}
             aria-expanded={open}
             className={cn(
               'h-11 w-full justify-between rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm hover:bg-white',
