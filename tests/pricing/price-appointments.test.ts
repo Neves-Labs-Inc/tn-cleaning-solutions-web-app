@@ -182,6 +182,16 @@ test("display is the Billed amount from the visit's live invoice line", async ()
   assert.deepEqual(live, { source: 'job', amount_cents: 11250, rate_cents: 4500, minutes: 150, headcount: 1 })
 })
 
+test("display ignores a Cancelled line's Billed amount", async () => {
+  const { live, display } = await priceOne(appointment(), {
+    invoice_appointments: [
+      { appointment_id: 'appt-1', billed_amount_cents: 9999, is_archived: false, cancelled_at: '2026-10-09T12:00:00Z' },
+    ],
+  })
+
+  assert.deepEqual(display, live)
+})
+
 test('a live invoice line with no Billed amount leaves display on the Live price', async () => {
   const { live, display } = await priceOne(appointment(), {
     invoice_appointments: [{ appointment_id: 'appt-1', billed_amount_cents: null, is_archived: false }],

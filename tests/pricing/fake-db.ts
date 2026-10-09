@@ -16,7 +16,7 @@ export type FakeDb = {
   queriesByTable: Map<string, number>
 }
 
-// Hand-rolled stand-in for the three reads the price module makes: `from().select().in().eq()/.not()`,
+// Hand-rolled stand-in for the three reads the price module makes: `from().select().in().eq()/.is()/.not()`,
 // awaited for `{ data, error }`. It applies the filters, so archived rows drop out the way they would in Postgres.
 export function createFakeDb(tables: FakeTables): FakeDb {
   const queriesByTable = new Map<string, number>()
@@ -33,6 +33,11 @@ export function createFakeDb(tables: FakeTables): FakeDb {
       },
       eq: (column: string, value: unknown) => {
         filters.push((row) => row[column] === value)
+        return builder
+      },
+      // Like SQL `IS NULL`, NULL and undefined both match null.
+      is: (column: string, value: null) => {
+        filters.push((row) => (row[column] ?? null) === value)
         return builder
       },
       // Only the `is` operator is used; like SQL `IS`, NULL and undefined both match null.

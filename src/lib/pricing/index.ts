@@ -94,12 +94,14 @@ async function fetchBilledAmounts(
   db: SupabaseClient<Database>,
   appointmentIds: string[]
 ): Promise<Map<string, number>> {
-  // A released line (on a voided invoice) is archived and no longer claims its appointment.
+  // A released line (on a voided invoice) is archived and a Cancelled line charges nothing; neither
+  // claims its appointment.
   const { data, error } = await db
     .from('invoice_appointments')
     .select('appointment_id, billed_amount_cents')
     .in('appointment_id', appointmentIds)
     .eq('is_archived', false)
+    .is('cancelled_at', null)
 
   if (error) throw error
 

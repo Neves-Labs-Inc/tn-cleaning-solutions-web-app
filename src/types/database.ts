@@ -15,9 +15,8 @@
 // unexposed `private` schema (20261004120000), so they have no foreign keys for PostgREST to infer:
 // their embeds go through computed relationships, SQL functions in `public` named after the embed
 // target (`appointments_employee_view`, `employees_employee_view`, `clients`, `client_locations`,
-// `jobs_employee_view`). Functions is empty for the same reason as the view relationships -- the
-// schema's SQL functions are called through untyped clients, so typing them here would be guesswork
-// nobody checks.
+// `jobs_employee_view`). Functions lists the invoice write functions (20261009140000 onward), which
+// the invoice ledger calls through the typed session client; the older RPCs are not listed.
 //
 // `invoices_with_status` is a security_invoker projection of `invoices`, one row per invoice.
 // Its Row follows the database's real column nullability, not the narrowed `invoices` Row: `notes`,
@@ -676,7 +675,27 @@ export type Database = {
         Relationships: []
       }
     }
-    Functions: Record<string, never>
+    Functions: {
+      invoice_create_draft: {
+        Args: {
+          p_client_id: string
+          p_appointment_ids: string[]
+          p_due_date: string | null
+          p_notes: string | null
+        }
+        Returns: string
+      }
+      invoice_update_draft: {
+        Args: {
+          p_invoice_id: string
+          p_add_appointment_ids: string[]
+          p_remove_appointment_ids: string[]
+          p_due_date: string | null
+          p_notes: string | null
+        }
+        Returns: undefined
+      }
+    }
   }
 }
 

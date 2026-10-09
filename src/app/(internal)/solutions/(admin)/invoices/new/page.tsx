@@ -72,8 +72,9 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePagePro
       .eq('is_active', true)
       .eq('is_archived', false)
       .order('name', { ascending: true }),
-    // A released row (a line on a voided invoice) is a historical record and no longer claims its appointment.
-    supabase.from('invoice_appointments').select('appointment_id').eq('is_archived', false),
+    // A released row (a line on a voided invoice) and a Cancelled line are records only and no longer claim
+    // their appointment.
+    supabase.from('invoice_appointments').select('appointment_id').eq('is_archived', false).is('cancelled_at', null),
     supabase
       .from('appointments')
       .select(
