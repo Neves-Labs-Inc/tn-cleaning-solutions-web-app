@@ -7,14 +7,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import StatusBadge, { appointmentStatusBadge, clockStatusBadge } from '@/components/ui/status-badge'
 import { buildMapsUrl, formatTimeRange } from '@/lib/schedule'
-import { cn } from '@/lib/utils'
 import type { ScheduleStop } from '@/types/schedule'
 
 export function ScheduleTodayCard({ stop }: { stop: ScheduleStop }) {
 	const statusBadge = appointmentStatusBadge(stop.status)
 	const youBadge = clockStatusBadge(stop.you.clockStatus, stop.you.clocked_in_at, stop.you.clocked_out_at)
 	const hasAddress = Boolean(stop.address?.trim())
-	const hasPhone = Boolean(stop.clientPhone)
 	const description = stop.jobDescription?.trim()
 
 	return (
@@ -57,31 +55,16 @@ export function ScheduleTodayCard({ stop }: { stop: ScheduleStop }) {
 			<CardContent className="space-y-3">
 				{description ? <p className="text-sm leading-6 break-words text-foreground">{description}</p> : null}
 				{hasAddress ? <p className="text-sm break-words text-muted-foreground">{stop.address}</p> : null}
-				{hasAddress || hasPhone ? (
-					<div className="grid grid-cols-2 gap-2">
-						{hasAddress ? (
-							<Button
-								variant="outline"
-								nativeButton={false}
-								className={cn('min-w-0 px-3', !hasPhone && 'col-span-2')}
-								render={<a href={buildMapsUrl(stop.address ?? '')} target="_blank" rel="noopener" />}
-							>
-								<MapPin aria-hidden="true" />
-								Directions
-							</Button>
-						) : null}
-						{hasPhone ? (
-							<Button
-								variant="outline"
-								nativeButton={false}
-								className={cn('min-w-0 px-3', !hasAddress && 'col-span-2')}
-								render={<a href={`tel:${stop.clientPhone}`} />}
-							>
-								<Phone aria-hidden="true" />
-								<span className="truncate">{stop.clientPhone}</span>
-							</Button>
-						) : null}
-					</div>
+				{hasAddress ? (
+					<Button
+						variant="outline"
+						nativeButton={false}
+						className="w-full"
+						render={<a href={buildMapsUrl(stop.address ?? '')} target="_blank" rel="noopener" />}
+					>
+						<MapPin aria-hidden="true" />
+						Directions
+					</Button>
 				) : null}
 			</CardContent>
 
