@@ -31,10 +31,12 @@ export function ScheduleTodayCard({ stop }: { stop: ScheduleStop }) {
 					<h3 className="text-base font-semibold break-words text-foreground">{stop.jobName}</h3>
 					<p className="text-sm break-words text-muted-foreground">{stop.clientName}</p>
 					<div className="col-span-2 flex flex-wrap gap-2 pt-1">
-						<StatusBadge tone={statusBadge.tone} icon={statusBadge.icon}>
-							{statusBadge.label}
-						</StatusBadge>
-						{/* Keyed on the status so the badge zooms in once when it changes after a clock action. */}
+						{/* Keyed on the status so the badges zoom in once when they change after a clock action. */}
+						<span key={stop.status} className="animate-in fade-in-0 zoom-in-95 duration-base ease-out-quart">
+							<StatusBadge tone={statusBadge.tone} icon={statusBadge.icon}>
+								{statusBadge.label}
+							</StatusBadge>
+						</span>
 						<span key={stop.you.clockStatus} className="animate-in fade-in-0 zoom-in-95 duration-base ease-out-quart">
 							<StatusBadge tone={youBadge.tone} icon={youBadge.icon}>
 								{youBadge.label}
@@ -50,6 +52,7 @@ export function ScheduleTodayCard({ stop }: { stop: ScheduleStop }) {
 					jobName={stop.jobName}
 					appointmentEmployeeId={stop.assignmentId}
 					appointmentStatus={stop.status}
+					manuallyCompleted={stop.manually_completed}
 					clockStatus={stop.you.clockStatus}
 				/>
 			</CardContent>

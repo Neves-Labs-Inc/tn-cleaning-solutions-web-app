@@ -225,6 +225,7 @@ function assignment(clockedInAt: string | null = null) {
       scheduled_start_time: '08:00:00',
       scheduled_end_time: '11:00:00',
       status: 'scheduled' as const,
+      manually_completed: false,
       clients: { name: 'Acme', phone: null },
       client_locations: null,
       jobs: { name: 'Deep clean', description: null },

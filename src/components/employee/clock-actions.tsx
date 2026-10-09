@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useEffect, useId, useRef, useState, useTransition } from 'react'
 import { CheckCircle2, CircleAlert, Clock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -11,13 +11,15 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, D
 import { Spinner } from '@/components/ui/spinner'
 import { clockIn, clockOut, type ClockActionState } from '@/lib/actions/attendance'
 import { formatBusinessTime } from '@/lib/schedule'
-import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
+import { CLOCK_BLOCKED_MESSAGES } from '@/lib/appointments/clock-messages'
+import { canClockIn, type AppointmentStatus } from '@/lib/appointments/lifecycle'
 
 type ClockStatus = 'clocked_in' | 'clocked_out' | 'not_started'
 type ClockActionsProps = {
 	appointmentEmployeeId: string
 	clockStatus: ClockStatus
 	appointmentStatus: AppointmentStatus
+	manuallyCompleted: boolean
 	jobName?: string
 	variant?: 'inline' | 'bar'
 }
@@ -34,7 +36,12 @@ const ROOT_CLASSES: Record<NonNullable<ClockActionsProps['variant']>, string> = 
 	bar: 'w-full space-y-3',
 }
 
-export function ClockActions({ appointmentEmployeeId, clockStatus, appointmentStatus, jobName, variant = 'inline' }: ClockActionsProps) {
+function getBlockedMessage(canClockInHere: boolean, status: AppointmentStatus): string | null {
+	if (canClockInHere) return null
+	return status === 'cancelled' ? CLOCK_BLOCKED_MESSAGES.cancelled : CLOCK_BLOCKED_MESSAGES.manuallyCompleted
+}
+
+export function ClockActions({ appointmentEmployeeId, clockStatus, appointmentStatus, manuallyCompleted, jobName, variant = 'inline' }: ClockActionsProps) {
 	const router = useRouter()
 	const [isPending, startTransition] = useTransition()
 	const [error, setError] = useState<string | null>(null)
@@ -43,11 +50,17 @@ export function ClockActions({ appointmentEmployeeId, clockStatus, appointmentSt
 	const completedRef = useRef<HTMLDivElement>(null)
 	const previousClockStatusRef = useRef(clockStatus)
 
-	const isDisabled = appointmentStatus === 'completed' || appointmentStatus === 'cancelled'
-	const disabledMessage = `This appointment is ${appointmentStatus}. Clock actions are disabled.`
-	// After a refused clock the refresh flips isDisabled, and the standing notice then says the
-	// same thing as the inline error, so the error yields to it.
-	const shownError = isDisabled && error === disabledMessage ? null : error
+	const noticeId = useId()
+
+	const canClockInHere = canClockIn({ status: appointmentStatus, manually_completed: manuallyCompleted })
+	// Picking the copy by status is not a status rule; availability comes from canClockIn alone.
+	const blockedMessage = getBlockedMessage(canClockInHere, appointmentStatus)
+	// Clocking out always works, so the notice only shows when no action is left to explain.
+	const noticeMessage = clockStatus === 'clocked_in' ? null : blockedMessage
+	// After a refused clock-in the refresh brings the notice, which says the same thing as the inline
+	// error, so the error yields to it.
+	const shownError = noticeMessage && error === noticeMessage ? null : error
+	const isClockInBlocked = !canClockInHere
 
 	// Fires when the sheet unmounts for every close path (vaul's onAnimationEnd and onOpenChange skip the
 	// programmatic close), and replaces Radix's default return to a trigger this drawer does not have.
@@ -103,14 +116,14 @@ export function ClockActions({ appointmentEmployeeId, clockStatus, appointmentSt
 	return (
 		<div className={ROOT_CLASSES[variant]}>
 			{clockStatus === 'not_started' ? (
-				<Button type="button" size="lg" className="w-full" onClick={handleClockIn} disabled={isPending || isDisabled} aria-busy={isPending}>
+				<Button type="button" size="lg" className="w-full" onClick={handleClockIn} disabled={isPending || isClockInBlocked} aria-busy={isPending} aria-describedby={isClockInBlocked ? noticeId : undefined}>
 					{isPending ? <Spinner className="size-5" /> : <Clock aria-hidden="true" />}
 					{isPending ? 'Clocking in…' : 'Clock In'}
 				</Button>
 			) : null}
 
 			{clockStatus === 'clocked_in' ? (
-				<Button ref={clockOutButtonRef} type="button" size="lg" variant="secondary" className="w-full" onClick={() => setIsDrawerOpen(true)} disabled={isDisabled}>
+				<Button ref={clockOutButtonRef} type="button" size="lg" variant="secondary" className="w-full" onClick={() => setIsDrawerOpen(true)}>
 					<CheckCircle2 aria-hidden="true" />
 					Clock Out
 				</Button>
@@ -135,7 +148,11 @@ export function ClockActions({ appointmentEmployeeId, clockStatus, appointmentSt
 				</Alert>
 			) : null}
 
-			{isDisabled ? <p className="text-sm text-muted-foreground">{disabledMessage}</p> : null}
+			{noticeMessage ? (
+				<p id={noticeId} className="text-sm text-muted-foreground">
+					{noticeMessage}
+				</p>
+			) : null}
 
 			<Drawer open={isDrawerOpen} onOpenChange={handleDrawerOpenChange} dismissible={!isPending} autoFocus>
 				<DrawerContent className="sm:mx-auto sm:max-w-md" onCloseAutoFocus={handleDrawerCloseAutoFocus}>

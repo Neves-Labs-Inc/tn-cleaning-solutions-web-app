@@ -627,6 +627,7 @@ export type Database = {
           updated_at: string | null
           is_archived: boolean | null
           location_id: string | null
+          manually_completed: boolean | null
         }
         Relationships: []
       }
