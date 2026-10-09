@@ -272,3 +272,21 @@ export function invoiceClientOptions(rows: InvoiceViewRow[]): ClientOption[] {
     .map(([id, name]) => ({ id, name: name || 'Unknown client' }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
+
+// --- Payment methods (ticket 14) ---
+
+// Same collapse as write_invoice_payment's btrim(regexp_replace(p_method, '\s+', ' ', 'g')).
+export function normalizePaymentMethodName(raw: string): string {
+  return raw.trim().replace(/\s+/g, ' ')
+}
+
+type NamedMethod = { id: string; name: string }
+
+// The payment_methods_name_lower_key rule, checked early so the page can name the clash.
+export function findDuplicateMethod<T extends NamedMethod>(name: string, methods: T[], selfId: string): T | null {
+  const wanted = normalizePaymentMethodName(name).toLowerCase()
+  const match = methods.find(
+    (method) => method.id !== selfId && normalizePaymentMethodName(method.name).toLowerCase() === wanted,
+  )
+  return match ?? null
+}

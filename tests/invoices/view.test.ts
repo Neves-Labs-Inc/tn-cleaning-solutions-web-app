@@ -6,8 +6,10 @@ import {
   daysOverdue,
   dueLabel,
   filterInvoices,
+  findDuplicateMethod,
   groupUnbilled,
   invoiceLabel,
+  normalizePaymentMethodName,
   overdueInvoices,
   receivablesTotals,
   type InvoiceFilter,
@@ -190,4 +192,28 @@ test('groupUnbilled groups per client and tags excluded and unpriced visits', ()
       ['Birch', [['v1', null], ['v3', 'excluded']]],
     ],
   )
+})
+
+const METHODS = [
+  { id: 'm1', name: 'Cash', is_hidden: false, sort_order: 1 },
+  { id: 'm2', name: 'Cheque', is_hidden: false, sort_order: 2 },
+  { id: 'm3', name: 'Venmo', is_hidden: true, sort_order: 3 },
+]
+
+test('normalizePaymentMethodName trims and collapses inner whitespace', () => {
+  assert.equal(normalizePaymentMethodName('  Cash \t on   site\n'), 'Cash on site')
+  assert.equal(normalizePaymentMethodName('   '), '')
+})
+
+test('findDuplicateMethod matches another method ignoring case and spacing', () => {
+  assert.equal(findDuplicateMethod('  cHEQUE ', METHODS, 'm1')?.name, 'Cheque')
+  assert.equal(findDuplicateMethod('venmo', METHODS, 'm1')?.is_hidden, true)
+})
+
+test('findDuplicateMethod skips the row being renamed', () => {
+  assert.equal(findDuplicateMethod('CASH', METHODS, 'm1'), null)
+})
+
+test('findDuplicateMethod returns null for a free name', () => {
+  assert.equal(findDuplicateMethod('Wire transfer', METHODS, 'm1'), null)
 })

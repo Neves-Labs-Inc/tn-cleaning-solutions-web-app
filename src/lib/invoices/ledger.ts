@@ -4,6 +4,7 @@ import type { Database } from '@/types/database'
 import { loadDraftLines, type DraftLine } from './draft-lines.ts'
 import { messageFor, toLedgerError, type LedgerError, type LedgerErrorCode, type PostgrestLikeError } from './errors.ts'
 import { hasUnpricedLine } from './lines.ts'
+import { normalizePaymentMethodName } from './view.ts'
 
 // Server-only: it takes the user-session client, so every write runs as the signed-in admin and the
 // SQL functions check the role themselves (ADR 0001). It never sees a service-role client.
@@ -56,10 +57,6 @@ function toBilledLine({ appointment_id, visit }: DraftLine): BilledLine[] {
 function asPostgrestLike(thrown: unknown): PostgrestLikeError {
   const hasMessage = typeof thrown === 'object' && thrown !== null && 'message' in thrown
   return hasMessage ? (thrown as PostgrestLikeError) : { message: String(thrown) }
-}
-
-function normalizeMethodName(name: string): string {
-  return name.trim().replace(/\s+/g, ' ')
 }
 
 export class InvoiceLedger {
@@ -181,7 +178,7 @@ export class InvoiceLedger {
 
   // Saved the way invoice_record_payment saves a typed method: trimmed, whitespace runs collapsed.
   async renamePaymentMethod(methodId: string, name: string): Promise<LedgerResult<null>> {
-    const normalized = normalizeMethodName(name)
+    const normalized = normalizePaymentMethodName(name)
     if (!normalized) return this.fail('renamePaymentMethod', { methodId }, refusal('method_name_required'))
 
     const { data, error } = await this.db
