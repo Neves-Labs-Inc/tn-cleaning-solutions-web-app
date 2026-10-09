@@ -1,9 +1,9 @@
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
+import type { InvoiceEffectiveStatus, InvoiceStatus } from '@/lib/invoices/view'
 import { formatBusinessDate } from '@/lib/schedule'
 
 export type { AppointmentStatus }
-export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'void'
-export type InvoiceEffectiveStatus = InvoiceStatus | 'overdue'
+export type { InvoiceStatus, InvoiceEffectiveStatus }
 
 export type TodayAppointmentRow = {
     id: string
@@ -24,6 +24,7 @@ export type TodayAppointmentRow = {
 export type RecentInvoiceRow = {
     id: string
     status: InvoiceStatus
+    invoice_number: string | null
     total_cents: number
     created_at: string
     due_date: string | null
@@ -72,17 +73,6 @@ export function relationLocation(
     return value
 }
 
-export function invoiceRef(id: string): string {
-    return `INV-${id.slice(0, 8).toUpperCase()}`
-}
-
-export function formatCurrency(cents: number): string {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-    }).format(cents / 100)
-}
-
 export function parseDateOnly(value: string): Date {
     const [year, month, day] = value.split('-').map(Number)
     return new Date(year, month - 1, day)
@@ -118,26 +108,6 @@ export function formatTime(value: string): string {
     }).format(date)
 }
 
-export function statusBadgeClasses(status: InvoiceEffectiveStatus): string {
-    if (status === 'draft') {
-        return 'border border-blue-200 bg-blue-50 text-blue-700'
-    }
-
-    if (status === 'issued') {
-        return 'border border-amber-200 bg-amber-50 text-amber-700'
-    }
-
-    if (status === 'paid') {
-        return 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-    }
-
-    if (status === 'overdue') {
-        return 'border border-red-200 bg-red-50 text-red-700'
-    }
-
-    return 'border border-neutral-200 bg-neutral-100 text-neutral-700'
-}
-
 export function appointmentStatusBadgeClasses(status: AppointmentStatus): string {
     if (status === 'in_progress') {
         return 'border border-emerald-200 bg-emerald-50 text-emerald-700'
@@ -152,14 +122,6 @@ export function appointmentStatusBadgeClasses(status: AppointmentStatus): string
     }
 
     return 'border border-blue-200 bg-blue-50 text-blue-700'
-}
-
-export function invoiceEffectiveStatus(invoice: RecentInvoiceRow, today: string): InvoiceEffectiveStatus {
-    if (invoice.status === 'issued' && invoice.due_date && invoice.due_date < today) {
-        return 'overdue'
-    }
-
-    return invoice.status
 }
 
 export function assignedEmployeeNames(row: TodayAppointmentRow): string {

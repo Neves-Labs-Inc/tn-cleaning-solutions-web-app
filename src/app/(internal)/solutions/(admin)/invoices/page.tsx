@@ -2,26 +2,23 @@ import Link from 'next/link'
 import { FileText } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import StatusBadge, { invoiceStatusBadge } from '@/components/ui/status-badge'
 import { archiveInvoice, restoreInvoice } from '@/lib/actions/invoices'
+import { invoiceLabel } from '@/lib/invoices/view'
+import { formatCents } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
 
 type InvoiceListRow = {
 	id: string
 	status: 'draft' | 'issued' | 'paid' | 'void'
 	effective_status: 'draft' | 'issued' | 'paid' | 'void' | 'overdue'
+	invoice_number: string | null
 	issued_date: string | null
 	due_date: string | null
 	total_cents: number
 	notes: string | null
 	is_archived: boolean
 	clients: { name: string } | { name: string }[] | null
-}
-
-function formatCurrency(cents: number) {
-	return new Intl.NumberFormat('en-US', {
-		style: 'currency',
-		currency: 'USD',
-	}).format(cents / 100)
 }
 
 function getClientName(clients: InvoiceListRow['clients']) {
@@ -50,30 +47,6 @@ function formatDateValue(value: string | null) {
 	})
 }
 
-function statusBadgeClasses(status: InvoiceListRow['effective_status']) {
-	if (status === 'draft') {
-		return 'border border-blue-200 bg-blue-50 text-blue-700'
-	}
-
-	if (status === 'issued') {
-		return 'border border-amber-200 bg-amber-50 text-amber-700'
-	}
-
-	if (status === 'paid') {
-		return 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-	}
-
-	if (status === 'overdue') {
-		return 'border border-red-200 bg-red-50 text-red-700'
-	}
-
-	return 'border border-neutral-200 bg-neutral-100 text-neutral-700'
-}
-
-function invoiceRef(id: string) {
-	return `INV-${id.slice(0, 8).toUpperCase()}`
-}
-
 function InvoiceCard({ invoice, archived = false }: { invoice: InvoiceListRow; archived?: boolean }) {
 	async function handleArchiveToggle(formData: FormData) {
 		'use server'
@@ -94,24 +67,24 @@ function InvoiceCard({ invoice, archived = false }: { invoice: InvoiceListRow; a
 	const canArchive =
 		archived || invoice.effective_status === 'draft' || invoice.effective_status === 'paid' || invoice.effective_status === 'void'
 
+	const badge = invoiceStatusBadge(invoice.effective_status)
+
 	return (
-		<article className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm shadow-emerald-950/5">
+		<article className="min-w-0 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm shadow-emerald-950/5">
 			<div className="space-y-3">
 				<div className="flex items-start justify-between gap-3">
 					<div className="min-w-0 space-y-1">
 						<p className="truncate text-sm font-semibold text-neutral-950">{getClientName(invoice.clients)}</p>
-						<p className="text-xs text-neutral-500">{invoiceRef(invoice.id)}</p>
+						<p className="text-xs text-neutral-500">{invoiceLabel(invoice)}</p>
 					</div>
-					<span
-						className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${statusBadgeClasses(invoice.effective_status)}`}
-					>
-						{invoice.effective_status}
-					</span>
+					<StatusBadge tone={badge.tone} icon={badge.icon} className="shrink-0">
+						{badge.label}
+					</StatusBadge>
 				</div>
 
 				<div>
 					<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Total</p>
-					<p className="mt-1 text-xl font-bold text-neutral-950">{formatCurrency(invoice.total_cents)}</p>
+					<p className="mt-1 text-xl font-bold text-neutral-950">{formatCents(invoice.total_cents)}</p>
 				</div>
 
 				<div className="grid grid-cols-2 gap-3 text-xs text-neutral-600">
@@ -162,12 +135,12 @@ export default async function InvoicesPage() {
 		await Promise.all([
 			supabase
 				.from('invoices_with_status')
-				.select('id, client_id, status, effective_status, issued_date, due_date, total_cents, notes, is_archived, clients!inner(name), created_at')
+				.select('id, client_id, status, effective_status, invoice_number, issued_date, due_date, total_cents, notes, is_archived, clients!inner(name), created_at')
 				.eq('is_archived', false)
 				.order('created_at', { ascending: false }),
 			supabase
 				.from('invoices_with_status')
-				.select('id, client_id, status, effective_status, issued_date, due_date, total_cents, notes, is_archived, clients!inner(name), created_at')
+				.select('id, client_id, status, effective_status, invoice_number, issued_date, due_date, total_cents, notes, is_archived, clients!inner(name), created_at')
 				.eq('is_archived', true)
 				.order('created_at', { ascending: false }),
 		])

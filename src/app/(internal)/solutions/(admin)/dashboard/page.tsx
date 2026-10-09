@@ -5,23 +5,22 @@ import { AlertCircle, CalendarDays, CheckCircle, FileText, Users } from 'lucide-
 import { createClient } from '@/lib/supabase/server'
 import { toBusinessWallClock } from '@/lib/schedule'
 import { 
-    formatCurrency, 
     formatCreatedAtDate, 
     formatDateLabel, 
     formatTime, 
-    statusBadgeClasses, 
     appointmentStatusBadgeClasses, 
-    invoiceEffectiveStatus, 
     assignedEmployeeNames,
     relationName,
     relationLocation,
-    invoiceRef
 } from '@/lib/helpers/dashboard'
 import type { 
     TodayAppointmentRow, 
     RecentInvoiceRow, 
     UpcomingAppointmentRow 
 } from '@/lib/helpers/dashboard'
+import StatusBadge, { invoiceStatusBadge } from '@/components/ui/status-badge'
+import { effectiveStatus, invoiceLabel } from '@/lib/invoices/view'
+import { formatCents } from '@/lib/pricing/money'
 import StatCard from '@/components/dashboard/statCard'
 
 
@@ -79,7 +78,7 @@ export default async function DashboardPage() {
 
         supabase
             .from('invoices_with_status')
-            .select(`id, status, total_cents, created_at, due_date, clients!inner(name)`)
+            .select(`id, status, invoice_number, total_cents, created_at, due_date, clients!inner(name)`)
             .eq('is_archived', false)
             .order('created_at', { ascending: false })
             .limit(5),
@@ -185,7 +184,7 @@ export default async function DashboardPage() {
             </section>
 
             <section className="grid gap-6 xl:grid-cols-2">
-                <article className="rounded-2xl border border-neutral-200 bg-white shadow-sm shadow-emerald-950/5 flex flex-col">
+                <article className="min-w-0 rounded-2xl border border-neutral-200 bg-white shadow-sm shadow-emerald-950/5 flex flex-col">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-5 py-4">
                         <h2 className="text-base font-semibold text-neutral-950">Today&apos;s Schedule</h2>
                         <Link href="/solutions/appointments" className="text-sm font-medium text-emerald-700 hover:text-emerald-800 shrink-0">
@@ -242,7 +241,7 @@ export default async function DashboardPage() {
                     </div>
                 </article>
 
-                <article className="rounded-2xl border border-neutral-200 bg-white shadow-sm shadow-emerald-950/5 flex flex-col">
+                <article className="min-w-0 rounded-2xl border border-neutral-200 bg-white shadow-sm shadow-emerald-950/5 flex flex-col">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-5 py-4">
                         <h2 className="text-base font-semibold text-neutral-950">Recent Invoices</h2>
                         <Link href="/solutions/invoices" className="text-sm font-medium text-emerald-700 hover:text-emerald-800 shrink-0">
@@ -255,7 +254,7 @@ export default async function DashboardPage() {
                             <p className="px-5 py-8 text-sm text-neutral-500">No invoices found.</p>
                         ) : (
                             recentInvoices.map((invoice) => {
-                                const effectiveStatus = invoiceEffectiveStatus(invoice, today)
+                                const badge = invoiceStatusBadge(effectiveStatus(invoice, today))
 
                                 return (
                                     <Link
@@ -265,19 +264,15 @@ export default async function DashboardPage() {
                                     >
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0 space-y-1">
-                                                <p className="text-sm font-semibold text-neutral-950 truncate">{invoiceRef(invoice.id)}</p>
+                                                <p className="text-sm font-semibold text-neutral-950 truncate">{invoiceLabel(invoice)}</p>
                                                 <p className="truncate text-sm text-neutral-600">{relationName(invoice.clients)}</p>
                                                 <p className="text-xs text-neutral-500">Created {formatCreatedAtDate(invoice.created_at)}</p>
                                             </div>
                                             <div className="shrink-0 text-right">
-                                                <span
-                                                    className={`inline-flex rounded-full px-2.5 py-1 text-[0.65rem] sm:text-xs font-semibold uppercase tracking-wide ${statusBadgeClasses(
-                                                        effectiveStatus,
-                                                    )}`}
-                                                >
-                                                    {effectiveStatus}
-                                                </span>
-                                                <p className="mt-2 text-sm font-semibold text-neutral-950">{formatCurrency(invoice.total_cents)}</p>
+                                                <StatusBadge tone={badge.tone} icon={badge.icon} className="ml-auto">
+                                                    {badge.label}
+                                                </StatusBadge>
+                                                <p className="mt-2 text-sm font-semibold text-neutral-950">{formatCents(invoice.total_cents)}</p>
                                             </div>
                                         </div>
                                     </Link>

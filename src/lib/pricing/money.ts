@@ -1,6 +1,6 @@
-const usdFormatter = new Intl.NumberFormat('en-US', {
+const cadFormatter = new Intl.NumberFormat('en-CA', {
   style: 'currency',
-  currency: 'USD',
+  currency: 'CAD',
 })
 
 // Deliberate contract change from the three parsers this replaces: the appointments variant
@@ -24,7 +24,7 @@ export function parseDollarsToCents(raw: string): number | null {
 export const UNPRICED_LABEL = '—'
 
 export function formatCents(cents: number): string {
-  return usdFormatter.format(cents / 100)
+  return cadFormatter.format(cents / 100)
 }
 
 export function formatRate(cents: number): string {

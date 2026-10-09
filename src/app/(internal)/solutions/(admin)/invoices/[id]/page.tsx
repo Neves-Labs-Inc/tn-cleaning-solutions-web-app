@@ -3,12 +3,14 @@ import { ArrowLeft, CircleOff, Pencil, ReceiptText } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
 import { Button } from '@/components/ui/button'
+import StatusBadge, { invoiceStatusBadge } from '@/components/ui/status-badge'
 import {
 	archiveInvoice,
 	issueInvoice,
 	markInvoicePaid,
 	voidInvoice,
 } from '@/lib/actions/invoices'
+import { effectiveStatus, invoiceLabel } from '@/lib/invoices/view'
 import { formatCents, formatRate } from '@/lib/pricing/money'
 import { formatBusinessDateTime, getBusinessDate } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
@@ -21,6 +23,7 @@ type InvoiceDetailRow = {
 	id: string
 	status: 'draft' | 'issued' | 'paid' | 'void'
 	issued_date: string | null
+	invoice_number: string | null
 	due_date: string | null
 	total_cents: number
 	notes: string | null
@@ -58,10 +61,6 @@ type InvoiceDetailRow = {
 		| null
 }
 
-function invoiceRef(id: string) {
-	return `INV-${id.slice(0, 8).toUpperCase()}`
-}
-
 function formatDateValue(value: string | null) {
 	if (!value) {
 		return 'Not set'
@@ -78,38 +77,6 @@ function formatDateValue(value: string | null) {
 
 function formatDateTime(date: string, time: string) {
 	return `${formatDateValue(date)} • ${time.slice(0, 5)}`
-}
-
-function isPastDate(value: string) {
-	return value < getBusinessDate(new Date())
-}
-
-function effectiveStatus(invoice: InvoiceDetailRow) {
-	if (invoice.status === 'issued' && invoice.due_date && isPastDate(invoice.due_date)) {
-		return 'overdue'
-	}
-
-	return invoice.status
-}
-
-function statusBadgeClasses(status: ReturnType<typeof effectiveStatus>) {
-	if (status === 'draft') {
-		return 'border border-blue-200 bg-blue-50 text-blue-700'
-	}
-
-	if (status === 'issued') {
-		return 'border border-amber-200 bg-amber-50 text-amber-700'
-	}
-
-	if (status === 'paid') {
-		return 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-	}
-
-	if (status === 'overdue') {
-		return 'border border-red-200 bg-red-50 text-red-700'
-	}
-
-	return 'border border-neutral-200 bg-neutral-100 text-neutral-700'
 }
 
 function rateBreakdown(rateCents: number | null, minutes: number | null) {
@@ -133,7 +100,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 		.from('invoices_with_status')
 		.select(
 			`
-				id, status, issued_date, due_date, total_cents, notes, is_archived, created_at, client_id,
+				id, status, invoice_number, issued_date, due_date, total_cents, notes, is_archived, created_at, client_id,
 				clients!inner ( id, name, email, phone ),
 				invoice_appointments (
 					appointment_id, billed_amount_cents, billed_rate_cents, billed_minutes,
@@ -154,7 +121,8 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 		notFound()
 	}
 
-	const status = effectiveStatus(invoice)
+	const status = effectiveStatus(invoice, getBusinessDate(new Date()))
+	const badge = invoiceStatusBadge(status)
 	const overdue = status === 'overdue'
 
 	const lines = (invoice.invoice_appointments ?? []).flatMap((row) =>
@@ -212,15 +180,13 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 						</Link>
 
 						<div>
-							<h1 className="text-3xl font-bold tracking-tight text-neutral-950">{invoiceRef(invoice.id)}</h1>
+							<h1 className="text-3xl font-bold tracking-tight text-neutral-950">{invoiceLabel(invoice)}</h1>
 							<p className="mt-2 text-sm text-neutral-600">Client billing details and status controls.</p>
 						</div>
 
-						<span
-							className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${statusBadgeClasses(status)}`}
-						>
-							{status}
-						</span>
+						<StatusBadge tone={badge.tone} icon={badge.icon} className="w-fit">
+							{badge.label}
+						</StatusBadge>
 					</div>
 
 					<div className="flex flex-wrap items-center gap-2">
@@ -376,7 +342,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 						<ul className="mt-3 space-y-2 text-sm text-neutral-700">
 							<li className="flex items-center gap-2">
 								<ReceiptText className="size-4 text-emerald-600" aria-hidden="true" />
-								{invoiceRef(invoice.id)}
+								{invoiceLabel(invoice)}
 							</li>
 							<li className="flex items-center gap-2">
 								<CircleOff className="size-4 text-neutral-500" aria-hidden="true" />
