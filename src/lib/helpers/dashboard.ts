@@ -1,9 +1,6 @@
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
-import type { InvoiceEffectiveStatus, InvoiceStatus } from '@/lib/invoices/view'
-import { formatBusinessDate } from '@/lib/schedule'
 
 export type { AppointmentStatus }
-export type { InvoiceStatus, InvoiceEffectiveStatus }
 
 export type TodayAppointmentRow = {
     id: string
@@ -19,16 +16,6 @@ export type TodayAppointmentRow = {
             employees: { full_name: string } | { full_name: string }[] | null
         }>
         | null
-}
-
-export type RecentInvoiceRow = {
-    id: string
-    status: InvoiceStatus
-    invoice_number: string | null
-    total_cents: number
-    created_at: string
-    due_date: string | null
-    clients: { name: string } | { name: string }[] | null
 }
 
 export type UpcomingAppointmentRow = {
@@ -76,10 +63,6 @@ export function relationLocation(
 export function parseDateOnly(value: string): Date {
     const [year, month, day] = value.split('-').map(Number)
     return new Date(year, month - 1, day)
-}
-
-export function formatCreatedAtDate(value: string): string {
-    return formatBusinessDate(new Date(value))
 }
 
 export function formatDateLabel(value: string): string {
