@@ -54,10 +54,11 @@ export type UnbilledVisit = {
 
 export type UnbilledTag = 'excluded' | 'unpriced' | null
 
-export type UnbilledGroup = {
+// Generic so a caller's richer visit rows (time, job, location) survive grouping.
+export type UnbilledGroup<T extends UnbilledVisit = UnbilledVisit> = {
   clientId: string
   clientName: string
-  visits: Array<UnbilledVisit & { tag: UnbilledTag }>
+  visits: Array<T & { tag: UnbilledTag }>
 }
 
 const MS_PER_DAY = 86_400_000
@@ -174,7 +175,7 @@ export function clientBalances(
     .sort((a, b) => b.overdueCents - a.overdueCents || b.owedCents - a.owedCents)
 }
 
-export function overdueInvoices(rows: InvoiceViewRow[]): InvoiceViewRow[] {
+export function overdueInvoices<T extends InvoiceViewRow>(rows: T[]): T[] {
   return rows
     .filter((row) => isOwed(row) && row.effective_status === 'overdue')
     .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''))
@@ -200,8 +201,8 @@ function tagFor(visit: UnbilledVisit): UnbilledTag {
   return visit.live_price_cents === null ? 'unpriced' : null
 }
 
-export function groupUnbilled(visits: UnbilledVisit[]): UnbilledGroup[] {
-  const groups = new Map<string, UnbilledGroup>()
+export function groupUnbilled<T extends UnbilledVisit>(visits: T[]): Array<UnbilledGroup<T>> {
+  const groups = new Map<string, UnbilledGroup<T>>()
 
   for (const visit of visits) {
     const group = groups.get(visit.client_id) ?? {
@@ -304,4 +305,28 @@ export function findDuplicateMethod<T extends NamedMethod>(name: string, methods
     (method) => method.id !== selfId && normalizePaymentMethodName(method.name).toLowerCase() === wanted,
   )
   return match ?? null
+}
+
+// --- Contact links (ticket 12) ---
+
+export type ContactLinks = { phone: string | null; phoneHref: string | null; emailHref: string | null }
+
+// The @ stays literal: encoding each side keeps odd characters out of the URL without breaking it.
+function mailtoHref(email: string): string {
+  const at = email.lastIndexOf('@')
+  if (at < 0) return `mailto:${encodeURIComponent(email)}`
+  return `mailto:${encodeURIComponent(email.slice(0, at))}@${encodeURIComponent(email.slice(at + 1))}`
+}
+
+// Phone and email can be NULL. A trailing extension ("ext 2", "x2") is cut off, since tel: can't dial it.
+export function contactLinks(client: { phone: string | null; email: string | null } | null): ContactLinks {
+  const phone = client?.phone?.trim() ?? ''
+  const email = client?.email?.trim() ?? ''
+  const dialable = phone.replace(/\s*(?:ext\.?|x)\s*\d+\s*$/i, '').replace(/[^\d+]/g, '')
+
+  return {
+    phone: phone || null,
+    phoneHref: dialable ? `tel:${dialable}` : null,
+    emailHref: email ? mailtoHref(email) : null,
+  }
 }

@@ -3,6 +3,7 @@ import { test } from 'node:test'
 
 import {
   clientBalances,
+  contactLinks,
   daysOverdue,
   dueLabel,
   filterInvoices,
@@ -242,4 +243,22 @@ test('unbilledSummary counts visits, sums priced ones and counts unpriced ones',
     unpricedCount: 1,
   })
   assert.deepEqual(unbilledSummary([]), { count: 0, pricedCents: 0, unpricedCount: 0 })
+})
+
+test('contactLinks gives no links for a client with no phone and no email', () => {
+  const none = { phone: null, phoneHref: null, emailHref: null }
+  assert.deepEqual(contactLinks({ phone: null, email: null }), none)
+  assert.deepEqual(contactLinks(null), none)
+})
+
+test('contactLinks drops a phone extension and encodes the email', () => {
+  const links = contactLinks({ phone: '(416) 555-0101 ext 2', email: 'a b+c@x.com' })
+  assert.equal(links.phoneHref, 'tel:4165550101')
+  assert.equal(links.emailHref, 'mailto:a%20b%2Bc@x.com')
+})
+
+test('contactLinks keeps an x that is not a trailing extension', () => {
+  assert.equal(contactLinks({ phone: '1-800-FLOWERS x', email: null }).phoneHref, 'tel:1800')
+  assert.equal(contactLinks({ phone: '416 555 0101 x23', email: null }).phoneHref, 'tel:4165550101')
+  assert.equal(contactLinks({ phone: '+1 (416) 555-0101', email: null }).phoneHref, 'tel:+14165550101')
 })

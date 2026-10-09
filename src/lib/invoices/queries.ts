@@ -18,11 +18,11 @@ import type { InvoiceViewRow, LineState, UnbilledVisit } from './view'
 
 type Db = SupabaseClient<Database>
 
-export type ClientContact = { id: string; name: string; phone: string; email: string }
+export type ClientContact = { id: string; name: string; phone: string | null; email: string | null }
 
 export type InvoiceListRow = InvoiceViewRow & {
   created_at: string | null
-  clients: { name: string; phone: string; email: string } | null
+  clients: { name: string; phone: string | null; email: string | null } | null
 }
 
 export type VisitDetails = {
