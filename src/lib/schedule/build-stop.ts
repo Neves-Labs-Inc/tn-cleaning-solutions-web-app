@@ -12,7 +12,7 @@ export type AppointmentRecord = {
     scheduled_start_time: string
     scheduled_end_time: string
     status: ScheduleStop['status']
-    clients: { name: string; phone: string | null }
+    clients: { name: string }
     client_locations: { label: string; address: string } | null
     jobs: { name: string; description: string | null }
   }
@@ -69,7 +69,6 @@ export function buildStop(
     jobName: appointment.jobs.name,
     jobDescription: appointment.jobs.description,
     clientName: appointment.clients.name,
-    clientPhone: appointment.clients.phone,
     address: appointment.client_locations?.address ?? null,
     crew: [you, ...others],
     you,

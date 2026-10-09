@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { format, parseISO } from 'date-fns'
-import { MapPin, Phone } from 'lucide-react'
+import { MapPin } from 'lucide-react'
 
 import { ClockActions } from '@/components/employee/clock-actions'
 import { CrewRow, type CrewMember } from '@/components/employee/crew-row'
@@ -34,7 +34,6 @@ type AppointmentRecord = {
 		notes: string
 		clients: {
 			name: string
-			phone: string | null
 		}
 		client_locations: {
 			label: string
@@ -102,10 +101,7 @@ export default async function AppointmentDetailPage({
 					scheduled_end_time,
 					status,
 					notes,
-					clients!inner (
-						name,
-						phone
-					),
+					clients!inner ( name ),
 					client_locations (
 						label,
 						address
@@ -191,20 +187,12 @@ export default async function AppointmentDetailPage({
 					<CardHeader>
 						<CardTitle className="text-base font-semibold wrap-anywhere">{client.name}</CardTitle>
 					</CardHeader>
-					{address || client.phone ? (
-						<CardContent className="grid gap-2 text-sm leading-6 sm:grid-cols-2">
-							{address ? (
-								<Button variant="outline" className={LINK_BUTTON_CLASSES} render={<a href={buildMapsUrl(address)} target="_blank" rel="noopener" />} nativeButton={false}>
-									<MapPin aria-hidden="true" />
-									{address}
-								</Button>
-							) : null}
-							{client.phone ? (
-								<Button variant="outline" className={LINK_BUTTON_CLASSES} render={<a href={`tel:${client.phone}`} />} nativeButton={false}>
-									<Phone aria-hidden="true" />
-									{client.phone}
-								</Button>
-							) : null}
+					{address ? (
+						<CardContent className="text-sm leading-6">
+							<Button variant="outline" className={LINK_BUTTON_CLASSES} render={<a href={buildMapsUrl(address)} target="_blank" rel="noopener" />} nativeButton={false}>
+								<MapPin aria-hidden="true" />
+								{address}
+							</Button>
 						</CardContent>
 					) : null}
 				</Card>
