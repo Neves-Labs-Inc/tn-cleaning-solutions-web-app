@@ -64,7 +64,12 @@ export type ClaimableVisit = VisitDetails & { state: LineState; amount_cents: nu
 // visits can still be billed.
 export type BillableClient = { id: string; name: string; is_active: boolean; is_archived: boolean }
 
-export type UnbilledVisitRow = UnbilledVisit & { job_name: string; location_label: string | null }
+export type UnbilledVisitRow = UnbilledVisit & {
+  scheduled_start_time: string
+  scheduled_end_time: string
+  job_name: string
+  location_label: string | null
+}
 
 export type Receivables = {
   invoices: InvoiceListRow[]
@@ -196,6 +201,8 @@ async function loadUnbilled(db: Db, clientId: string | null): Promise<UnbilledVi
       client_id: row.client_id,
       client_name: row.clients?.name ?? 'Unknown client',
       scheduled_date: row.scheduled_date,
+      scheduled_start_time: row.scheduled_start_time,
+      scheduled_end_time: row.scheduled_end_time,
       live_price_cents: live.source === 'unpriced' ? null : live.amount_cents,
       is_excluded: row.excluded_from_automatic,
       job_name: row.jobs?.name ?? 'Unknown job',

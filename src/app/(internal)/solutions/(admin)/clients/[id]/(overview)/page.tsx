@@ -5,7 +5,10 @@ import { ArrowLeft, MapPin, Pencil, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { archiveLocation, restoreLocation } from '@/lib/actions/clients'
+import { getReceivables } from '@/lib/invoices/queries'
+import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createClient } from '@/lib/supabase/server'
+import { BillingSection } from './billing-section'
 
 type ClientDetailPageProps = {
 	params: Promise<{ id: string }>
@@ -103,11 +106,11 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
 	const { id } = await params
 	const supabase = await createClient()
 
-	const [{ data: client, error: clientError }, { data: locations, error: locationsError }] =
+	const [{ data: client, error: clientError }, { data: locations, error: locationsError }, receivables] =
 		await Promise.all([
 			supabase
 				.from('clients')
-				.select('id, name, email, phone, notes, is_active, is_archived')
+				.select('id, name, email, phone, notes, is_active, is_archived, automatic_invoicing')
 				.eq('id', id)
 				.maybeSingle(),
 			supabase
@@ -116,6 +119,11 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
 				.eq('client_id', id)
 				.order('is_archived', { ascending: true })
 				.order('label', { ascending: true }),
+			// A billing failure shows in the Billing section only: the rest of the page still renders.
+			getReceivables(supabase, id).catch((error: unknown) => {
+				console.error('Failed to load billing for client', id, error)
+				return null
+			}),
 		])
 
 	if (clientError || !client) {
@@ -170,6 +178,8 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
 					</div>
 				</div>
 			</section>
+
+			<BillingSection client={client} receivables={receivables} businessDate={getBusinessDate(new Date())} />
 
 			<section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
 				<h2 className="text-lg font-semibold text-neutral-950">Client Info</h2>

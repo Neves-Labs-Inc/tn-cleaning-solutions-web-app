@@ -180,6 +180,21 @@ export function overdueInvoices(rows: InvoiceViewRow[]): InvoiceViewRow[] {
     .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''))
 }
 
+// Issued and overdue, unarchived, newest issued first: what a client still owes.
+export function owedInvoices(rows: InvoiceViewRow[]): InvoiceViewRow[] {
+  return rows.filter(isOwed).sort((a, b) => (b.issued_date ?? '').localeCompare(a.issued_date ?? ''))
+}
+
+export type UnbilledSummary = { count: number; pricedCents: number; unpricedCount: number }
+
+export function unbilledSummary(visits: Array<{ live_price_cents: number | null }>): UnbilledSummary {
+  return {
+    count: visits.length,
+    pricedCents: visits.reduce((total, visit) => total + (visit.live_price_cents ?? 0), 0),
+    unpricedCount: visits.filter((visit) => visit.live_price_cents === null).length,
+  }
+}
+
 function tagFor(visit: UnbilledVisit): UnbilledTag {
   if (visit.is_excluded) return 'excluded'
   return visit.live_price_cents === null ? 'unpriced' : null

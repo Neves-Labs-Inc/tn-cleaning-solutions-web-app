@@ -11,7 +11,9 @@ import {
   invoiceLabel,
   normalizePaymentMethodName,
   overdueInvoices,
+  owedInvoices,
   receivablesTotals,
+  unbilledSummary,
   type InvoiceFilter,
   type InvoiceViewRow,
   type UnbilledVisit,
@@ -216,4 +218,28 @@ test('findDuplicateMethod skips the row being renamed', () => {
 
 test('findDuplicateMethod returns null for a free name', () => {
   assert.equal(findDuplicateMethod('Wire transfer', METHODS, 'm1'), null)
+})
+
+test('owedInvoices keeps issued and overdue unarchived invoices, newest issued first', () => {
+  const rows = [
+    row({ id: 'old', issued_date: '2026-09-01' }),
+    row({ id: 'late', effective_status: 'overdue', issued_date: '2026-09-20' }),
+    row({ id: 'new', issued_date: '2026-10-05' }),
+    row({ id: 'draft', status: 'draft', effective_status: 'draft', issued_date: null }),
+    row({ id: 'paid', status: 'paid', effective_status: 'paid', issued_date: '2026-10-06' }),
+    row({ id: 'arch', is_archived: true, issued_date: '2026-10-06' }),
+  ]
+
+  assert.deepEqual(ids(owedInvoices(rows)), ['new', 'late', 'old'])
+})
+
+test('unbilledSummary counts visits, sums priced ones and counts unpriced ones', () => {
+  const visit = (live_price_cents: number | null) => ({ live_price_cents })
+
+  assert.deepEqual(unbilledSummary([visit(13000), visit(null), visit(0), visit(500)]), {
+    count: 4,
+    pricedCents: 13500,
+    unpricedCount: 1,
+  })
+  assert.deepEqual(unbilledSummary([]), { count: 0, pricedCents: 0, unpricedCount: 0 })
 })

@@ -91,7 +91,7 @@ function revalidateInvoicing(invoiceId?: string) {
   revalidatePath(INVOICES_PATH)
   revalidatePath(`${INVOICES_PATH}/receivables`)
   revalidatePath(`${INVOICES_PATH}/payment-methods`)
-  revalidatePath('/(internal)/solutions/(admin)/clients/[id]', 'page')
+  revalidatePath('/(internal)/solutions/(admin)/clients/[id]/(overview)', 'page')
   revalidatePath('/solutions/dashboard')
   if (invoiceId) {
     revalidatePath(`${INVOICES_PATH}/${invoiceId}`)
