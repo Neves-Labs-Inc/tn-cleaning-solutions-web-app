@@ -80,7 +80,7 @@ The amount frozen on an appointment's live invoice line. It wins over the Live p
 _Avoid_: billed price cache
 
 **Unpriced**:
-An appointment with no Job, so no Live price can be worked out. It is never billed as $0.
+An appointment whose Live price can't be worked out. Every appointment has a Job today, so this is a defensive state the price module reports rather than one any screen creates. It is never billed as $0.
 
 ### Invoicing
 
@@ -90,14 +90,61 @@ An appointment's line on an invoice that has not been voided. An appointment has
 **Billable appointment**:
 An appointment that is not cancelled, has no Live claim, and is not Unpriced.
 
+**Automatic draft**:
+The draft invoice a client's completed visits join as each one is completed. A client has at most one at a time; issuing it means the next completion starts a new one. It never joins a draft an admin made.
+_Avoid_: invoice run, billing cycle
+
+**Automatic invoicing**:
+A per-client setting, on by default, that decides whether the client's completed visits join an Automatic draft. Turning it off leaves an open Automatic draft as it is; turning it back on picks up only visits completed from then on. The client's active or archived status plays no part.
+_Avoid_: manual-only client, billing mode
+
+**Excluded visit**:
+A completed visit an admin removed from an Automatic draft. It never rejoins one, but can still be billed on a manual invoice.
+
+**Upcoming line**:
+A line on an invoice for a visit that is not completed yet: billed ahead, as a prepayment.
+
+**Cancelled line**:
+The line left on an issued invoice when its visit is cancelled. It charges nothing and is not a Live claim; it stays only as a record of what the client was first billed.
+
+**Business date**:
+Today's calendar date in Eastern time, where the business is. Every invoice date (issued, due, paid, created) is a Business date, and an issued invoice is overdue once the Business date is past its due date.
+_Avoid_: today (UTC), server date
+
+**Invoice number**:
+The human reference an invoice gets when it is issued, such as INV-042-SMI2026: a count shared by every invoice that restarts each January, the first three letters of the client's name, and the issue year. It never changes and is never reused, even when the invoice is voided. A draft has none.
+_Avoid_: invoice ID, ref
+
+**Payment**:
+The record that an issued invoice was paid in full: the paid date, the Payment method, and an optional reference such as an e-Transfer confirmation or cheque number. It can be edited, or undone to put the invoice back to issued.
+
+**Payment method**:
+How a Payment was made, chosen from a list the admin manages. The list starts with e-Transfer, Cash, Cheque and Credit card, and a new method typed in while recording a Payment joins it.
+
+**Archived invoice**:
+A draft, paid or void invoice hidden from the working list and read-only until it is unarchived. An invoice still owed (issued) can't be archived. Archiving a draft releases its Live claims, and its visits become Excluded visits if it was an Automatic draft.
+_Avoid_: deleted, hidden
+
+**Outstanding**:
+What clients owe: the total of every issued invoice. An issued invoice with no due date is outstanding but never overdue. Drafts are not outstanding.
+_Avoid_: open (it hid overdue invoices), receivable balance
+
+**Unbilled visit**:
+A visit completed after launch that is not cancelled and has no Live claim. It includes Excluded visits and Unpriced visits, which are shown with a tag so they aren't forgotten.
+_Avoid_: uninvoiced, missed visit
+
 ## Relationships
 
 - A **Cleaner** has one default **Pay rate** and zero or more **Job pay overrides**
 - A **Pay run** covers many visits; each visit's pay is **Clocked time** × the applicable **Pay rate**, plus its **Visit add-ons**
 - A visit belongs to at most one **Pay run**
 - An appointment shows its **Billed amount** if it is on a live invoice, otherwise its **Live price**
-- A cancelled appointment never has a **Live claim**; it must be removed from its draft, or its invoice voided, before it can be cancelled
-- An invoice moves draft → issued → paid, and a draft or issued invoice can be voided; voiding releases its **Live claims**
+- A cancelled appointment never has a **Live claim**. Cancelling removes its line from a draft, turns it into a **Cancelled line** on an issued invoice, and is refused on a paid invoice until it is voided
+- An issued invoice whose lines are all **Cancelled lines** is voided automatically
+- An invoice moves draft → issued → paid; recording a **Payment** makes it paid and undoing the Payment makes it issued again
+- An issued or paid invoice can be voided, which clears any **Payment** and releases its **Live claims**; a draft is archived instead
+- An issued invoice is never edited; it is corrected by voiding it and issuing a new one
+- An archived draft can be unarchived only while none of its visits has been claimed by another invoice; it comes back as an ordinary draft if the client already has an **Automatic draft**
 
 ## Flagged ambiguities
 
