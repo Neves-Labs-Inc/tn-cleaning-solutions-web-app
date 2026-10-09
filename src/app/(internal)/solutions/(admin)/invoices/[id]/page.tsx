@@ -128,8 +128,9 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 	const { id } = await params
 	const supabase = await createClient()
 
+	// The view, not the table: total_cents is derived from the lines there.
 	const { data, error } = await supabase
-		.from('invoices')
+		.from('invoices_with_status')
 		.select(
 			`
 				id, status, issued_date, due_date, total_cents, notes, is_archived, created_at, client_id,

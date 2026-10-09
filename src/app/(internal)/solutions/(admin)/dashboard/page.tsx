@@ -78,7 +78,7 @@ export default async function DashboardPage() {
             .eq('is_archived', false),
 
         supabase
-            .from('invoices')
+            .from('invoices_with_status')
             .select(`id, status, total_cents, created_at, due_date, clients!inner(name)`)
             .eq('is_archived', false)
             .order('created_at', { ascending: false })

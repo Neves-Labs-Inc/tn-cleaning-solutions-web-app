@@ -41,14 +41,14 @@ insert into public.jobs (id, name, hourly_rate_cents, is_archived) values
 
 insert into public.appointments (
 	id, client_id, job_id, location_id, scheduled_date, scheduled_start_time, scheduled_end_time,
-	price_override_cents, billed_price_cents
+	price_override_cents
 ) values
 	-- Assigned to A and B.
 	('d0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
-	 'c1000000-0000-4000-8000-000000000001', '2026-10-01', '09:00', '11:00', 9000, 9000),
+	 'c1000000-0000-4000-8000-000000000001', '2026-10-01', '09:00', '11:00', 9000),
 	-- Assigned only to B.
 	('d0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
-	 'c1000000-0000-4000-8000-000000000001', '2026-10-02', '09:00', '11:00', 12000, 12000);
+	 'c1000000-0000-4000-8000-000000000001', '2026-10-02', '09:00', '11:00', 12000);
 
 insert into public.appointment_employees (id, appointment_id, employee_id, admin_notes) values
 	('f0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-00000000000a', 'note on A'),

@@ -166,7 +166,7 @@ async function fetchAppointmentsForPricing(appointmentIds: string[]): Promise<
 async function buildInvoiceLines(
   parsed: ParsedInvoiceInput
 ): Promise<
-  { success: true; lines: InvoiceLine[]; totalCents: number } | { success: false; error: string }
+  { success: true; lines: InvoiceLine[] } | { success: false; error: string }
 > {
   const pricingResult = await fetchAppointmentsForPricing(parsed.selections.map((item) => item.appointmentId))
   if (!pricingResult.success) {
@@ -206,7 +206,6 @@ async function buildInvoiceLines(
   }
 
   const lines: InvoiceLine[] = []
-  let totalCents = 0
 
   for (const { priceCents, appointment } of selected) {
     const live = pricesById.get(appointment.id)?.live
@@ -225,11 +224,9 @@ async function buildInvoiceLines(
       billed_rate_cents: canFreezeBreakdown ? live.rate_cents : null,
       billed_minutes: canFreezeBreakdown ? live.minutes : null,
     })
-
-    totalCents += priceCents
   }
 
-  return { success: true, lines, totalCents }
+  return { success: true, lines }
 }
 
 function toJunctionRows(invoiceId: string, lines: InvoiceLine[]) {
@@ -240,39 +237,6 @@ function toJunctionRows(invoiceId: string, lines: InvoiceLine[]) {
     billed_rate_cents: line.billed_rate_cents,
     billed_minutes: line.billed_minutes,
   }))
-}
-
-async function writeBilledPriceCache(lines: InvoiceLine[]): Promise<void> {
-  const adminClient = createAdminClient()
-
-  for (const line of lines) {
-    const { error } = await adminClient
-      .from('appointments')
-      .update({ billed_price_cents: line.billed_amount_cents })
-      .eq('id', line.appointment_id)
-
-    if (error) {
-      console.error('billed_price_cents write failed', line.appointment_id, error.message)
-    }
-  }
-}
-
-async function clearBilledPriceCache(appointmentIds: string[]): Promise<boolean> {
-  let cleared = true
-
-  if (appointmentIds.length > 0) {
-    const { error } = await createAdminClient()
-      .from('appointments')
-      .update({ billed_price_cents: null })
-      .in('id', appointmentIds)
-
-    if (error) {
-      console.error('billed_price_cents clear failed', appointmentIds.join(','), error.message)
-      cleared = false
-    }
-  }
-
-  return cleared
 }
 
 async function restoreInvoiceLines(invoiceId: string, lines: InvoiceLine[]) {
@@ -344,7 +308,6 @@ export async function createInvoice(
         due_date: parsed.data.dueDate,
         notes: parsed.data.notes,
         status: 'draft',
-        total_cents: linesResult.totalCents,
       })
       .select('id')
       .single()
@@ -366,8 +329,6 @@ export async function createInvoice(
 
       return { success: false, error: linkError.message }
     }
-
-    await writeBilledPriceCache(linesResult.lines)
 
     redirectPath = `/solutions/invoices/${invoiceId}`
   } catch {
@@ -446,10 +407,6 @@ export async function updateInvoice(
   }
 
   const previousLines = (linkedRows ?? []) as InvoiceLine[]
-  const selectedIds = new Set(linesResult.lines.map((line) => line.appointment_id))
-  const removedAppointmentIds = previousLines
-    .map((line) => line.appointment_id)
-    .filter((appointmentId) => !selectedIds.has(appointmentId))
 
   let redirectPath = ''
 
@@ -476,16 +433,12 @@ export async function updateInvoice(
       return { success: false, error: restored ? detail : `${detail} ${linesNotRestoredError}` }
     }
 
-    await clearBilledPriceCache(removedAppointmentIds)
-    await writeBilledPriceCache(linesResult.lines)
-
     const { error: updateInvoiceError } = await adminClient
       .from('invoices')
       .update({
         client_id: parsed.data.clientId,
         due_date: parsed.data.dueDate,
         notes: parsed.data.notes,
-        total_cents: linesResult.totalCents,
       })
       .eq('id', id)
 
@@ -652,38 +605,22 @@ export async function voidInvoice(id: string): Promise<InvoiceActionResult> {
     return { success: false, error: invoiceChangedError }
   }
 
-  // Order is status -> release -> clear, and it must stay that way. A release that fails after the
-  // status write leaves the invoice void with its appointments still consumed, which is the
-  // behaviour this action has always had. Releasing first would let a failed status write leave a
-  // draft or issued invoice still totalling lines whose appointments are billable again — a
-  // double-billing window.
-  const { data: releasedRows, error: releaseError } = await adminClient
+  // Order is status -> release, and it must stay that way. A release that fails after the status
+  // write leaves the invoice void with its appointments still consumed, which is the behaviour this
+  // action has always had. Releasing first would let a failed status write leave a draft or issued
+  // invoice still totalling lines whose appointments are billable again — a double-billing window.
+  const { error: releaseError } = await adminClient
     .from('invoice_appointments')
     .update({ is_archived: true })
     .eq('invoice_id', id)
     .eq('is_archived', false)
-    .select('appointment_id')
-
-  if (releaseError) {
-    revalidateInvoicePaths(id)
-    return {
-      success: false,
-      error: 'The invoice was voided, but its appointments were not released.',
-    }
-  }
-
-  const releasedAppointmentIds = ((releasedRows ?? []) as Array<{ appointment_id: string }>).map(
-    (row) => row.appointment_id
-  )
-  const cleared = await clearBilledPriceCache(releasedAppointmentIds)
 
   revalidateInvoicePaths(id)
 
-  if (!cleared) {
+  if (releaseError) {
     return {
       success: false,
-      error:
-        'The invoice was voided and its appointments were released, but their cached invoiced amounts were not cleared.',
+      error: 'The invoice was voided, but its appointments were not released.',
     }
   }
 

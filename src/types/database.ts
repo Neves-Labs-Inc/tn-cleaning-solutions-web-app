@@ -19,11 +19,11 @@
 // schema's SQL functions are called through untyped clients, so typing them here would be guesswork
 // nobody checks.
 //
-// `invoices_with_status` is a plain security_invoker projection of `invoices`, one row per invoice.
+// `invoices_with_status` is a security_invoker projection of `invoices`, one row per invoice.
 // Its Row follows the database's real column nullability, not the narrowed `invoices` Row: `notes`,
-// `created_at`, `updated_at` and `is_archived` have no NOT NULL constraint on the table, so they are
-// nullable here. `effective_status` is `status` with an issued, past-due invoice reported as
-// 'overdue'.
+// `created_at` and `updated_at` have no NOT NULL constraint on the table, so they are nullable here.
+// `total_cents` is derived: the sum of the invoice's live, uncancelled lines (0 when none).
+// `effective_status` is `status` with an issued, past-due invoice reported as 'overdue'.
 //
 // `npm run db:check-types` (run in CI) fails when a table, view or column name here and in the
 // database `public` schema disagree. It compares names only, never types or nullability.
@@ -81,6 +81,7 @@ export type Database = {
           address: string
           notes: string
           is_active: boolean
+          automatic_invoicing: boolean
           created_at: string
           updated_at: string
           is_archived: boolean
@@ -93,6 +94,7 @@ export type Database = {
           address: string
           notes: string
           is_active: boolean
+          automatic_invoicing?: boolean
           created_at?: string
           updated_at?: string
           is_archived?: boolean
@@ -105,6 +107,7 @@ export type Database = {
           address?: string
           notes?: string
           is_active?: boolean
+          automatic_invoicing?: boolean
           created_at?: string
           updated_at?: string
           is_archived?: boolean
@@ -317,9 +320,10 @@ export type Database = {
           scheduled_start_time: string
           scheduled_end_time: string
           price_override_cents: number | null
-          billed_price_cents: number | null
           status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
           manually_completed: boolean
+          completed_at: string | null
+          excluded_from_automatic: boolean
           notes: string
           created_at: string
           updated_at: string
@@ -335,9 +339,10 @@ export type Database = {
           scheduled_start_time: string
           scheduled_end_time: string
           price_override_cents?: number | null
-          billed_price_cents?: number | null
           status?: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
           manually_completed?: boolean
+          completed_at?: string | null
+          excluded_from_automatic?: boolean
           notes: string
           created_at?: string
           updated_at?: string
@@ -353,9 +358,10 @@ export type Database = {
           scheduled_start_time?: string
           scheduled_end_time?: string
           price_override_cents?: number | null
-          billed_price_cents?: number | null
           status?: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
           manually_completed?: boolean
+          completed_at?: string | null
+          excluded_from_automatic?: boolean
           notes?: string
           created_at?: string
           updated_at?: string
@@ -450,11 +456,15 @@ export type Database = {
           status: 'draft' | 'issued' | 'paid' | 'void'
           issued_date: string | null
           due_date: string | null
-          total_cents: number
           notes: string
           created_at: string
           updated_at: string
           is_archived: boolean
+          invoice_number: string | null
+          is_automatic: boolean
+          paid_date: string | null
+          payment_method: string | null
+          payment_reference: string | null
         }
         Insert: {
           id?: string
@@ -462,11 +472,15 @@ export type Database = {
           status?: 'draft' | 'issued' | 'paid' | 'void'
           issued_date?: string | null
           due_date?: string | null
-          total_cents: number
           notes: string
           created_at?: string
           updated_at?: string
           is_archived?: boolean
+          invoice_number?: string | null
+          is_automatic?: boolean
+          paid_date?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
         }
         Update: {
           id?: string
@@ -474,11 +488,15 @@ export type Database = {
           status?: 'draft' | 'issued' | 'paid' | 'void'
           issued_date?: string | null
           due_date?: string | null
-          total_cents?: number
           notes?: string
           created_at?: string
           updated_at?: string
           is_archived?: boolean
+          invoice_number?: string | null
+          is_automatic?: boolean
+          paid_date?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
         }
         Relationships: [
           {
@@ -494,9 +512,10 @@ export type Database = {
         Row: {
           invoice_id: string
           appointment_id: string
-          billed_amount_cents: number
+          billed_amount_cents: number | null
           billed_rate_cents: number | null
           billed_minutes: number | null
+          cancelled_at: string | null
           created_at: string
           updated_at: string
           is_archived: boolean
@@ -504,9 +523,10 @@ export type Database = {
         Insert: {
           invoice_id: string
           appointment_id: string
-          billed_amount_cents: number
+          billed_amount_cents?: number | null
           billed_rate_cents?: number | null
           billed_minutes?: number | null
+          cancelled_at?: string | null
           created_at?: string
           updated_at?: string
           is_archived?: boolean
@@ -514,9 +534,10 @@ export type Database = {
         Update: {
           invoice_id?: string
           appointment_id?: string
-          billed_amount_cents?: number
+          billed_amount_cents?: number | null
           billed_rate_cents?: number | null
           billed_minutes?: number | null
+          cancelled_at?: string | null
           created_at?: string
           updated_at?: string
           is_archived?: boolean
@@ -537,6 +558,45 @@ export type Database = {
             referencedColumns: ['id']
           },
         ]
+      }
+      payment_methods: {
+        Row: {
+          id: string
+          name: string
+          is_hidden: boolean
+          sort_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          is_hidden?: boolean
+          sort_order: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          is_hidden?: boolean
+          sort_order?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
+      invoice_number_counters: {
+        Row: {
+          year: number
+          last_value: number
+        }
+        Insert: {
+          year: number
+          last_value?: number
+        }
+        Update: {
+          year?: number
+          last_value?: number
+        }
+        Relationships: []
       }
     }
     Views: {
@@ -592,11 +652,16 @@ export type Database = {
           status: 'draft' | 'issued' | 'paid' | 'void'
           issued_date: string | null
           due_date: string | null
-          total_cents: number
           notes: string | null
           created_at: string | null
           updated_at: string | null
-          is_archived: boolean | null
+          is_archived: boolean
+          invoice_number: string | null
+          is_automatic: boolean
+          paid_date: string | null
+          payment_method: string | null
+          payment_reference: string | null
+          total_cents: number
           effective_status: 'draft' | 'issued' | 'paid' | 'void' | 'overdue'
         }
         Relationships: []

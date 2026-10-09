@@ -103,10 +103,11 @@ async function fetchBilledAmounts(
 
   if (error) throw error
 
+  // A draft line has no amount yet (null), so it falls back to the Live price.
   return new Map(
-    data
-      .filter((line) => line.billed_amount_cents !== null)
-      .map((line) => [line.appointment_id, line.billed_amount_cents])
+    data.flatMap((line) =>
+      line.billed_amount_cents === null ? [] : [[line.appointment_id, line.billed_amount_cents] as const]
+    )
   )
 }
 

@@ -9,12 +9,16 @@
 -- confirm afterwards that no already-invoiced amount moved.
 --
 -- Sections 1 and 2 are the judgement call. Section 3 is the part that must be boring: every count
--- in it is a bug unless it is 0. Section 4 prints pre-existing invoice-total drift and leaves it
--- alone.
+-- in it is a bug unless it is 0.
+--
+-- 20261009130000_invoicing_schema.sql dropped appointments.billed_price_cents and
+-- invoices.total_cents, so the appointment-cache invariants and the old section 4 (stored invoice
+-- total drift) are gone: there is no cache or stored total left to drift. Every column read below
+-- exists both before and after that migration, so the script runs against either schema.
 --
 -- It is one statement on purpose. The Supabase CLI sends a file to the server as a single prepared
--- statement, so a script split into four SELECTs fails with 'cannot insert multiple commands into
--- a prepared statement'. The four sections are therefore one UNION ALL over a shared
+-- statement, so a script split into several SELECTs fails with 'cannot insert multiple commands into
+-- a prepared statement'. The sections are therefore one UNION ALL over a shared
 -- label/subject/detail/before/after/delta shape, each section labelling its own rows.
 --
 -- This file must never gain a statement that writes. Rounding mirrors src/lib/pricing/money.ts --
@@ -36,8 +40,8 @@ WITH "job_reinterpretation" AS (
         round("j"."hourly_rate_cents" * "j"."estimated_duration_minutes" / 60.0)::bigint AS "after_cents"
     FROM "public"."jobs" "j"
 ), "live_appointment" AS (
-    -- Every appointment still priced live, i.e. not yet frozen onto an invoice. is_archived is
-    -- nullable on this table, so the filter has to COALESCE rather than say NOT.
+    -- Every appointment still priced live, i.e. with no live (unreleased) invoice line. is_archived
+    -- is nullable on this table, so the filter has to COALESCE rather than say NOT.
     SELECT
         "a"."id",
         "a"."scheduled_date",
@@ -49,7 +53,7 @@ WITH "job_reinterpretation" AS (
         )::bigint AS "new_price_cents"
     FROM "public"."appointments" "a"
     JOIN "public"."jobs" "j" ON ("j"."id" = "a"."job_id")
-    WHERE "a"."billed_price_cents" IS NULL
+    WHERE NOT EXISTS (SELECT 1 FROM "public"."invoice_appointments" "ia" WHERE "ia"."appointment_id" = "a"."id" AND "ia"."is_archived" = false)
         AND COALESCE("a"."is_archived", false) = false
 ), "appointment_repricing" AS (
     SELECT
@@ -80,26 +84,16 @@ WITH "job_reinterpretation" AS (
     -- Each of these must be 0. A non-zero count means the backfill did not do what the migration
     -- claims, and nothing downstream should be trusted until it reads 0 again.
     --
-    -- The two appointment-cache invariants are one iff: a cache value exists exactly when a live
-    -- (is_archived = false) junction row claims the appointment, and then it matches that row's
-    -- billed_amount_cents; a released row is a historical record and claims nothing.
-    SELECT 'junction rows with no billed amount' AS "subject", count(*) AS "offending"
+    -- A draft's lines carry no amount from 20261009130000 on, so only non-draft lines must have one.
+    SELECT 'non-draft junction rows with no billed amount' AS "subject", count(*) AS "offending"
     FROM "public"."invoice_appointments" "ia"
+    JOIN "public"."invoices" "inv" ON ("inv"."id" = "ia"."invoice_id")
     WHERE "ia"."billed_amount_cents" IS NULL
+        AND "inv"."status" <> 'draft'
     UNION ALL
     SELECT 'junction rows with rate xor minutes', count(*)
     FROM "public"."invoice_appointments" "ia"
     WHERE ("ia"."billed_rate_cents" IS NULL) <> ("ia"."billed_minutes" IS NULL)
-    UNION ALL
-    SELECT 'appointment cache disagrees with its live junction row', count(*)
-    FROM "public"."appointments" "a"
-    JOIN "public"."invoice_appointments" "ia" ON ("ia"."appointment_id" = "a"."id" AND "ia"."is_archived" = false)
-    WHERE "a"."billed_price_cents" IS DISTINCT FROM "ia"."billed_amount_cents"
-    UNION ALL
-    SELECT 'appointment cached a price with no live junction row', count(*)
-    FROM "public"."appointments" "a"
-    WHERE "a"."billed_price_cents" IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM "public"."invoice_appointments" "ia" WHERE "ia"."appointment_id" = "a"."id" AND "ia"."is_archived" = false)
     UNION ALL
     SELECT 'jobs with a negative rate', count(*)
     FROM "public"."jobs" "j"
@@ -115,24 +109,6 @@ WITH "job_reinterpretation" AS (
         NULL::bigint AS "before_cents",
         "i"."offending"::bigint AS "after_cents"
     FROM "invariant" "i"
-), "invoice_drift" AS (
-    -- Informational only. An invoice whose stored total disagrees with the sum of its frozen lines
-    -- predates this migration and is a business question, not a data-repair one. Printed, never
-    -- corrected: silently rewriting a number a client was already invoiced for is the exact
-    -- failure this milestone exists to stop.
-    SELECT
-        5 AS "section",
-        ("i"."total_cents"::bigint - COALESCE(sum("ia"."billed_amount_cents"), 0))::bigint AS "delta_cents",
-        "i"."id"::text AS "tiebreak",
-        '4. invoice total drift (informational)' AS "label",
-        "i"."id"::text AS "subject",
-        'status ' || "i"."status" AS "detail",
-        "i"."total_cents"::bigint AS "before_cents",
-        COALESCE(sum("ia"."billed_amount_cents"), 0)::bigint AS "after_cents"
-    FROM "public"."invoices" "i"
-    LEFT JOIN "public"."invoice_appointments" "ia" ON ("ia"."invoice_id" = "i"."id")
-    GROUP BY "i"."id", "i"."status", "i"."total_cents"
-    HAVING "i"."total_cents" <> COALESCE(sum("ia"."billed_amount_cents"), 0)
 ), "report" AS (
     SELECT * FROM "job_reinterpretation"
     UNION ALL
@@ -141,8 +117,6 @@ WITH "job_reinterpretation" AS (
     SELECT * FROM "appointment_repricing_summary"
     UNION ALL
     SELECT * FROM "invariant_report"
-    UNION ALL
-    SELECT * FROM "invoice_drift"
 )
 SELECT
     "r"."label",
