@@ -15,8 +15,11 @@
 // unexposed `private` schema (20261004120000), so they have no foreign keys for PostgREST to infer:
 // their embeds go through computed relationships, SQL functions in `public` named after the embed
 // target (`appointments_employee_view`, `employees_employee_view`, `clients`, `client_locations`,
-// `jobs_employee_view`). Functions lists the invoice write functions (20261009140000 onward), which
-// the invoice ledger calls through the typed session client; the older RPCs are not listed.
+// `jobs_employee_view`). Functions lists the invoice write functions (20261009140000 onward), the
+// RPCs the invoice ledger calls through the typed session client; `p_lines` is the Billed amounts
+// TypeScript priced. The other SQL functions are called through untyped clients and stay out until a
+// typed caller needs them. Every invoice function refuses through `invoice_error`: the PostgREST
+// error's `details` is the code.
 //
 // `invoices_with_status` is a security_invoker projection of `invoices`, one row per invoice.
 // Its Row follows the database's real column nullability, not the narrowed `invoices` Row: `notes`,
@@ -26,6 +29,8 @@
 //
 // `npm run db:check-types` (run in CI) fails when a table, view or column name here and in the
 // database `public` schema disagree. It compares names only, never types or nullability.
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+
 export type Database = {
   public: {
     Tables: {
@@ -677,6 +682,10 @@ export type Database = {
       }
     }
     Functions: {
+      invoice_archive: {
+        Args: { p_invoice_id: string }
+        Returns: undefined
+      }
       invoice_create_draft: {
         Args: {
           p_client_id: string
@@ -686,6 +695,22 @@ export type Database = {
         }
         Returns: string
       }
+      invoice_issue: {
+        Args: { p_invoice_id: string; p_lines: Json; p_due_date: string | null }
+        Returns: string
+      }
+      invoice_record_payment: {
+        Args: { p_invoice_id: string; p_paid_date: string | null; p_method: string; p_reference: string | null }
+        Returns: undefined
+      }
+      invoice_unarchive: {
+        Args: { p_invoice_id: string }
+        Returns: undefined
+      }
+      invoice_undo_payment: {
+        Args: { p_invoice_id: string }
+        Returns: undefined
+      }
       invoice_update_draft: {
         Args: {
           p_invoice_id: string
@@ -694,6 +719,14 @@ export type Database = {
           p_due_date: string | null
           p_notes: string | null
         }
+        Returns: undefined
+      }
+      invoice_update_payment: {
+        Args: { p_invoice_id: string; p_paid_date: string | null; p_method: string; p_reference: string | null }
+        Returns: undefined
+      }
+      invoice_void: {
+        Args: { p_invoice_id: string }
         Returns: undefined
       }
     }
