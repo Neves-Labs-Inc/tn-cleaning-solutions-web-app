@@ -11,8 +11,7 @@ import { buildMapsUrl, getClockStatus } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 import { cn } from '@/lib/utils'
 import type { Views } from '@/types/database'
-
-type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
 type EmployeeSummary = {
 	id: string

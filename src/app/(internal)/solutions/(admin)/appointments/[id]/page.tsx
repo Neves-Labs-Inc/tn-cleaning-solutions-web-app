@@ -1,11 +1,12 @@
 import Link from 'next/link'
 import { format, parseISO } from 'date-fns'
-import { ArrowLeft, Pencil } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
 import { AdminClockOverride } from '@/components/admin/admin-clock-override'
-import { Button } from '@/components/ui/button'
-import { cancelAppointment, uncancelAppointment } from '@/lib/actions/appointments'
+import AppointmentLifecycleActions, { CompletedByAdminHint } from '@/components/admin/appointment-lifecycle-actions'
+import StatusBadge, { appointmentStatusBadge } from '@/components/ui/status-badge'
+import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 import {
   APPOINTMENT_PRICE_COLUMNS,
   priceAppointments,
@@ -22,7 +23,8 @@ type AppointmentDetailPageProps = {
 }
 
 type AppointmentDetailRow = PriceableAppointment & {
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+  status: AppointmentStatus
+  manually_completed: boolean
   notes: string
   is_archived: boolean
   clients: {
@@ -72,22 +74,6 @@ type PriceView = {
   isUnavailable: boolean
 }
 
-function statusBadgeClasses(status: AppointmentDetailRow['status']) {
-  if (status === 'in_progress') {
-    return 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-  }
-
-  if (status === 'completed') {
-    return 'border border-neutral-200 bg-neutral-100 text-neutral-700'
-  }
-
-  if (status === 'cancelled') {
-    return 'border border-red-200 bg-red-50 text-red-600'
-  }
-
-  return 'border border-blue-200 bg-blue-50 text-blue-700'
-}
-
 function employeeClockStatus(assignment: {
   clocked_in_at: string | null
   clocked_out_at: string | null
@@ -112,7 +98,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
     .select(
       `
         ${APPOINTMENT_PRICE_COLUMNS},
-        status, notes, is_archived,
+        status, manually_completed, notes, is_archived,
         clients!inner ( id, name, phone, email ),
         jobs!inner ( id, name, estimated_duration_minutes, description ),
         client_locations ( id, label, address ),
@@ -134,23 +120,13 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
 
   const priceView = await loadPriceView(supabase, appointment)
 
-  async function handleCancelAppointment() {
-    'use server'
-
-    await cancelAppointment(id)
-  }
-
-  async function handleUncancelAppointment() {
-    'use server'
-
-    await uncancelAppointment(id)
-  }
+  const statusBadge = appointmentStatusBadge(appointment.status)
 
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-3">
+          <div className="min-w-0 space-y-3">
             <Link
               href="/solutions/appointments"
               className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
@@ -167,45 +143,17 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
               </p>
             </div>
 
-            <span
-              className={`inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-wide ${statusBadgeClasses(
-                appointment.status
-              )}`}
-            >
-              {appointment.status.replace('_', ' ')}
-            </span>
+            <StatusBadge tone={statusBadge.tone}>{statusBadge.label}</StatusBadge>
+
+            <CompletedByAdminHint status={appointment.status} manuallyCompleted={appointment.manually_completed} />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Link href={`/solutions/appointments/${appointment.id}/edit`}>
-              <Button className="h-10 rounded-full bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700">
-                <Pencil className="size-4" aria-hidden="true" />
-                Edit
-              </Button>
-            </Link>
-
-            {appointment.status === 'cancelled' ? (
-              <form action={handleUncancelAppointment}>
-                <Button
-                  type="submit"
-                  variant="outline"
-                  className="h-10 rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                >
-                  Reopen
-                </Button>
-              </form>
-            ) : appointment.status === 'completed' ? null : (
-              <form action={handleCancelAppointment}>
-                <Button
-                  type="submit"
-                  variant="outline"
-                  className="h-10 rounded-full border-red-200 text-red-600 hover:bg-red-50"
-                >
-                  Cancel
-                </Button>
-              </form>
-            )}
-          </div>
+          <AppointmentLifecycleActions
+            appointmentId={appointment.id}
+            status={appointment.status}
+            manuallyCompleted={appointment.manually_completed}
+            editHref={`/solutions/appointments/${appointment.id}/edit`}
+          />
         </div>
       </section>
 

@@ -14,6 +14,7 @@ import {
 } from '@/lib/pricing'
 import { formatCents, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
+import { canEdit, type AppointmentStatus } from '@/lib/appointments/lifecycle'
 
 type EditAppointmentPageProps = {
   params: Promise<{ id: string }>
@@ -31,7 +32,7 @@ type AppointmentRow = PriceableAppointment & {
   location_id: string | null
   recurrence_series_id: string | null
   notes: string
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+  status: AppointmentStatus
   is_archived: boolean
   appointment_employees: Array<{ employee_id: string }> | null
 }
@@ -175,16 +176,14 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
           <section className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {loadErrorMessage}
           </section>
-        ) : typedAppointment.status === 'completed' ? (
+        ) : !canEdit(typedAppointment.status) ? (
           <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            This appointment cannot be edited because it has already been completed.
-          </section>
-        ) : typedAppointment.status === 'cancelled' ? (
-          <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            This appointment cannot be edited because it has been cancelled. Reopen it to make changes.
+            {typedAppointment.status === 'completed'
+              ? 'This appointment cannot be edited because it has already been completed.'
+              : 'This appointment cannot be edited because it has been cancelled. Restore it to make changes.'}
           </section>
         ) : (
-          // Keyed on the status so a clock-driven change remounts the uncontrolled status select instead of leaving it stale.
+          // Keyed on the status so a clock-driven change remounts the form with the fresh expected_status.
           <AppointmentForm
             key={typedAppointment.status}
             clients={(clients ?? []).map((client) => ({

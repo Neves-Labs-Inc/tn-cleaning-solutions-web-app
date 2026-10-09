@@ -11,10 +11,9 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, D
 import { Spinner } from '@/components/ui/spinner'
 import { clockIn, clockOut, type ClockActionState } from '@/lib/actions/attendance'
 import { formatBusinessTime } from '@/lib/schedule'
+import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
 type ClockStatus = 'clocked_in' | 'clocked_out' | 'not_started'
-type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
-
 type ClockActionsProps = {
 	appointmentEmployeeId: string
 	clockStatus: ClockStatus

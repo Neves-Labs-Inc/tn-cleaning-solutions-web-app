@@ -13,6 +13,7 @@ import { parseDollarsToCents } from '@/lib/pricing/money'
 import { getBusinessDate } from '@/lib/schedule'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
 type InvoiceFieldErrors = {
   client_id?: string
@@ -33,7 +34,7 @@ type ParsedInvoiceInput = {
 }
 
 type AppointmentPriceRow = PriceableAppointment & {
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+  status: AppointmentStatus
   is_archived: boolean
 }
 

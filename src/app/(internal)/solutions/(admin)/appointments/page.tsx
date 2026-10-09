@@ -10,13 +10,14 @@ import {
 } from '@/lib/pricing'
 import { toBusinessWallClock } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
+import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
 type AppointmentsPageProps = {
   searchParams: Promise<{ month?: string | string[]; year?: string | string[] }>
 }
 
 type RawAppointmentRow = PriceableAppointment & {
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+  status: AppointmentStatus
   notes: string | null
   clients: { id: string; name: string } | null
   jobs: { id: string; name: string } | null

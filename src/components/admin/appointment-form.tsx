@@ -16,6 +16,7 @@ import {
   updateAppointment,
 } from '@/lib/actions/appointments'
 import { formatRate } from '@/lib/pricing/money'
+import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
 type AppointmentFormProps = {
   clients: Array<{
@@ -42,7 +43,7 @@ type AppointmentFormProps = {
     scheduled_end_time: string
     price_override_cents: number | null
     notes: string
-    status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+    status: AppointmentStatus
     assignedEmployeeIds: string[]
   }
   recurrenceSeries?: {
@@ -281,7 +282,7 @@ export function AppointmentForm({
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4">
           <div className="space-y-1.5">
             <Label htmlFor="price_override" className="text-sm font-medium text-neutral-700">
               Manual price override ($)
@@ -305,26 +306,8 @@ export function AppointmentForm({
             ) : null}
           </div>
 
-          {appointment ? (
-            <div className="space-y-1.5">
-              {/* The status this form rendered with; the action refuses to save over a status that moved since. */}
-              <input type="hidden" name="expected_status" value={appointment.status} />
-              <Label htmlFor="status" className="text-sm font-medium text-neutral-700">
-                Status
-              </Label>
-              <select
-                id="status"
-                name="status"
-                defaultValue={appointment.status}
-                className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              >
-                <option value="scheduled">Scheduled</option>
-                <option value="in_progress">In Progress</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-          ) : null}
+          {/* The status this form rendered with; the action refuses to save over a status that moved since. */}
+          {appointment ? <input type="hidden" name="expected_status" value={appointment.status} /> : null}
         </div>
 
         <div className="space-y-1.5">

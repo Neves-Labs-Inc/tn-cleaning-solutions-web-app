@@ -1,7 +1,7 @@
+import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 import { formatBusinessDate } from '@/lib/schedule'
 
-
-export type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+export type { AppointmentStatus }
 export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'void'
 export type InvoiceEffectiveStatus = InvoiceStatus | 'overdue'
 
