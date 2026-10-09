@@ -1,9 +1,9 @@
 -- employee_clock drives appointments.status from the crew's clocks, asserted as the calling role.
 --
--- The RPC is the single writer of clock-driven status: after every clock write it recomputes the
--- appointment's status from its non-archived assignments, and it refuses to clock on an
--- appointment an admin has completed or cancelled. These tests pin the returned outcome and the
--- resulting row, never how the recompute is written.
+-- Each clock write moves the appointment's status through the appointment_employees trigger
+-- (20261009120000). The RPC refuses clock-in on an appointment that is manually completed or
+-- cancelled (a completion derived from the clocks reopens), and always lets an open shift clock out. These tests pin the returned outcome and the resulting
+-- row, never how the recompute is written.
 --
 -- Fixtures are built here and rolled back; nothing depends on seed.sql or test-data.sql.
 
@@ -11,7 +11,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(55);
+select plan(61);
 
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
@@ -35,32 +35,38 @@ insert into public.jobs (id, name, hourly_rate_cents, is_archived) values
 
 insert into public.appointments (
 	id, client_id, job_id, location_id, scheduled_date, scheduled_start_time, scheduled_end_time,
-	price_override_cents, billed_price_cents, status, status_before_cancel
+	price_override_cents, billed_price_cents, status
 ) values
 	-- d1: single crew (A).
 	('d0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
-	 'c1000000-0000-4000-8000-000000000001', '2026-10-01', '09:00', '11:00', 9000, 9000, 'scheduled', null),
+	 'c1000000-0000-4000-8000-000000000001', '2026-10-01', '09:00', '11:00', 9000, 9000, 'scheduled'),
 	-- d2: two crew (A and B).
 	('d0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
-	 'c1000000-0000-4000-8000-000000000001', '2026-10-02', '09:00', '11:00', 9000, 9000, 'scheduled', null),
+	 'c1000000-0000-4000-8000-000000000001', '2026-10-02', '09:00', '11:00', 9000, 9000, 'scheduled'),
 	-- d3: A plus an archived, never-clocked assignment for B.
 	('d0000000-0000-4000-8000-000000000003', 'c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
-	 'c1000000-0000-4000-8000-000000000001', '2026-10-03', '09:00', '11:00', 9000, 9000, 'scheduled', null),
-	-- d4: completed by an admin, A assigned and never clocked.
+	 'c1000000-0000-4000-8000-000000000001', '2026-10-03', '09:00', '11:00', 9000, 9000, 'scheduled'),
+	-- d4: Manual completion by an admin, A assigned and never clocked (flag set below).
 	('d0000000-0000-4000-8000-000000000004', 'c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
-	 'c1000000-0000-4000-8000-000000000001', '2026-10-04', '09:00', '11:00', 9000, 9000, 'completed', null),
+	 'c1000000-0000-4000-8000-000000000001', '2026-10-04', '09:00', '11:00', 9000, 9000, 'completed'),
 	-- d5: cancelled by an admin while scheduled, A assigned and never clocked.
 	('d0000000-0000-4000-8000-000000000005', 'c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
-	 'c1000000-0000-4000-8000-000000000001', '2026-10-05', '09:00', '11:00', 9000, 9000, 'cancelled', 'scheduled'),
-	-- d6: admin set it back to scheduled while A is clocked in; B has not clocked yet.
+	 'c1000000-0000-4000-8000-000000000001', '2026-10-05', '09:00', '11:00', 9000, 9000, 'cancelled'),
+	-- d6: admin set it back to scheduled while A is clocked in; B has not clocked yet (set below).
 	('d0000000-0000-4000-8000-000000000006', 'c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
-	 'c1000000-0000-4000-8000-000000000001', '2026-10-06', '09:00', '11:00', 9000, 9000, 'scheduled', null),
+	 'c1000000-0000-4000-8000-000000000001', '2026-10-06', '09:00', '11:00', 9000, 9000, 'scheduled'),
 	-- d7: assignments in every pre-clocked state, for the existing outcomes.
 	('d0000000-0000-4000-8000-000000000007', 'c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
-	 'c1000000-0000-4000-8000-000000000001', '2026-10-07', '09:00', '11:00', 9000, 9000, 'in_progress', null),
+	 'c1000000-0000-4000-8000-000000000001', '2026-10-07', '09:00', '11:00', 9000, 9000, 'in_progress'),
 	-- d9: A assigned, plus a never-clocked row for B whose is_archived is NULL (the column is nullable).
 	('d0000000-0000-4000-8000-000000000009', 'c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
-	 'c1000000-0000-4000-8000-000000000001', '2026-10-09', '09:00', '11:00', 9000, 9000, 'scheduled', null);
+	 'c1000000-0000-4000-8000-000000000001', '2026-10-09', '09:00', '11:00', 9000, 9000, 'scheduled'),
+	-- d10: Manual completion by an admin while A is clocked in (flag set below).
+	('d0000000-0000-4000-8000-000000000010', 'c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
+	 'c1000000-0000-4000-8000-000000000001', '2026-10-10', '09:00', '11:00', 9000, 9000, 'scheduled'),
+	-- d11: cancelled by an admin while A is clocked in.
+	('d0000000-0000-4000-8000-000000000011', 'c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001',
+	 'c1000000-0000-4000-8000-000000000001', '2026-10-11', '09:00', '11:00', 9000, 9000, 'cancelled');
 
 insert into public.appointment_employees (id, appointment_id, employee_id, is_archived, clocked_in_at, clocked_out_at) values
 	('f0000000-0000-4000-8000-000000000011', 'd0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-00000000000a', false, null, null),
@@ -76,7 +82,14 @@ insert into public.appointment_employees (id, appointment_id, employee_id, is_ar
 	('f0000000-0000-4000-8000-000000000071', 'd0000000-0000-4000-8000-000000000007', 'e0000000-0000-4000-8000-00000000000a', false, '2026-10-07 09:00+00', null),
 	('f0000000-0000-4000-8000-000000000072', 'd0000000-0000-4000-8000-000000000007', 'e0000000-0000-4000-8000-00000000000b', false, '2026-10-07 09:00+00', '2026-10-07 10:00+00'),
 	('f0000000-0000-4000-8000-000000000091', 'd0000000-0000-4000-8000-000000000009', 'e0000000-0000-4000-8000-00000000000a', false, null, null),
-	('f0000000-0000-4000-8000-000000000092', 'd0000000-0000-4000-8000-000000000009', 'e0000000-0000-4000-8000-00000000000b', null, null, null);
+	('f0000000-0000-4000-8000-000000000092', 'd0000000-0000-4000-8000-000000000009', 'e0000000-0000-4000-8000-00000000000b', null, null, null),
+	('f0000000-0000-4000-8000-000000000101', 'd0000000-0000-4000-8000-000000000010', 'e0000000-0000-4000-8000-00000000000a', false, '2026-10-10 09:00+00', null),
+	('f0000000-0000-4000-8000-000000000111', 'd0000000-0000-4000-8000-000000000011', 'e0000000-0000-4000-8000-00000000000a', false, '2026-10-11 09:00+00', null);
+
+-- Admin writes made after the crew exists, since adding crew re-derives the status.
+update public.appointments set manually_completed = true
+	where id in ('d0000000-0000-4000-8000-000000000004', 'd0000000-0000-4000-8000-000000000010');
+update public.appointments set status = 'scheduled' where id = 'd0000000-0000-4000-8000-000000000006';
 
 
 -- Helpers --------------------------------------------------------------------------------------
@@ -97,7 +110,7 @@ $$;
 create function public.pgtap_appointment(appointment uuid) returns text
 	language sql security definer
 	as $$
-	select status || '/' || coalesce(status_before_cancel, 'null')
+	select status
 	from public.appointments
 	where id = appointment;
 $$;
@@ -132,35 +145,35 @@ set local role authenticated;
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000011', 'in'),
 	'clocked', 'single crew: A clocks in');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000001'),
-	'in_progress/null', 'single crew: in progress once A clocked in');
+	'in_progress', 'single crew: in progress once A clocked in');
 
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000011', 'out'),
 	'clocked', 'single crew: A clocks out');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000001'),
-	'completed/null', 'single crew: completed once A clocked out');
+	'completed', 'single crew: completed once A clocked out');
 
 
--- d2: two crew ---------------------------------------------------------------------------------
+-- d2: two crew, overlapping shifts --------------------------------------------------------------
 
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000021', 'in'),
 	'clocked', 'two crew: A clocks in');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000002'),
-	'in_progress/null', 'two crew: in progress once A clocked in');
+	'in_progress', 'two crew: in progress once A clocked in');
+
+select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000022', 'in'),
+	'clocked', 'two crew: B clocks in while A is working');
+select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000002'),
+	'in_progress', 'two crew: in progress while both are clocked in');
 
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000021', 'out'),
 	'clocked', 'two crew: A clocks out');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000002'),
-	'in_progress/null', 'two crew: still in progress after A clocked out, B has not clocked in');
-
-select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000022', 'in'),
-	'clocked', 'two crew: B clocks in after A left');
-select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000002'),
-	'in_progress/null', 'two crew: in progress while B is clocked in');
+	'in_progress', 'two crew: still in progress while B is clocked in');
 
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000022', 'out'),
 	'clocked', 'two crew: B clocks out');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000002'),
-	'completed/null', 'two crew: completed once everyone assigned clocked out');
+	'completed', 'two crew: completed once everyone who clocked in has clocked out');
 
 
 -- d3: an archived assignment is ignored by the recompute ---------------------------------------
@@ -170,7 +183,7 @@ select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000031', 'out'),
 	'clocked', 'archived crew: A clocks out');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000003'),
-	'completed/null', 'archived crew: the never-clocked archived assignment does not block completed');
+	'completed', 'archived crew: the never-clocked archived assignment does not block completed');
 select is(public.pgtap_clocks('f0000000-0000-4000-8000-000000000032'),
 	'null/null', 'archived crew: the archived assignment is untouched');
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000032', 'in'),
@@ -178,57 +191,74 @@ select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000003', 'f0000000-0
 select is(public.pgtap_clocks('f0000000-0000-4000-8000-000000000032'),
 	'null/null', 'archived crew: the refused clock wrote nothing on the archived row');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000003'),
-	'completed/null', 'archived crew: the refused clock moved no status');
+	'completed', 'archived crew: the refused clock moved no status');
 
 
 -- d9: a NULL is_archived counts as an active assignment ----------------------------------------
 
+select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000092', 'in'),
+	'clocked', 'null is_archived: B can clock in on the NULL row');
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000091', 'in'),
 	'clocked', 'null is_archived: A clocks in');
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000091', 'out'),
 	'clocked', 'null is_archived: A clocks out');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000009'),
-	'in_progress/null', 'null is_archived: B''s never-clocked row still counts, so not completed');
-select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000092', 'in'),
-	'clocked', 'null is_archived: B can clock in on the NULL row');
+	'in_progress', 'null is_archived: B''s open shift on the NULL row still counts, so not completed');
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000092', 'out'),
 	'clocked', 'null is_archived: B clocks out');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000009'),
-	'completed/null', 'null is_archived: completed once the NULL row has clocked out too');
+	'completed', 'null is_archived: completed once the NULL row has clocked out too');
 
 
--- d4: a completed appointment refuses clocks ---------------------------------------------------
+-- d4: a manually completed appointment refuses clock in ---------------------------------------------------
 
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000041', 'in'),
-	'appointment_completed', 'completed: clock in is refused');
+	'appointment_completed', 'manually completed: clock in is refused');
 select is(public.pgtap_clocks('f0000000-0000-4000-8000-000000000041'),
-	'null/null', 'completed: clock in wrote nothing');
+	'null/null', 'manually completed: clock in wrote nothing');
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000041', 'out'),
-	'appointment_completed', 'completed: clock out is refused');
+	'appointment_completed', 'manually completed: clock out without an open shift is refused');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000004'),
-	'completed/null', 'completed: status unchanged');
+	'completed', 'manually completed: status unchanged');
 
 
--- d5: a cancelled appointment refuses clocks ---------------------------------------------------
+-- d5: a cancelled appointment refuses clock in ---------------------------------------------------
 
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000051', 'in'),
 	'appointment_cancelled', 'cancelled: clock in is refused');
 select is(public.pgtap_clocks('f0000000-0000-4000-8000-000000000051'),
 	'null/null', 'cancelled: clock in wrote nothing');
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000051', 'out'),
-	'appointment_cancelled', 'cancelled: clock out is refused');
+	'appointment_cancelled', 'cancelled: clock out without an open shift is refused');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000005'),
-	'cancelled/scheduled', 'cancelled: status and status_before_cancel unchanged');
+	'cancelled', 'cancelled: status unchanged');
+
+
+-- d10, d11: an open shift can always clock out ------------------------------------------------
+
+select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000101', 'out'),
+	'clocked', 'manually completed: an open shift can still clock out');
+select is(public.pgtap_clocks('f0000000-0000-4000-8000-000000000101'),
+	'set/set', 'manually completed: the clock out was written');
+select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000010'),
+	'completed', 'manually completed: still completed after the clock out');
+
+select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000111', 'out'),
+	'clocked', 'cancelled: an open shift can still clock out');
+select is(public.pgtap_clocks('f0000000-0000-4000-8000-000000000111'),
+	'set/set', 'cancelled: the clock out was written');
+select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000011'),
+	'cancelled', 'cancelled: still cancelled after the clock out');
 
 
 -- d6: an admin-set scheduled is recomputed by the next clock write -----------------------------
 
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000006'),
-	'scheduled/null', 'admin reset: starts scheduled with A clocked in');
+	'scheduled', 'admin reset: starts scheduled with A clocked in');
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000062', 'in'),
 	'clocked', 'admin reset: B clocks in');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000006'),
-	'in_progress/null', 'admin reset: recomputed to in progress');
+	'in_progress', 'admin reset: recomputed to in progress');
 
 
 -- d7: existing outcomes are unchanged ----------------------------------------------------------
@@ -244,9 +274,9 @@ select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000003', 'f0000000-0
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000072', 'in'),
 	'clock_in_after_clock_out', 'clocking in after clocking out is clock_in_after_clock_out');
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000003', 'f0000000-0000-4000-8000-000000000022', 'in'),
-	'appointment_completed', 'a finished crew member cannot reopen a completed appointment: the closed check wins');
+	'clock_in_after_clock_out', 'a finished crew member cannot clock in again on a completion derived from the clocks');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000007'),
-	'in_progress/null', 'refused clocks leave the status alone');
+	'in_progress', 'refused clocks leave the status alone');
 select is(public.pgtap_clocks('f0000000-0000-4000-8000-000000000071'),
 	'set/null', 'refused clocks leave A''s clocks alone');
 
@@ -270,7 +300,7 @@ set local role authenticated;
 select is(public.pgtap_clock('a0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000081', 'out'),
 	'clock_out_before_clock_in', 'clocking out first is clock_out_before_clock_in');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000008'),
-	'scheduled/null', 'a refused clock out leaves a scheduled appointment scheduled');
+	'scheduled', 'a refused clock out leaves a scheduled appointment scheduled');
 select is(public.pgtap_clocks('f0000000-0000-4000-8000-000000000081'),
 	'null/null', 'a refused clock out writes nothing');
 
@@ -289,7 +319,7 @@ reset role;
 select is(public.pgtap_clocks('f0000000-0000-4000-8000-000000000081'),
 	'null/null', 'anon wrote nothing');
 select is(public.pgtap_appointment('d0000000-0000-4000-8000-000000000008'),
-	'scheduled/null', 'anon moved no status');
+	'scheduled', 'anon moved no status');
 
 select * from finish();
 

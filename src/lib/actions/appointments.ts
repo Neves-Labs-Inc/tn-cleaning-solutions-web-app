@@ -737,7 +737,6 @@ export async function updateAppointment(
           price_override_cents: parsed.data.price_override_cents,
           notes: parsed.data.notes,
           status: parsed.data.status,
-          status_before_cancel: parsed.data.status === 'cancelled' ? existingAppointment.status : null,
         })
         .eq('id', id)
         .eq('is_archived', false)
@@ -993,7 +992,7 @@ export async function cancelAppointment(id: string): Promise<AppointmentActionRe
 
   const { data: cancelledAppointment, error } = await adminClient
     .from('appointments')
-    .update({ status: 'cancelled', status_before_cancel: currentAppointment.status })
+    .update({ status: 'cancelled' })
     .eq('id', id)
     .eq('is_archived', false)
     .eq('status', currentAppointment.status)
@@ -1030,7 +1029,7 @@ export async function uncancelAppointment(id: string): Promise<AppointmentAction
   const adminClient = createAdminClient()
   const { data: currentAppointment, error: loadError } = await adminClient
     .from('appointments')
-    .select('id, status, status_before_cancel')
+    .select('id, status')
     .eq('id', id)
     .eq('is_archived', false)
     .maybeSingle()
@@ -1047,11 +1046,10 @@ export async function uncancelAppointment(id: string): Promise<AppointmentAction
     return { success: false, error: 'This appointment is not cancelled.' }
   }
 
-  const restoredStatus = currentAppointment.status_before_cancel ?? 'scheduled'
-
+  // Any non-cancelled status will do: the appointments trigger replaces it with the derived one.
   const { data: restoredAppointment, error } = await adminClient
     .from('appointments')
-    .update({ status: restoredStatus, status_before_cancel: null })
+    .update({ status: 'scheduled' })
     .eq('id', id)
     .eq('is_archived', false)
     .eq('status', 'cancelled')
