@@ -84,7 +84,7 @@ export default async function EditInvoicePage({ params }: EditInvoicePageProps) 
       .order('name', { ascending: true }),
     supabase
       .from('invoice_appointments')
-      .select('appointment_id, billed_amount_cents, billed_rate_cents, billed_minutes')
+      .select('appointment_id')
       .eq('invoice_id', id),
     // A released row (a line on a voided invoice) and a Cancelled line are records only and no longer claim
     // their appointment.
@@ -138,7 +138,7 @@ export default async function EditInvoicePage({ params }: EditInvoicePageProps) 
   let pricesById = new Map<string, PricedAppointment>()
   if (!loadErrorMessage) {
     try {
-      pricesById = await priceAppointments(supabase, selectableRows)
+      pricesById = await priceAppointments(supabase, [...selectableRows, ...linkedAppointments])
     } catch (thrown) {
       console.error('Error pricing appointments:', thrown)
       loadErrorMessage = 'Failed to load appointment prices.'
@@ -149,23 +149,10 @@ export default async function EditInvoicePage({ params }: EditInvoicePageProps) 
     toAppointmentOption(row, livePriceOption(pricesById.get(row.id)?.live ?? { source: 'unpriced' }))
   )
 
-  const frozenByAppointmentId = new Map(billedLines.map((line) => [line.appointment_id, line]))
-  const preselectedAppointments: AppointmentOption[] = []
-
-  for (const row of linkedAppointments) {
-    const frozen = frozenByAppointmentId.get(row.id)
-
-    if (frozen) {
-      preselectedAppointments.push(
-        toAppointmentOption(row, {
-          resolved_amount_cents: frozen.billed_amount_cents,
-          resolved_rate_cents: frozen.billed_rate_cents,
-          resolved_minutes: frozen.billed_minutes,
-          resolved_headcount: 1,
-        })
-      )
-    }
-  }
+  // A draft line stores no price, so its visits show at the Live price.
+  const preselectedAppointments = linkedAppointments.map((row) =>
+    toAppointmentOption(row, livePriceOption(pricesById.get(row.id)?.live ?? { source: 'unpriced' }))
+  )
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">

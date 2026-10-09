@@ -10,10 +10,13 @@ export type InvoiceViewRow = {
   status: InvoiceStatus
   effective_status: InvoiceEffectiveStatus
   invoice_number: string | null
+  issued_date: string | null
   due_date: string | null
   total_cents: number
   is_archived: boolean
   is_automatic: boolean
+  // A draft holding an Unpriced line can't be issued; always false once issued.
+  has_unpriced: boolean
   clients: ClientRelation
 }
 
@@ -85,7 +88,7 @@ function parseDateOnly(value: string): number {
   return Date.UTC(year, month - 1, day)
 }
 
-function formatDateOnly(value: string): string {
+export function formatDateOnly(value: string): string {
   return dateFormatter.format(parseDateOnly(value))
 }
 

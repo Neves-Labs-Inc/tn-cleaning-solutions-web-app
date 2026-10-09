@@ -7,7 +7,7 @@ import StatusBadge, { invoiceStatusBadge } from '@/components/ui/status-badge'
 import {
 	archiveInvoice,
 	issueInvoice,
-	markInvoicePaid,
+	recordPayment,
 	voidInvoice,
 } from '@/lib/actions/invoices'
 import { effectiveStatus, invoiceLabel } from '@/lib/invoices/view'
@@ -140,30 +140,30 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 	const canEdit = invoice.status === 'draft'
 	const canIssue = invoice.status === 'draft'
 	const canMarkPaid = invoice.status === 'issued' || overdue
-	const canVoid = invoice.status === 'draft' || invoice.status === 'issued'
+	const canVoid = invoice.status === 'issued' || invoice.status === 'paid'
 
 	async function handleIssue(formData: FormData) {
 		'use server'
 
-		await issueInvoice(String(formData.get('id') ?? ''))
+		await issueInvoice(null, formData)
 	}
 
 	async function handleMarkPaid(formData: FormData) {
 		'use server'
 
-		await markInvoicePaid(String(formData.get('id') ?? ''))
+		await recordPayment(null, formData)
 	}
 
 	async function handleVoid(formData: FormData) {
 		'use server'
 
-		await voidInvoice(String(formData.get('id') ?? ''))
+		await voidInvoice(null, formData)
 	}
 
 	async function handleArchive(formData: FormData) {
 		'use server'
 
-		await archiveInvoice(String(formData.get('id') ?? ''))
+		await archiveInvoice(null, formData)
 	}
 
 	return (
@@ -201,7 +201,9 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 
 						{canIssue ? (
 							<form action={handleIssue}>
-								<input type="hidden" name="id" value={invoice.id} />
+								<input type="hidden" name="invoice_id" value={invoice.id} />
+								{/* invoice_issue writes the due date it is given, so send the draft's own. */}
+								<input type="hidden" name="due_date" value={invoice.due_date ?? ''} />
 								<Button type="submit" variant="outline" className="h-10 rounded-full border-amber-200 text-amber-700 hover:bg-amber-50">
 									Issue Invoice
 								</Button>
@@ -210,7 +212,14 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 
 						{canMarkPaid ? (
 							<form action={handleMarkPaid}>
-								<input type="hidden" name="id" value={invoice.id} />
+								<input type="hidden" name="invoice_id" value={invoice.id} />
+								<input
+									name="payment_method"
+									required
+									placeholder="Payment method"
+									aria-label="Payment method"
+									className="mr-2 h-10 rounded-full border border-neutral-200 px-3 text-sm"
+								/>
 								<Button type="submit" variant="outline" className="h-10 rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50">
 									Mark as Paid
 								</Button>
@@ -219,7 +228,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 
 						{canVoid ? (
 							<form action={handleVoid}>
-								<input type="hidden" name="id" value={invoice.id} />
+								<input type="hidden" name="invoice_id" value={invoice.id} />
 								<Button type="submit" variant="outline" className="h-10 rounded-full border-red-200 text-red-700 hover:bg-red-50">
 									Void
 								</Button>
@@ -228,7 +237,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 
 						{!invoice.is_archived ? (
 							<form action={handleArchive}>
-								<input type="hidden" name="id" value={invoice.id} />
+								<input type="hidden" name="invoice_id" value={invoice.id} />
 								<Button type="submit" variant="outline" className="h-10 rounded-full border-neutral-200 text-neutral-700 hover:bg-neutral-50">
 									Archive
 								</Button>

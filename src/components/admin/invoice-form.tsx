@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useActionState, useMemo, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 
@@ -10,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { SearchableMultiSelect } from '@/components/ui/searchable-multi-select'
 import { SearchableSelect } from '@/components/ui/searchable-select'
-import { createInvoice, type InvoiceActionResult, updateInvoice } from '@/lib/actions/invoices'
+import { createInvoice, type InvoiceActionResult, updateDraft } from '@/lib/actions/invoices'
 import { formatCents, formatRate, UNPRICED_LABEL } from '@/lib/pricing/money'
 
 export type AppointmentOption = {
@@ -43,9 +44,12 @@ type InvoiceFormProps = {
   }
 }
 
-const initialState: InvoiceActionResult = {
+type FormAction = (previous: unknown, formData: FormData) => Promise<InvoiceActionResult<unknown>>
+
+const initialState: InvoiceActionResult<unknown> = {
   success: false,
   error: '',
+  code: 'unknown',
 }
 
 function SubmitButton({ isEditMode }: { isEditMode: boolean }) {
@@ -112,8 +116,21 @@ export function InvoiceForm({
   invoice,
 }: InvoiceFormProps) {
   const isEditMode = Boolean(invoice)
-  const serverAction = invoice ? updateInvoice.bind(null, invoice.id) : createInvoice
+  const router = useRouter()
+
+  // Removing every line deletes the draft, so there is no draft page left to show.
+  async function saveDraft(previous: unknown, formData: FormData) {
+    const result = await updateDraft(previous, formData)
+    if (result.success && result.data.isDeleted) {
+      router.push('/solutions/invoices')
+    }
+    return result
+  }
+
+  const serverAction: FormAction = invoice ? saveDraft : createInvoice
   const [state, formAction] = useActionState(serverAction, initialState)
+  // The draft's lines when the page loaded: a save sends only what the admin added and removed.
+  const loadedIds = useMemo(() => preselectedAppointments.map((appointment) => appointment.id), [preselectedAppointments])
 
   const allAppointments = useMemo(() => {
     const map = new Map<string, AppointmentOption>()
@@ -188,7 +205,15 @@ export function InvoiceForm({
   return (
     <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
       <form action={formAction} className="space-y-6">
-        {'error' in state && state.error ? (
+        {state.success && isEditMode ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700" role="status">
+            Draft saved.
+          </div>
+        ) : null}
+
+        {invoice ? <input type="hidden" name="invoice_id" value={invoice.id} /> : null}
+
+        {!state.success && state.error ? (
           <div
             className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
             role="alert"
@@ -215,9 +240,6 @@ export function InvoiceForm({
             emptyMessage="No clients found."
             className={isEditMode ? 'pointer-events-none opacity-60' : ''}
           />
-          {'fieldErrors' in state && state.fieldErrors?.client_id ? (
-            <p className="text-xs text-red-600">{state.fieldErrors.client_id}</p>
-          ) : null}
           {isEditMode ? (
             <p className="text-xs text-neutral-500">Client cannot be changed after draft creation.</p>
           ) : null}
@@ -301,16 +323,24 @@ export function InvoiceForm({
             </div>
           )}
 
-          {'fieldErrors' in state && state.fieldErrors?.appointment_ids ? (
-            <p className="text-xs text-red-600">{state.fieldErrors.appointment_ids}</p>
-          ) : null}
-          {'fieldErrors' in state && state.fieldErrors?.prices ? (
-            <p className="text-xs text-red-600">{state.fieldErrors.prices}</p>
-          ) : null}
-
-          {selectedIds.map((appointmentId) => (
-            <input key={appointmentId} type="hidden" name="appointment_ids" value={appointmentId} />
-          ))}
+          {isEditMode ? (
+            <>
+              {selectedIds
+                .filter((appointmentId) => !loadedIds.includes(appointmentId))
+                .map((appointmentId) => (
+                  <input key={appointmentId} type="hidden" name="add_appointment_ids" value={appointmentId} />
+                ))}
+              {loadedIds
+                .filter((appointmentId) => !selectedIds.includes(appointmentId))
+                .map((appointmentId) => (
+                  <input key={appointmentId} type="hidden" name="remove_appointment_ids" value={appointmentId} />
+                ))}
+            </>
+          ) : (
+            selectedIds.map((appointmentId) => (
+              <input key={appointmentId} type="hidden" name="appointment_ids" value={appointmentId} />
+            ))
+          )}
         </div>
 
         <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3">
@@ -330,9 +360,6 @@ export function InvoiceForm({
               defaultValue={invoice?.due_date ?? ''}
               className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
             />
-            {'fieldErrors' in state && state.fieldErrors?.due_date ? (
-              <p className="text-xs text-red-600">{state.fieldErrors.due_date}</p>
-            ) : null}
           </div>
         </div>
 

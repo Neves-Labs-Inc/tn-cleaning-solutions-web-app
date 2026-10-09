@@ -3,7 +3,7 @@ import { FileText } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import StatusBadge, { invoiceStatusBadge } from '@/components/ui/status-badge'
-import { archiveInvoice, restoreInvoice } from '@/lib/actions/invoices'
+import { archiveInvoice, unarchiveInvoice } from '@/lib/actions/invoices'
 import { invoiceLabel } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
@@ -51,17 +51,7 @@ function InvoiceCard({ invoice, archived = false }: { invoice: InvoiceListRow; a
 	async function handleArchiveToggle(formData: FormData) {
 		'use server'
 
-		const id = String(formData.get('id') ?? '')
-		if (!id) {
-			return
-		}
-
-		if (archived) {
-			await restoreInvoice(id)
-			return
-		}
-
-		await archiveInvoice(id)
+		await (archived ? unarchiveInvoice : archiveInvoice)(null, formData)
 	}
 
 	const canArchive =
@@ -108,7 +98,7 @@ function InvoiceCard({ invoice, archived = false }: { invoice: InvoiceListRow; a
 
 					{canArchive ? (
 						<form action={handleArchiveToggle}>
-							<input type="hidden" name="id" value={invoice.id} />
+							<input type="hidden" name="invoice_id" value={invoice.id} />
 							<Button
 								type="submit"
 								variant="outline"

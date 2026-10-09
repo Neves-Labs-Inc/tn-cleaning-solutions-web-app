@@ -3,669 +3,283 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-import {
-  APPOINTMENT_PRICE_COLUMNS,
-  priceAppointments,
-  type PriceableAppointment,
-  type PricedAppointment,
-} from '@/lib/pricing'
-import { parseDollarsToCents } from '@/lib/pricing/money'
-import { getBusinessDate } from '@/lib/schedule'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { messageFor, type LedgerErrorCode } from '@/lib/invoices/errors'
+import { InvoiceLedger, type BulkIssueOutcome, type LedgerResult, type PaymentInput } from '@/lib/invoices/ledger'
 import { createClient } from '@/lib/supabase/server'
-import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
-type InvoiceFieldErrors = {
-  client_id?: string
-  due_date?: string
-  appointment_ids?: string
-  prices?: string
+// Thin by design: parse the form, check the session is an admin, call the ledger, revalidate,
+// return. Every business rule lives in src/lib/invoices and the SQL functions behind it.
+
+export type InvoiceActionResult<T = null> =
+  | { success: true; data: T }
+  | { success: false; error: string; code: LedgerErrorCode }
+
+const INVOICES_PATH = '/solutions/invoices'
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Caps on what a form can post: a bulk issue runs a few queries per draft in series.
+const MAX_IDS = 200
+const MAX_NOTES_LENGTH = 2000
+const MAX_SHORT_TEXT_LENGTH = 200
+// The ledger logs the raw cause; the page gets no Postgres text.
+const UNKNOWN_ERROR_MESSAGE = 'Something went wrong. Try again.'
+
+type Refusal = { success: false; error: string; code: LedgerErrorCode }
+
+function refuse(code: Exclude<LedgerErrorCode, 'unknown'>): Refusal {
+  return { success: false, error: messageFor(code), code }
 }
 
-export type InvoiceActionResult =
-  | { success: true; data?: { id: string } }
-  | { success: false; error: string; fieldErrors?: InvoiceFieldErrors }
-
-type ParsedInvoiceInput = {
-  clientId: string
-  dueDate: string | null
-  notes: string
-  selections: Array<{ appointmentId: string; priceCents: number }>
-}
-
-type AppointmentPriceRow = PriceableAppointment & {
-  status: AppointmentStatus
-  is_archived: boolean
-}
-
-type InvoiceLine = {
-  appointment_id: string
-  billed_amount_cents: number
-  billed_rate_cents: number | null
-  billed_minutes: number | null
-}
-
-const duplicateAppointmentError =
-  'One or more selected appointments are already attached to another invoice.'
-
-const linesNotRestoredError =
-  "The invoice's previous appointments could not be restored, so it currently has no lines."
-
-const invoiceChangedError =
-  'The invoice changed while this action was in progress. Reload it and try again.'
-
-async function requireAdminRole(): Promise<{ success: true } | { success: false; error: string }> {
-  const supabase = await createClient()
+// One admin check for every invoice action; the SQL functions check the role again themselves.
+async function requireAdmin(): Promise<{ ledger: InvoiceLedger } | { refusal: Refusal }> {
+  const db = await createClient()
   const {
     data: { user },
-    error,
-  } = await supabase.auth.getUser()
+  } = await db.auth.getUser()
 
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  if (!user) {
-    return { success: false, error: 'Not authenticated' }
-  }
-
-  if (user.app_metadata?.role !== 'admin') {
-    return { success: false, error: 'Unauthorized' }
-  }
-
-  return { success: true }
+  if (user?.app_metadata?.role !== 'admin') return { refusal: refuse('not_admin') }
+  return { ledger: new InvoiceLedger(db) }
 }
 
-function isValidDate(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+// Every parser returns undefined for input it rejects, which the action refuses as invalid_input.
+
+function text(formData: FormData, name: string, maxLength: number): string | undefined {
+  const value = String(formData.get(name) ?? '').trim()
+  return value.length <= maxLength ? value : undefined
 }
 
-function uniqueIds(values: FormDataEntryValue[]) {
-  return Array.from(new Set(values.map((value) => String(value)).filter(Boolean)))
+function optionalText(formData: FormData, name: string, maxLength: number): string | null | undefined {
+  const value = text(formData, name, maxLength)
+  return value === undefined ? undefined : value || null
 }
 
-function parseInvoiceFormData(formData: FormData):
-  | { success: true; data: ParsedInvoiceInput }
-  | { success: false; error: string; fieldErrors: InvoiceFieldErrors } {
-  const clientId = String(formData.get('client_id') ?? '').trim()
-  const dueDateRaw = String(formData.get('due_date') ?? '').trim()
-  const notes = String(formData.get('notes') ?? '').trim()
-  const appointmentIds = uniqueIds(formData.getAll('appointment_ids'))
-
-  const fieldErrors: InvoiceFieldErrors = {}
-
-  if (!clientId) {
-    fieldErrors.client_id = 'Client is required.'
-  }
-
-  if (dueDateRaw && !isValidDate(dueDateRaw)) {
-    fieldErrors.due_date = 'Enter a valid due date.'
-  }
-
-  if (appointmentIds.length === 0) {
-    fieldErrors.appointment_ids = 'Select at least one appointment.'
-  }
-
-  const selections: Array<{ appointmentId: string; priceCents: number }> = []
-  for (const appointmentId of appointmentIds) {
-    const rawPrice = String(formData.get(`price_override_${appointmentId}`) ?? '').trim()
-    const priceCents = parseDollarsToCents(rawPrice)
-
-    if (priceCents == null) {
-      fieldErrors.prices = 'Each selected appointment must have a valid non-negative price.'
-      break
-    }
-
-    selections.push({ appointmentId, priceCents })
-  }
-
-  if (Object.keys(fieldErrors).length > 0) {
-    return {
-      success: false,
-      error: 'Please correct the highlighted fields.',
-      fieldErrors,
-    }
-  }
-
-  return {
-    success: true,
-    data: {
-      clientId,
-      dueDate: dueDateRaw || null,
-      notes,
-      selections,
-    },
-  }
+function id(formData: FormData, name: string): string | undefined {
+  const value = String(formData.get(name) ?? '').trim()
+  return UUID.test(value) ? value : undefined
 }
 
-async function fetchAppointmentsForPricing(appointmentIds: string[]): Promise<
-  { success: true; rows: AppointmentPriceRow[] } | { success: false; error: string }
-> {
-  const adminClient = createAdminClient()
-  const { data, error } = await adminClient
-    .from('appointments')
-    .select(
-      `
-        ${APPOINTMENT_PRICE_COLUMNS},
-        status, is_archived
-      `
-    )
-    .in('id', appointmentIds)
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  const rows = (data ?? []) as unknown as AppointmentPriceRow[]
-  if (rows.length !== appointmentIds.length) {
-    return { success: false, error: 'One or more selected appointments were not found.' }
-  }
-
-  return { success: true, rows }
+function ids(formData: FormData, name: string): string[] | undefined {
+  const values = [...new Set(formData.getAll(name).map((value) => String(value).trim()).filter(Boolean))]
+  const isValid = values.length <= MAX_IDS && values.every((value) => UUID.test(value))
+  return isValid ? values : undefined
 }
 
-async function buildInvoiceLines(
-  parsed: ParsedInvoiceInput
-): Promise<
-  { success: true; lines: InvoiceLine[] } | { success: false; error: string }
-> {
-  const pricingResult = await fetchAppointmentsForPricing(parsed.selections.map((item) => item.appointmentId))
-  if (!pricingResult.success) {
-    return pricingResult
-  }
-
-  const byId = new Map(pricingResult.rows.map((row) => [row.id, row]))
-  const selected: Array<{ priceCents: number; appointment: AppointmentPriceRow }> = []
-
-  for (const selection of parsed.selections) {
-    const appointment = byId.get(selection.appointmentId)
-
-    if (!appointment) {
-      return { success: false, error: 'One or more selected appointments were not found.' }
-    }
-
-    if (appointment.client_id !== parsed.clientId) {
-      return { success: false, error: 'All selected appointments must belong to the selected client.' }
-    }
-
-    if (appointment.is_archived) {
-      return { success: false, error: 'Archived appointments cannot be invoiced.' }
-    }
-
-    selected.push({ priceCents: selection.priceCents, appointment })
-  }
-
-  let pricesById: Map<string, PricedAppointment>
-  try {
-    pricesById = await priceAppointments(
-      createAdminClient(),
-      selected.map(({ appointment }) => appointment)
-    )
-  } catch (thrown) {
-    console.error('Error pricing invoice appointments:', thrown)
-    return { success: false, error: 'Failed to load appointment prices.' }
-  }
-
-  const lines: InvoiceLine[] = []
-
-  for (const { priceCents, appointment } of selected) {
-    const live = pricesById.get(appointment.id)?.live
-    // An Unpriced visit is never billed, not even at a typed amount, until it has a Job.
-    if (!live || live.source === 'unpriced') {
-      return { success: false, error: 'One or more selected appointments have no Job, so they cannot be priced.' }
-    }
-
-    // No line column holds the crew size, so a multi-Cleaner line freezes no rate or minutes:
-    // rate × minutes would not add up to its billed amount.
-    const canFreezeBreakdown = priceCents === live.amount_cents && live.headcount === 1
-
-    lines.push({
-      appointment_id: appointment.id,
-      billed_amount_cents: priceCents,
-      billed_rate_cents: canFreezeBreakdown ? live.rate_cents : null,
-      billed_minutes: canFreezeBreakdown ? live.minutes : null,
-    })
-  }
-
-  return { success: true, lines }
+// A blank date is null.
+function optionalDate(formData: FormData, name: string): string | null | undefined {
+  const value = String(formData.get(name) ?? '').trim()
+  if (!value) return null
+  return ISO_DATE.test(value) ? value : undefined
 }
 
-function toJunctionRows(invoiceId: string, lines: InvoiceLine[]) {
-  return lines.map((line) => ({
-    invoice_id: invoiceId,
-    appointment_id: line.appointment_id,
-    billed_amount_cents: line.billed_amount_cents,
-    billed_rate_cents: line.billed_rate_cents,
-    billed_minutes: line.billed_minutes,
-  }))
+// A checkbox or switch posts "on" when checked and nothing when not.
+function flag(formData: FormData, name: string): boolean {
+  return ['on', 'true'].includes(String(formData.get(name) ?? ''))
 }
 
-async function restoreInvoiceLines(invoiceId: string, lines: InvoiceLine[]) {
-  let restored = true
+function payment(formData: FormData): PaymentInput | undefined {
+  const paidDate = optionalDate(formData, 'paid_date')
+  // A blank method is passed through: SQL refuses it with method_required.
+  const method = text(formData, 'payment_method', MAX_SHORT_TEXT_LENGTH)
+  const reference = optionalText(formData, 'payment_reference', MAX_SHORT_TEXT_LENGTH)
+  if (paidDate === undefined || method === undefined || reference === undefined) return undefined
 
-  if (lines.length > 0) {
-    const { error } = await createAdminClient()
-      .from('invoice_appointments')
-      .insert(toJunctionRows(invoiceId, lines))
-
-    restored = !error
-  }
-
-  return restored
+  return { paidDate, method, reference }
 }
 
-function isUniqueConstraintError(error: string) {
-  const lower = error.toLowerCase()
-  return lower.includes('duplicate key') || lower.includes('unique')
-}
-
-function revalidateInvoicePaths(invoiceId?: string) {
-  revalidatePath('/solutions/invoices')
-  revalidatePath('/solutions/appointments')
+// Called only with an id the parser accepted as a UUID, so the detail path is never free text.
+function revalidateInvoicing(invoiceId?: string) {
+  revalidatePath(INVOICES_PATH)
+  revalidatePath(`${INVOICES_PATH}/receivables`)
+  revalidatePath(`${INVOICES_PATH}/payment-methods`)
+  revalidatePath('/(internal)/solutions/(admin)/clients/[id]', 'page')
+  revalidatePath('/solutions/dashboard')
   if (invoiceId) {
-    revalidatePath(`/solutions/invoices/${invoiceId}`)
+    revalidatePath(`${INVOICES_PATH}/${invoiceId}`)
   }
 }
 
-export async function createInvoice(formData: FormData): Promise<InvoiceActionResult>
-export async function createInvoice(
-  _prevState: InvoiceActionResult,
+function toActionResult<T>(result: LedgerResult<T>): InvoiceActionResult<T> {
+  if (result.ok) return { success: true, data: result.data }
+
+  const error = result.code === 'unknown' ? UNKNOWN_ERROR_MESSAGE : result.message
+  return { success: false, error, code: result.code }
+}
+
+export async function createInvoice(_previous: unknown, formData: FormData): Promise<InvoiceActionResult<{ id: string }>> {
+  const clientId = id(formData, 'client_id')
+  const appointmentIds = ids(formData, 'appointment_ids')
+  const dueDate = optionalDate(formData, 'due_date')
+  const notes = optionalText(formData, 'notes', MAX_NOTES_LENGTH)
+  if (!clientId || !appointmentIds || dueDate === undefined || notes === undefined) return refuse('invalid_input')
+
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
+
+  const result = await admin.ledger.createDraft({ clientId, appointmentIds, dueDate, notes })
+  if (!result.ok) return toActionResult(result)
+
+  revalidateInvoicing()
+  redirect(`${INVOICES_PATH}/${result.data.id}`)
+}
+
+// Takes the visits added and removed against what the page loaded, and always the current due
+// date and notes: SQL overwrites both, so a missing value would clear it.
+export async function updateDraft(
+  _previous: unknown,
   formData: FormData
-): Promise<InvoiceActionResult>
-export async function createInvoice(
-  firstArg: FormData | InvoiceActionResult,
-  secondArg?: FormData
-): Promise<InvoiceActionResult> {
-  const formData = firstArg instanceof FormData ? firstArg : secondArg
+): Promise<InvoiceActionResult<{ isDeleted: boolean }>> {
+  const invoiceId = id(formData, 'invoice_id')
+  const addAppointmentIds = ids(formData, 'add_appointment_ids')
+  const removeAppointmentIds = ids(formData, 'remove_appointment_ids')
+  const dueDate = optionalDate(formData, 'due_date')
+  const notes = optionalText(formData, 'notes', MAX_NOTES_LENGTH)
+  const isValid = invoiceId && addAppointmentIds && removeAppointmentIds && dueDate !== undefined && notes !== undefined
+  if (!isValid) return refuse('invalid_input')
 
-  if (!formData) {
-    return { success: false, error: 'Invalid form submission.' }
-  }
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
 
-  const authResult = await requireAdminRole()
-  if (!authResult.success) {
-    return { success: false, error: authResult.error }
-  }
-
-  const parsed = parseInvoiceFormData(formData)
-  if (!parsed.success) {
-    return parsed
-  }
-
-  const linesResult = await buildInvoiceLines(parsed.data)
-  if (!linesResult.success) {
-    return { success: false, error: linesResult.error }
-  }
-
-  let redirectPath = ''
-
-  try {
-    const adminClient = createAdminClient()
-
-    const { data: createdInvoice, error: createError } = await adminClient
-      .from('invoices')
-      .insert({
-        client_id: parsed.data.clientId,
-        due_date: parsed.data.dueDate,
-        notes: parsed.data.notes,
-        status: 'draft',
-      })
-      .select('id')
-      .single()
-
-    if (createError) {
-      return { success: false, error: createError.message }
-    }
-
-    const invoiceId = createdInvoice.id
-
-    const { error: linkError } = await adminClient
-      .from('invoice_appointments')
-      .insert(toJunctionRows(invoiceId, linesResult.lines))
-
-    if (linkError) {
-      if (isUniqueConstraintError(linkError.message)) {
-        return { success: false, error: duplicateAppointmentError }
-      }
-
-      return { success: false, error: linkError.message }
-    }
-
-    redirectPath = `/solutions/invoices/${invoiceId}`
-  } catch {
-    return { success: false, error: 'Failed to create invoice.' }
-  }
-
-  revalidateInvoicePaths()
-  redirect(redirectPath)
-
-  return { success: true }
+  const result = await admin.ledger.updateDraft(invoiceId, { addAppointmentIds, removeAppointmentIds, dueDate, notes })
+  revalidateInvoicing(invoiceId)
+  return toActionResult(result)
 }
 
-export async function updateInvoice(id: string, formData: FormData): Promise<InvoiceActionResult>
-export async function updateInvoice(
-  id: string,
-  _prevState: InvoiceActionResult,
+export async function issueInvoice(
+  _previous: unknown,
   formData: FormData
-): Promise<InvoiceActionResult>
-export async function updateInvoice(
-  id: string,
-  secondArg: FormData | InvoiceActionResult,
-  thirdArg?: FormData
-): Promise<InvoiceActionResult> {
-  const formData = secondArg instanceof FormData ? secondArg : thirdArg
+): Promise<InvoiceActionResult<{ invoiceNumber: string }>> {
+  const invoiceId = id(formData, 'invoice_id')
+  const dueDate = optionalDate(formData, 'due_date')
+  if (!invoiceId || dueDate === undefined) return refuse('invalid_input')
 
-  if (!id) {
-    return { success: false, error: 'Invoice id is required.' }
-  }
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
 
-  if (!formData) {
-    return { success: false, error: 'Invalid form submission.' }
-  }
-
-  const authResult = await requireAdminRole()
-  if (!authResult.success) {
-    return { success: false, error: authResult.error }
-  }
-
-  const parsed = parseInvoiceFormData(formData)
-  if (!parsed.success) {
-    return parsed
-  }
-
-  const adminClient = createAdminClient()
-
-  const { data: currentInvoice, error: invoiceError } = await adminClient
-    .from('invoices')
-    .select('id, status')
-    .eq('id', id)
-    .maybeSingle()
-
-  if (invoiceError) {
-    return { success: false, error: invoiceError.message }
-  }
-
-  if (!currentInvoice) {
-    return { success: false, error: 'Invoice not found.' }
-  }
-
-  if (currentInvoice.status !== 'draft') {
-    return { success: false, error: 'Only draft invoices can be edited.' }
-  }
-
-  const { data: linkedRows, error: linkedError } = await adminClient
-    .from('invoice_appointments')
-    .select('appointment_id, billed_amount_cents, billed_rate_cents, billed_minutes')
-    .eq('invoice_id', id)
-
-  if (linkedError) {
-    return { success: false, error: linkedError.message }
-  }
-
-  const linesResult = await buildInvoiceLines(parsed.data)
-  if (!linesResult.success) {
-    return { success: false, error: linesResult.error }
-  }
-
-  const previousLines = (linkedRows ?? []) as InvoiceLine[]
-
-  let redirectPath = ''
-
-  try {
-    const { error: deleteLinksError } = await adminClient
-      .from('invoice_appointments')
-      .delete()
-      .eq('invoice_id', id)
-
-    if (deleteLinksError) {
-      return { success: false, error: deleteLinksError.message }
-    }
-
-    const { error: insertLinksError } = await adminClient
-      .from('invoice_appointments')
-      .insert(toJunctionRows(id, linesResult.lines))
-
-    if (insertLinksError) {
-      const restored = await restoreInvoiceLines(id, previousLines)
-      const detail = isUniqueConstraintError(insertLinksError.message)
-        ? duplicateAppointmentError
-        : insertLinksError.message
-
-      return { success: false, error: restored ? detail : `${detail} ${linesNotRestoredError}` }
-    }
-
-    const { error: updateInvoiceError } = await adminClient
-      .from('invoices')
-      .update({
-        client_id: parsed.data.clientId,
-        due_date: parsed.data.dueDate,
-        notes: parsed.data.notes,
-      })
-      .eq('id', id)
-
-    if (updateInvoiceError) {
-      return { success: false, error: updateInvoiceError.message }
-    }
-
-    redirectPath = `/solutions/invoices/${id}`
-  } catch {
-    return { success: false, error: 'Failed to update invoice.' }
-  }
-
-  revalidateInvoicePaths(id)
-  redirect(redirectPath)
-
-  return { success: true, data: { id } }
+  const result = await admin.ledger.issue(invoiceId, dueDate)
+  revalidateInvoicing(invoiceId)
+  return toActionResult(result)
 }
 
-function todayDateString() {
-  return getBusinessDate(new Date())
+export async function bulkIssueInvoices(_previous: unknown, formData: FormData): Promise<InvoiceActionResult<BulkIssueOutcome>> {
+  const invoiceIds = ids(formData, 'invoice_ids')
+  const dueDate = optionalDate(formData, 'due_date')
+  if (!invoiceIds || invoiceIds.length === 0 || dueDate === undefined) return refuse('invalid_input')
+
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
+
+  const result = await admin.ledger.bulkIssue(invoiceIds, dueDate)
+  revalidateInvoicing()
+  return toActionResult(result)
 }
 
-export async function issueInvoice(id: string): Promise<InvoiceActionResult> {
-  if (!id) {
-    return { success: false, error: 'Invoice id is required.' }
-  }
+export async function voidInvoice(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
+  const invoiceId = id(formData, 'invoice_id')
+  if (!invoiceId) return refuse('invalid_input')
 
-  const authResult = await requireAdminRole()
-  if (!authResult.success) {
-    return { success: false, error: authResult.error }
-  }
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
 
-  const adminClient = createAdminClient()
-
-  const { data: currentInvoice, error: loadError } = await adminClient
-    .from('invoices')
-    .select('id, status, issued_date')
-    .eq('id', id)
-    .maybeSingle()
-
-  if (loadError) {
-    return { success: false, error: loadError.message }
-  }
-
-  if (!currentInvoice) {
-    return { success: false, error: 'Invoice not found.' }
-  }
-
-  if (currentInvoice.status !== 'draft') {
-    return { success: false, error: 'Only draft invoices can be issued.' }
-  }
-
-  const { data: issuedRows, error } = await adminClient
-    .from('invoices')
-    .update({
-      status: 'issued',
-      issued_date: currentInvoice.issued_date ?? todayDateString(),
-    })
-    .eq('id', id)
-    .eq('status', 'draft')
-    .select('id')
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  if ((issuedRows ?? []).length === 0) {
-    return { success: false, error: invoiceChangedError }
-  }
-
-  revalidateInvoicePaths(id)
-  return { success: true, data: { id } }
+  const result = await admin.ledger.voidInvoice(invoiceId)
+  revalidateInvoicing(invoiceId)
+  return toActionResult(result)
 }
 
-export async function markInvoicePaid(id: string): Promise<InvoiceActionResult> {
-  if (!id) {
-    return { success: false, error: 'Invoice id is required.' }
-  }
+export async function recordPayment(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
+  const invoiceId = id(formData, 'invoice_id')
+  const input = payment(formData)
+  if (!invoiceId || !input) return refuse('invalid_input')
 
-  const authResult = await requireAdminRole()
-  if (!authResult.success) {
-    return { success: false, error: authResult.error }
-  }
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
 
-  const adminClient = createAdminClient()
-  const { data: currentInvoice, error: loadError } = await adminClient
-    .from('invoices')
-    .select('id, status')
-    .eq('id', id)
-    .maybeSingle()
-
-  if (loadError) {
-    return { success: false, error: loadError.message }
-  }
-
-  if (!currentInvoice) {
-    return { success: false, error: 'Invoice not found.' }
-  }
-
-  if (currentInvoice.status !== 'issued') {
-    return { success: false, error: 'Only issued invoices can be marked as paid.' }
-  }
-
-  const { data: paidRows, error } = await adminClient
-    .from('invoices')
-    .update({ status: 'paid' })
-    .eq('id', id)
-    .eq('status', 'issued')
-    .select('id')
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  if ((paidRows ?? []).length === 0) {
-    return { success: false, error: invoiceChangedError }
-  }
-
-  revalidateInvoicePaths(id)
-  return { success: true, data: { id } }
+  const result = await admin.ledger.recordPayment(invoiceId, input)
+  revalidateInvoicing(invoiceId)
+  return toActionResult(result)
 }
 
-export async function voidInvoice(id: string): Promise<InvoiceActionResult> {
-  if (!id) {
-    return { success: false, error: 'Invoice id is required.' }
-  }
+export async function updatePayment(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
+  const invoiceId = id(formData, 'invoice_id')
+  const input = payment(formData)
+  if (!invoiceId || !input) return refuse('invalid_input')
 
-  const authResult = await requireAdminRole()
-  if (!authResult.success) {
-    return { success: false, error: authResult.error }
-  }
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
 
-  const adminClient = createAdminClient()
-  const { data: currentInvoice, error: loadError } = await adminClient
-    .from('invoices')
-    .select('id, status')
-    .eq('id', id)
-    .maybeSingle()
-
-  if (loadError) {
-    return { success: false, error: loadError.message }
-  }
-
-  if (!currentInvoice) {
-    return { success: false, error: 'Invoice not found.' }
-  }
-
-  if (currentInvoice.status !== 'draft' && currentInvoice.status !== 'issued') {
-    return { success: false, error: 'Only draft or issued invoices can be voided.' }
-  }
-
-  const { data: voidedRows, error } = await adminClient
-    .from('invoices')
-    .update({ status: 'void' })
-    .eq('id', id)
-    .in('status', ['draft', 'issued'])
-    .select('id')
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  if ((voidedRows ?? []).length === 0) {
-    return { success: false, error: invoiceChangedError }
-  }
-
-  // Order is status -> release, and it must stay that way. A release that fails after the status
-  // write leaves the invoice void with its appointments still consumed, which is the behaviour this
-  // action has always had. Releasing first would let a failed status write leave a draft or issued
-  // invoice still totalling lines whose appointments are billable again — a double-billing window.
-  const { error: releaseError } = await adminClient
-    .from('invoice_appointments')
-    .update({ is_archived: true })
-    .eq('invoice_id', id)
-    .eq('is_archived', false)
-
-  revalidateInvoicePaths(id)
-
-  if (releaseError) {
-    return {
-      success: false,
-      error: 'The invoice was voided, but its appointments were not released.',
-    }
-  }
-
-  return { success: true, data: { id } }
+  const result = await admin.ledger.updatePayment(invoiceId, input)
+  revalidateInvoicing(invoiceId)
+  return toActionResult(result)
 }
 
-export async function archiveInvoice(id: string): Promise<InvoiceActionResult> {
-  if (!id) {
-    return { success: false, error: 'Invoice id is required.' }
-  }
+export async function undoPayment(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
+  const invoiceId = id(formData, 'invoice_id')
+  if (!invoiceId) return refuse('invalid_input')
 
-  const authResult = await requireAdminRole()
-  if (!authResult.success) {
-    return { success: false, error: authResult.error }
-  }
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
 
-  const adminClient = createAdminClient()
-  const { error } = await adminClient.from('invoices').update({ is_archived: true }).eq('id', id)
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  revalidateInvoicePaths(id)
-  return { success: true, data: { id } }
+  const result = await admin.ledger.undoPayment(invoiceId)
+  revalidateInvoicing(invoiceId)
+  return toActionResult(result)
 }
 
-export async function restoreInvoice(id: string): Promise<InvoiceActionResult> {
-  if (!id) {
-    return { success: false, error: 'Invoice id is required.' }
-  }
+export async function archiveInvoice(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
+  const invoiceId = id(formData, 'invoice_id')
+  if (!invoiceId) return refuse('invalid_input')
 
-  const authResult = await requireAdminRole()
-  if (!authResult.success) {
-    return { success: false, error: authResult.error }
-  }
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
 
-  const adminClient = createAdminClient()
-  const { error } = await adminClient.from('invoices').update({ is_archived: false }).eq('id', id)
+  const result = await admin.ledger.archive(invoiceId)
+  revalidateInvoicing(invoiceId)
+  return toActionResult(result)
+}
 
-  if (error) {
-    return { success: false, error: error.message }
-  }
+export async function unarchiveInvoice(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
+  const invoiceId = id(formData, 'invoice_id')
+  if (!invoiceId) return refuse('invalid_input')
 
-  revalidateInvoicePaths(id)
-  return { success: true, data: { id } }
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
+
+  const result = await admin.ledger.unarchive(invoiceId)
+  revalidateInvoicing(invoiceId)
+  return toActionResult(result)
+}
+
+export async function setClientAutomaticInvoicing(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
+  const clientId = id(formData, 'client_id')
+  if (!clientId) return refuse('invalid_input')
+
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
+
+  const result = await admin.ledger.setAutomaticInvoicing(clientId, flag(formData, 'automatic_invoicing'))
+  revalidateInvoicing()
+  return toActionResult(result)
+}
+
+export async function renamePaymentMethod(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
+  const methodId = id(formData, 'payment_method_id')
+  const name = text(formData, 'name', MAX_SHORT_TEXT_LENGTH)
+  if (!methodId || name === undefined) return refuse('invalid_input')
+
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
+
+  const result = await admin.ledger.renamePaymentMethod(methodId, name)
+  revalidateInvoicing()
+  return toActionResult(result)
+}
+
+export async function setPaymentMethodHidden(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
+  const methodId = id(formData, 'payment_method_id')
+  if (!methodId) return refuse('invalid_input')
+
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
+
+  const result = await admin.ledger.setPaymentMethodHidden(methodId, flag(formData, 'is_hidden'))
+  revalidateInvoicing()
+  return toActionResult(result)
 }
