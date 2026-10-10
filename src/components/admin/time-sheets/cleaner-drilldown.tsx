@@ -8,10 +8,20 @@ import AcknowledgeButton, {
   ACKNOWLEDGE_BUTTON_ATTRIBUTE,
 } from "@/components/admin/time-sheets/acknowledge-button";
 import AcknowledgePanel from "@/components/admin/time-sheets/acknowledge-panel";
-import SessionRowActions from "@/components/admin/time-sheets/session-row-actions";
+import ClockCorrectionForm, {
+  type ReadOnlyCells,
+} from "@/components/admin/time-sheets/clock-correction-form";
+import ClockFixButton from "@/components/admin/time-sheets/clock-fix-button";
 import { formatMinutes } from "@/components/admin/time-sheets/format-minutes";
 import RangeBar from "@/components/admin/time-sheets/range-bar";
 import SessionCard from "@/components/admin/time-sheets/session-card";
+import {
+  getFixButtonId,
+  getFixPanelId,
+  getSessionFocusId,
+  type SessionLayout,
+} from "@/components/admin/time-sheets/session-panel-ids";
+import SessionRowActions from "@/components/admin/time-sheets/session-row-actions";
 import SessionTableRows, {
   SESSION_TABLE_COLUMNS,
 } from "@/components/admin/time-sheets/session-table-rows";
@@ -52,8 +62,9 @@ type CleanerDrilldownProps = {
   range: WeekRange;
 };
 
-// Ticket 07 adds "fix" to this union.
-type OpenPanel = { sessionId: string; kind: "history" | "ack" } | null;
+type PanelKind = "history" | "ack" | "fix";
+type OpenPanel = { sessionId: string; kind: PanelKind } | null;
+type FocusTarget = { sessionId: string; layout: SessionLayout };
 
 const EYEBROW =
   "text-xs font-semibold uppercase tracking-wider text-muted-foreground";
@@ -66,21 +77,21 @@ export default function CleanerDrilldown({
 }: CleanerDrilldownProps): React.ReactNode {
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const focusReturnId = useRef<string | null>(null);
+  const focusAfterFix = useRef<FocusTarget | null>(null);
 
-  const isHistoryOpen = (sessionId: string) =>
-    openPanel?.sessionId === sessionId && openPanel.kind === "history";
+  const isPanelOpen = (sessionId: string, kind: PanelKind) =>
+    openPanel?.sessionId === sessionId && openPanel.kind === kind;
 
   // Opening one session's panel replaces any other; the same toggle closes it.
-  const toggleHistory = (sessionId: string) =>
+  const togglePanel = (sessionId: string, kind: PanelKind) =>
     setOpenPanel((current) =>
-      current?.sessionId === sessionId && current.kind === "history"
+      current?.sessionId === sessionId && current.kind === kind
         ? null
-        : { sessionId, kind: "history" },
+        : { sessionId, kind },
     );
 
   const isAckOpen = (view: SessionRowView) =>
-    openPanel?.sessionId === view.id &&
-    openPanel.kind === "ack" &&
+    isPanelOpen(view.id, "ack") &&
     // A refresh that clears the flag also drops the panel.
     view.flags.includes("odd_duration");
 
@@ -100,6 +111,17 @@ export default function CleanerDrilldown({
     focusReturnId.current = sessionId;
   };
 
+  // Same rule as closeAck: a fix save resolving after the admin moved on leaves the new panel.
+  const closeFix = (target: FocusTarget) =>
+    setOpenPanel((current) => {
+      const isOwn =
+        current?.sessionId === target.sessionId && current.kind === "fix";
+      if (!isOwn) return current;
+
+      focusAfterFix.current = target;
+      return null;
+    });
+
   // The card and the table row both render; focus the copy that is actually visible.
   useEffect(() => {
     const sessionId = focusReturnId.current;
@@ -113,18 +135,40 @@ export default function CleanerDrilldown({
       ?.focus();
   }, [openPanel]);
 
-  // Acknowledge first, then ticket 07's fix button, so the fix button stays rightmost.
-  const renderActions = (view: SessionRowView, layout: "table" | "card") => (
+  // After a fix panel closes, focus returns to its button, or to the session when none remains.
+  useEffect(() => {
+    const target = focusAfterFix.current;
+    if (!target || openPanel !== null) return;
+
+    focusAfterFix.current = null;
+    const { sessionId, layout } = target;
+    const element =
+      document.getElementById(getFixButtonId(sessionId, layout)) ??
+      document.getElementById(getSessionFocusId(sessionId, layout));
+    element?.focus();
+  }, [openPanel]);
+
+  // Acknowledge first, then the fix button, so the fix button stays rightmost.
+  const renderActions = (view: SessionRowView, layout: SessionLayout) => (
     <SessionRowActions layout={layout}>
       <AcknowledgeButton
+        layout={layout}
         view={view}
         isOpen={isAckOpen(view)}
         onOpen={() => openAck(view.id)}
       />
+      <ClockFixButton
+        view={view}
+        layout={layout}
+        id={getFixButtonId(view.id, layout)}
+        expanded={isPanelOpen(view.id, "fix")}
+        controlsId={getFixPanelId(view.id, layout)}
+        onOpen={() => togglePanel(view.id, "fix")}
+      />
     </SessionRowActions>
   );
 
-  const renderPanel = (view: SessionRowView) =>
+  const renderAckPanel = (view: SessionRowView) =>
     isAckOpen(view) ? (
       <AcknowledgePanel
         view={view}
@@ -132,6 +176,37 @@ export default function CleanerDrilldown({
         onCancel={() => cancelAck(view.id)}
       />
     ) : undefined;
+
+  const renderCardPanel = (view: SessionRowView) =>
+    isPanelOpen(view.id, "fix") && view.fixAction ? (
+      <ClockCorrectionForm
+        layout="card"
+        view={view}
+        mode={view.fixAction}
+        id={getFixPanelId(view.id, "card")}
+        onClose={() => closeFix({ sessionId: view.id, layout: "card" })}
+      />
+    ) : (
+      renderAckPanel(view)
+    );
+
+  const getRowEditor = (view: SessionRowView) => {
+    const { fixAction } = view;
+    if (!isPanelOpen(view.id, "fix") || !fixAction) return undefined;
+
+    return function RowEditor(cells: ReadOnlyCells): React.ReactNode {
+      return (
+        <ClockCorrectionForm
+          layout="row"
+          cells={cells}
+          view={view}
+          mode={fixAction}
+          id={getFixPanelId(view.id, "row")}
+          onClose={() => closeFix({ sessionId: view.id, layout: "row" })}
+        />
+      );
+    };
+  };
 
   return (
     <div className="animate-in space-y-6 fade-in-0 duration-slow lg:space-y-8">
@@ -197,10 +272,10 @@ export default function CleanerDrilldown({
                     <SessionCard
                       key={view.id}
                       view={view}
-                      isHistoryOpen={isHistoryOpen(view.id)}
-                      onToggleHistory={() => toggleHistory(view.id)}
+                      isHistoryOpen={isPanelOpen(view.id, "history")}
+                      onToggleHistory={() => togglePanel(view.id, "history")}
                       actions={renderActions(view, "card")}
-                      panel={renderPanel(view)}
+                      panel={renderCardPanel(view)}
                     />
                   ))}
                 </ul>
@@ -240,10 +315,11 @@ export default function CleanerDrilldown({
                     <SessionTableRows
                       key={view.id}
                       view={view}
-                      isHistoryOpen={isHistoryOpen(view.id)}
-                      onToggleHistory={() => toggleHistory(view.id)}
-                      actions={renderActions(view, "table")}
-                      panel={renderPanel(view)}
+                      isHistoryOpen={isPanelOpen(view.id, "history")}
+                      onToggleHistory={() => togglePanel(view.id, "history")}
+                      actions={renderActions(view, "row")}
+                      panel={renderAckPanel(view)}
+                      renderEditor={getRowEditor(view)}
                     />
                   ))}
                 </TableBody>

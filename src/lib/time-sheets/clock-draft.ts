@@ -16,6 +16,14 @@ export type ClockDraft = { clockIn: DraftField; clockOut: DraftField };
 export type ClockDraftMode = FixAction;
 export type ClockDraftErrors = { clockIn?: string; clockOut?: string };
 export type ClockInstants = { clockIn: string | null; clockOut: string | null };
+// What prefill and validation read from a session; a SessionView or SessionRowView fits.
+export type ClockDraftView = Pick<
+  SessionView,
+  "scheduledDate" | "scheduledStart" | "scheduledEnd" | "graceEnd" | "clockIn" | "clockOut"
+>;
+
+// correctSessionClocks refuses longer reasons and notes; the inputs cap at it.
+export const MAX_CLOCK_TEXT_LENGTH = 2000;
 
 type DraftCheck = {
   field: keyof ClockDraftErrors;
@@ -26,6 +34,7 @@ type DraftCheck = {
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^\d{2}:\d{2}$/;
 const CLOSE_NEEDS_CLOCK_OUT = "Enter a clock-out to close the shift";
+const NEEDS_CLOCK_IN = "Enter a clock-in";
 
 function padTwo(value: number): string {
   return String(value).padStart(2, "0");
@@ -56,14 +65,14 @@ function isSameField(left: DraftField, right: DraftField): boolean {
 }
 
 // Clock-out defaults to the scheduled end once it has passed, else stays empty for the admin.
-function prefillClockOut(view: SessionView, now: Date): DraftField {
+function prefillClockOut(view: ClockDraftView, now: Date): DraftField {
   const hasEnded = Date.parse(view.scheduledEnd) <= now.getTime();
   return hasEnded
     ? toDraftField(view.scheduledEnd, view.scheduledDate)
     : toDraftField(null, view.scheduledDate);
 }
 
-export function prefillClockDraft(view: SessionView, mode: ClockDraftMode, now: Date): ClockDraft {
+export function prefillClockDraft(view: ClockDraftView, mode: ClockDraftMode, now: Date): ClockDraft {
   let draft: ClockDraft = {
     clockIn: toDraftField(view.clockIn, view.scheduledDate),
     clockOut: toDraftField(view.clockOut, view.scheduledDate),
@@ -89,7 +98,7 @@ function serverCheck(code: ClockErrorCode, hasFailed: boolean): DraftCheck {
 export function validateClockDraft(
   draft: ClockDraft,
   mode: ClockDraftMode,
-  view: SessionView,
+  view: ClockDraftView,
   now: Date,
 ): ClockDraftErrors {
   const clockIn = toInstant(draft.clockIn);
@@ -101,6 +110,8 @@ export function validateClockDraft(
   const checks: DraftCheck[] = [
     { field: "clockOut", message: CLOSE_NEEDS_CLOCK_OUT, hasFailed: mode === "close" && !clockOut },
     serverCheck("clock_in_required", clockOut !== null && clockIn === null),
+    // Only edit may clear; elsewhere an empty draft would equal the session and save nothing.
+    { field: "clockIn", message: NEEDS_CLOCK_IN, hasFailed: mode !== "edit" && !clockIn },
     serverCheck("clock_in_future", clockIn !== null && clockIn.getTime() > nowTime),
     serverCheck("clock_out_future", clockOut !== null && clockOut.getTime() > nowTime),
     serverCheck(

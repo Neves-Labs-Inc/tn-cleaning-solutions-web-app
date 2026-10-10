@@ -6,7 +6,9 @@ import ClockTime from "@/components/admin/time-sheets/clock-time";
 import ClockedValue from "@/components/admin/time-sheets/clocked-value";
 import SessionBadges from "@/components/admin/time-sheets/session-badges";
 import SessionHistory from "@/components/admin/time-sheets/session-history";
+import { getSessionFocusId } from "@/components/admin/time-sheets/session-panel-ids";
 import type { SessionRowView } from "@/lib/time-sheets/drilldown-days";
+import { cn } from "@/lib/utils";
 
 type SessionCardProps = {
   view: SessionRowView;
@@ -14,7 +16,7 @@ type SessionCardProps = {
   onToggleHistory: () => void;
   // A SessionRowActions element; it owns its own wrapper and hides itself when empty.
   actions?: React.ReactNode;
-  // An open inline panel; it replaces the actions inside the card.
+  // An open inline panel (fix or acknowledge); it replaces the actions inside the card.
   panel?: React.ReactNode;
 };
 
@@ -28,7 +30,14 @@ export default function SessionCard({
   const historyId = `history-card-${view.id}`;
 
   return (
-    <li className="grid gap-3 p-4 sm:p-5">
+    <li
+      id={getSessionFocusId(view.id, "card")}
+      tabIndex={-1}
+      className={cn(
+        "grid gap-3 p-4 outline-none sm:p-5",
+        panel && "bg-muted/40 first:rounded-t-lg last:rounded-b-lg",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-base font-semibold break-words">

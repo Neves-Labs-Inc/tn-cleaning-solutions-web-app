@@ -14,6 +14,7 @@ const BASE: BadgeInput = {
   isAcknowledged: false,
   isManualCompletion: false,
   isEdited: false,
+  fixAction: null,
 };
 
 test("a plain closed session wears no badges", () => {
@@ -45,6 +46,13 @@ test("in progress is success and upcoming is info", () => {
   assert.deepEqual(timeSheetFlagBadges({ ...BASE, state: "upcoming" }), [
     { tone: "info", label: "Upcoming" },
   ]);
+});
+
+test("an unclocked session past its scheduled start reads Not clocked in, not Upcoming", () => {
+  // The shared module offers Add session exactly once the scheduled start has passed.
+  const badges = timeSheetFlagBadges({ ...BASE, state: "upcoming", fixAction: "add" });
+
+  assert.deepEqual(badges, [{ tone: "info", label: "Not clocked in" }]);
 });
 
 test("an acknowledged odd duration is a neutral OK'd badge", () => {

@@ -1,9 +1,11 @@
 "use client";
 
+import type { ReadOnlyCells } from "@/components/admin/time-sheets/clock-correction-form";
 import ClockTime from "@/components/admin/time-sheets/clock-time";
 import ClockedValue from "@/components/admin/time-sheets/clocked-value";
 import SessionBadges from "@/components/admin/time-sheets/session-badges";
 import SessionHistory from "@/components/admin/time-sheets/session-history";
+import { getSessionFocusId } from "@/components/admin/time-sheets/session-panel-ids";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { SessionRowView } from "@/lib/time-sheets/drilldown-days";
 import { cn } from "@/lib/utils";
@@ -13,8 +15,10 @@ type SessionTableRowsProps = {
   isHistoryOpen: boolean;
   onToggleHistory: () => void;
   actions?: React.ReactNode;
-  // An open inline panel (fix or acknowledge), shown in a full-width row under the session.
+  // An open inline panel (acknowledge), shown in a full-width row under the session.
   panel?: React.ReactNode;
+  // Replaces the row with an in-place editor (the clock fix form), given the read-only cells.
+  renderEditor?: (cells: ReadOnlyCells) => React.ReactNode;
 };
 
 export const SESSION_TABLE_COLUMNS = 7;
@@ -26,8 +30,45 @@ export default function SessionTableRows({
   onToggleHistory,
   actions,
   panel,
+  renderEditor,
 }: SessionTableRowsProps): React.ReactNode {
   const historyId = `history-row-${view.id}`;
+  const cells: ReadOnlyCells = {
+    visit: (
+      <TableCell
+        id={getSessionFocusId(view.id, "row")}
+        tabIndex={-1}
+        className="px-4 align-top whitespace-normal outline-none"
+      >
+        <p className="font-medium break-words">{view.clientName}</p>
+        <p className="text-muted-foreground">{view.jobName}</p>
+      </TableCell>
+    ),
+    scheduled: (
+      <TableCell className="align-top font-mono tabular-nums whitespace-normal">
+        {view.scheduledWindow}
+      </TableCell>
+    ),
+    clocked: (
+      <TableCell className="align-top font-semibold">
+        <ClockedValue minutes={view.clockedMinutes} />
+      </TableCell>
+    ),
+    status: (
+      <TableCell className="align-top whitespace-normal">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <SessionBadges
+            view={view}
+            isHistoryOpen={isHistoryOpen}
+            onToggleHistory={onToggleHistory}
+            historyId={historyId}
+          />
+        </div>
+      </TableCell>
+    ),
+  };
+
+  if (renderEditor) return renderEditor(cells);
 
   return (
     <>
@@ -39,32 +80,16 @@ export default function SessionTableRows({
             "bg-muted/40 has-aria-expanded:bg-muted/40",
         )}
       >
-        <TableCell className="px-4 align-top whitespace-normal">
-          <p className="font-medium break-words">{view.clientName}</p>
-          <p className="text-muted-foreground">{view.jobName}</p>
-        </TableCell>
-        <TableCell className="align-top font-mono tabular-nums">
-          {view.scheduledWindow}
-        </TableCell>
+        {cells.visit}
+        {cells.scheduled}
         <TableCell className="align-top">
           <ClockTime instant={view.clockIn} />
         </TableCell>
         <TableCell className="align-top">
           <ClockTime instant={view.clockOut} />
         </TableCell>
-        <TableCell className="align-top font-semibold">
-          <ClockedValue minutes={view.clockedMinutes} />
-        </TableCell>
-        <TableCell className="min-w-48 align-top whitespace-normal">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <SessionBadges
-              view={view}
-              isHistoryOpen={isHistoryOpen}
-              onToggleHistory={onToggleHistory}
-              historyId={historyId}
-            />
-          </div>
-        </TableCell>
+        {cells.clocked}
+        {cells.status}
         <TableCell className="px-4 text-right align-top whitespace-nowrap">
           {actions}
         </TableCell>

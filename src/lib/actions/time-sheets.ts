@@ -8,6 +8,7 @@ import {
   type OddDurationAcknowledgement,
   type SessionClocksCorrection,
 } from "@/lib/time-sheets/clock-corrections";
+import { MAX_CLOCK_TEXT_LENGTH } from "@/lib/time-sheets/clock-draft";
 import { UNKNOWN_CLOCK_ERROR, type ClockError } from "@/lib/time-sheets/errors";
 
 // Thin by design: check the input's shape, call the SQL function through the user-session client
@@ -17,7 +18,6 @@ import { UNKNOWN_CLOCK_ERROR, type ClockError } from "@/lib/time-sheets/errors";
 export type ClockActionResult = { ok: true } | ({ ok: false } & ClockError);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MAX_TEXT_LENGTH = 2000;
 const REVALIDATED_PATHS = [
   "/solutions/time-tracking",
   "/solutions/time-sheets",
@@ -38,7 +38,7 @@ function isInstantOrNull(value: unknown): value is string | null {
 }
 
 function isShortText(value: unknown): value is string {
-  return typeof value === "string" && value.length <= MAX_TEXT_LENGTH;
+  return typeof value === "string" && value.length <= MAX_CLOCK_TEXT_LENGTH;
 }
 
 // The UI only ever posts these shapes, so anything else is a bug or a forged call.

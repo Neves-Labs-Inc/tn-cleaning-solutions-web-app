@@ -124,6 +124,14 @@ describe("validateClockDraft", () => {
 
     assert.deepEqual(validateClockDraft(draft("09:00", ""), "add", unclocked, justBefore), {});
   });
+
+  it("asks for a clock-in when an add leaves both clocks empty", () => {
+    const justBefore = new Date("2026-10-14T16:59:00Z");
+
+    assert.deepEqual(validateClockDraft(draft("", ""), "add", unclocked, justBefore), {
+      clockIn: "Enter a clock-in",
+    });
+  });
 });
 
 describe("draftToInstants", () => {

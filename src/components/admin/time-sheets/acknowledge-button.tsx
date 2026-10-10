@@ -7,6 +7,7 @@ type AcknowledgeButtonProps = {
   view: SessionRowView;
   isOpen: boolean;
   onOpen: () => void;
+  layout: "row" | "card";
 };
 
 // Marks the button so the drill-down can return focus to the visible copy (card or table row).
@@ -16,6 +17,7 @@ export default function AcknowledgeButton({
   view,
   isOpen,
   onOpen,
+  layout,
 }: AcknowledgeButtonProps): React.ReactNode {
   if (!view.flags.includes("odd_duration")) return null;
 
@@ -23,6 +25,7 @@ export default function AcknowledgeButton({
     <Button
       type="button"
       variant="outline"
+      size={layout === "row" ? "sm" : "default"}
       aria-expanded={isOpen}
       {...{ [ACKNOWLEDGE_BUTTON_ATTRIBUTE]: view.id }}
       className="transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]"

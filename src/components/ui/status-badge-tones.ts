@@ -50,8 +50,23 @@ export function invoiceFlagBadges(row: InvoiceFlagRow): StatusBadgeSpec[] {
 
 type TimeSheetBadgeView = Pick<
   SessionView,
-  "state" | "flags" | "oddRatioPercent" | "isAcknowledged" | "isManualCompletion" | "isEdited"
+  | "state"
+  | "flags"
+  | "oddRatioPercent"
+  | "isAcknowledged"
+  | "isManualCompletion"
+  | "isEdited"
+  | "fixAction"
 >;
+
+// An upcoming session is offered Add session once its scheduled start passes (fixAction "add"),
+// so from then on the badge stops promising a future visit.
+function upcomingBadge(view: TimeSheetBadgeView): StatusBadgeSpec | null {
+  if (view.state !== "upcoming") return null;
+
+  const label = view.fixAction === "add" ? "Not clocked in" : "Upcoming";
+  return { tone: "info", label };
+}
 
 // The per-kind tone, icon and plain label; the Odd duration pill adds its ratio in a session row.
 export const TIME_SHEET_FLAG_SPECS: Record<FlagKind, StatusBadgeSpec> = {
@@ -65,13 +80,14 @@ function timeSheetFlagBadge(flag: FlagKind, oddRatioPercent: number | null): Sta
   return flag === "odd_duration" ? { ...spec, label: `Odd duration · ${oddRatioPercent}%` } : spec;
 }
 
-// The pills a session wears, in fixed order: its flags, In progress or Upcoming, an acknowledged
-// Odd duration, Manual completion, Edited. Admin screens only: Cleaners never see flags.
+// The pills a session wears, in fixed order: its flags, In progress or Upcoming (Not clocked in
+// once due), an acknowledged Odd duration, Manual completion, Edited. Admin screens only:
+// Cleaners never see flags.
 export function timeSheetFlagBadges(view: TimeSheetBadgeView): StatusBadgeSpec[] {
   const badges: Array<StatusBadgeSpec | null> = [
     ...view.flags.map((flag) => timeSheetFlagBadge(flag, view.oddRatioPercent)),
     view.state === "in_progress" ? { tone: "success", label: "In progress" } : null,
-    view.state === "upcoming" ? { tone: "info", label: "Upcoming" } : null,
+    upcomingBadge(view),
     view.isAcknowledged
       ? { tone: "neutral", label: "Odd duration · OK'd", icon: CheckCircle2 }
       : null,

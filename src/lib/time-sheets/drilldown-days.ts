@@ -2,7 +2,13 @@ import { format } from "date-fns";
 
 // Relative imports: node --test runs this file without the @/ alias.
 import { formatBusinessTime } from "../schedule/business-time.ts";
-import { isSameInstant, type FlagKind, type SessionState, type SessionView } from "./session-view.ts";
+import {
+  isSameInstant,
+  type FixAction,
+  type FlagKind,
+  type SessionState,
+  type SessionView,
+} from "./session-view.ts";
 
 // The drill-down's session data, cut down to what the UI shows so client components never
 // receive whole database rows.
@@ -32,6 +38,12 @@ export type SessionRowView = {
   clientName: string;
   jobName: string;
   scheduledWindow: string;
+  // What the clock fix form prefills and validates against (ClockDraftView).
+  scheduledDate: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  graceEnd: string;
+  fixAction: FixAction | null;
   clockIn: string | null;
   clockOut: string | null;
   clockedMinutes: number | null;
@@ -59,6 +71,11 @@ export function toSessionRowView(view: SessionView): SessionRowView {
     clientName: view.clientName,
     jobName: view.jobName,
     scheduledWindow: `${formatBusinessTime(new Date(view.scheduledStart))}–${formatBusinessTime(new Date(view.scheduledEnd))}`,
+    scheduledDate: view.scheduledDate,
+    scheduledStart: view.scheduledStart,
+    scheduledEnd: view.scheduledEnd,
+    graceEnd: view.graceEnd,
+    fixAction: view.fixAction,
     clockIn: view.clockIn,
     clockOut: view.clockOut,
     clockedMinutes: view.clockedMinutes,

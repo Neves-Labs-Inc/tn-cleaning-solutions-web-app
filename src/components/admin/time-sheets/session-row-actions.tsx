@@ -1,13 +1,15 @@
+"use client";
+
 import { cn } from "@/lib/utils";
 
 type SessionRowActionsProps = {
-  layout: "table" | "card";
+  layout: "row" | "card";
   children?: React.ReactNode;
 };
 
-// The shared slot for a session's action buttons. Children gate themselves, so with none it
-// collapses (`empty:hidden`). Order matters: Acknowledge (outline) first, then the fix button
-// (ticket 07), so the sometimes-primary fix button stays rightmost.
+// The shared slot for a session's action buttons, left to right: Acknowledge (outline), then the
+// fix button, rightmost as the sometimes-primary action. Children gate themselves, so with none
+// it collapses (`empty:hidden`).
 export default function SessionRowActions({
   layout,
   children,
@@ -15,8 +17,10 @@ export default function SessionRowActions({
   return (
     <div
       className={cn(
-        "flex flex-wrap gap-2 empty:hidden",
-        layout === "table" ? "justify-end" : "*:flex-1",
+        "flex gap-2 empty:hidden",
+        layout === "row"
+          ? "flex-nowrap justify-end"
+          : "flex-wrap justify-start *:flex-1 sm:*:flex-none",
       )}
     >
       {children}
