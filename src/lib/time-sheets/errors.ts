@@ -94,6 +94,11 @@ const CLOCK_ERRORS: Record<ClockErrorCode, ClockError> = {
   },
 };
 
+// The field and message for a code, so client-side checks say exactly what the server would.
+export function getClockError(code: ClockErrorCode): ClockError {
+  return CLOCK_ERRORS[code];
+}
+
 export function isClockErrorCode(value: unknown): value is ClockErrorCode {
   return (CLOCK_ERROR_CODES as readonly unknown[]).includes(value);
 }
