@@ -89,7 +89,7 @@ function toEpochMicros(timestamp: string): number {
   return Date.parse(timestamp) * MICROS_PER_MS + Number(subMillis);
 }
 
-function isSameInstant(left: string | null, right: string | null): boolean {
+export function isSameInstant(left: string | null, right: string | null): boolean {
   if (left === null || right === null) return left === right;
 
   return toEpochMicros(left) === toEpochMicros(right);
