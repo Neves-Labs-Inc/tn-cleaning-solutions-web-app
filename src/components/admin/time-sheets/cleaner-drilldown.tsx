@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CalendarX2 } from "lucide-react";
 
+import AcknowledgeButton, {
+  ACKNOWLEDGE_BUTTON_ATTRIBUTE,
+} from "@/components/admin/time-sheets/acknowledge-button";
+import AcknowledgePanel from "@/components/admin/time-sheets/acknowledge-panel";
+import SessionRowActions from "@/components/admin/time-sheets/session-row-actions";
 import { formatMinutes } from "@/components/admin/time-sheets/format-minutes";
 import RangeBar from "@/components/admin/time-sheets/range-bar";
 import SessionCard from "@/components/admin/time-sheets/session-card";
@@ -29,7 +34,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { DrilldownDay } from "@/lib/time-sheets/drilldown-days";
+import type {
+  DrilldownDay,
+  SessionRowView,
+} from "@/lib/time-sheets/drilldown-days";
 import type { WeekRange } from "@/lib/time-sheets/range";
 import type { CleanerSummary } from "@/lib/time-sheets/summaries";
 import { cn } from "@/lib/utils";
@@ -44,8 +52,8 @@ type CleanerDrilldownProps = {
   range: WeekRange;
 };
 
-// Ticket 07 adds "fix" and ticket 08 "ack" to this union.
-type OpenPanel = { sessionId: string; kind: "history" } | null;
+// Ticket 07 adds "fix" to this union.
+type OpenPanel = { sessionId: string; kind: "history" | "ack" } | null;
 
 const EYEBROW =
   "text-xs font-semibold uppercase tracking-wider text-muted-foreground";
@@ -57,6 +65,7 @@ export default function CleanerDrilldown({
   range,
 }: CleanerDrilldownProps): React.ReactNode {
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
+  const focusReturnId = useRef<string | null>(null);
 
   const isHistoryOpen = (sessionId: string) =>
     openPanel?.sessionId === sessionId && openPanel.kind === "history";
@@ -68,6 +77,61 @@ export default function CleanerDrilldown({
         ? null
         : { sessionId, kind: "history" },
     );
+
+  const isAckOpen = (view: SessionRowView) =>
+    openPanel?.sessionId === view.id &&
+    openPanel.kind === "ack" &&
+    // A refresh that clears the flag also drops the panel.
+    view.flags.includes("odd_duration");
+
+  const openAck = (sessionId: string) =>
+    setOpenPanel({ sessionId, kind: "ack" });
+
+  // A save that resolves after another panel opened must not close that one.
+  const closeAck = (sessionId: string) =>
+    setOpenPanel((current) =>
+      current?.sessionId === sessionId && current.kind === "ack"
+        ? null
+        : current,
+    );
+
+  const cancelAck = (sessionId: string) => {
+    setOpenPanel(null);
+    focusReturnId.current = sessionId;
+  };
+
+  // The card and the table row both render; focus the copy that is actually visible.
+  useEffect(() => {
+    const sessionId = focusReturnId.current;
+    if (!sessionId) return;
+    focusReturnId.current = null;
+    const buttons = document.querySelectorAll<HTMLElement>(
+      `[${ACKNOWLEDGE_BUTTON_ATTRIBUTE}="${sessionId}"]`,
+    );
+    Array.from(buttons)
+      .find((button) => button.offsetParent !== null)
+      ?.focus();
+  }, [openPanel]);
+
+  // Acknowledge first, then ticket 07's fix button, so the fix button stays rightmost.
+  const renderActions = (view: SessionRowView, layout: "table" | "card") => (
+    <SessionRowActions layout={layout}>
+      <AcknowledgeButton
+        view={view}
+        isOpen={isAckOpen(view)}
+        onOpen={() => openAck(view.id)}
+      />
+    </SessionRowActions>
+  );
+
+  const renderPanel = (view: SessionRowView) =>
+    isAckOpen(view) ? (
+      <AcknowledgePanel
+        view={view}
+        onClose={() => closeAck(view.id)}
+        onCancel={() => cancelAck(view.id)}
+      />
+    ) : undefined;
 
   return (
     <div className="animate-in space-y-6 fade-in-0 duration-slow lg:space-y-8">
@@ -135,6 +199,8 @@ export default function CleanerDrilldown({
                       view={view}
                       isHistoryOpen={isHistoryOpen(view.id)}
                       onToggleHistory={() => toggleHistory(view.id)}
+                      actions={renderActions(view, "card")}
+                      panel={renderPanel(view)}
                     />
                   ))}
                 </ul>
@@ -176,6 +242,8 @@ export default function CleanerDrilldown({
                       view={view}
                       isHistoryOpen={isHistoryOpen(view.id)}
                       onToggleHistory={() => toggleHistory(view.id)}
+                      actions={renderActions(view, "table")}
+                      panel={renderPanel(view)}
                     />
                   ))}
                 </TableBody>

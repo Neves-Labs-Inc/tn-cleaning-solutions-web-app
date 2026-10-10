@@ -12,7 +12,10 @@ type SessionCardProps = {
   view: SessionRowView;
   isHistoryOpen: boolean;
   onToggleHistory: () => void;
+  // A SessionRowActions element; it owns its own wrapper and hides itself when empty.
   actions?: React.ReactNode;
+  // An open inline panel; it replaces the actions inside the card.
+  panel?: React.ReactNode;
 };
 
 export default function SessionCard({
@@ -20,11 +23,12 @@ export default function SessionCard({
   isHistoryOpen,
   onToggleHistory,
   actions,
+  panel,
 }: SessionCardProps): React.ReactNode {
   const historyId = `history-card-${view.id}`;
 
   return (
-    <li className="space-y-3 p-4 sm:p-5">
+    <li className="grid gap-3 p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-base font-semibold break-words">
@@ -61,9 +65,7 @@ export default function SessionCard({
         />
       </div>
 
-      {actions ? (
-        <div className="flex flex-wrap justify-end gap-2">{actions}</div>
-      ) : null}
+      {panel ?? actions}
 
       {isHistoryOpen ? (
         <div

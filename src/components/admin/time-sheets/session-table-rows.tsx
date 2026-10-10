@@ -13,6 +13,8 @@ type SessionTableRowsProps = {
   isHistoryOpen: boolean;
   onToggleHistory: () => void;
   actions?: React.ReactNode;
+  // An open inline panel (fix or acknowledge), shown in a full-width row under the session.
+  panel?: React.ReactNode;
 };
 
 export const SESSION_TABLE_COLUMNS = 7;
@@ -23,6 +25,7 @@ export default function SessionTableRows({
   isHistoryOpen,
   onToggleHistory,
   actions,
+  panel,
 }: SessionTableRowsProps): React.ReactNode {
   const historyId = `history-row-${view.id}`;
 
@@ -32,7 +35,8 @@ export default function SessionTableRows({
         className={cn(
           // The base row tints any row holding an aria-expanded button; only an open one should.
           "has-aria-expanded:bg-transparent",
-          isHistoryOpen && "bg-muted/40 has-aria-expanded:bg-muted/40",
+          (isHistoryOpen || panel) &&
+            "bg-muted/40 has-aria-expanded:bg-muted/40",
         )}
       >
         <TableCell className="px-4 align-top whitespace-normal">
@@ -61,7 +65,7 @@ export default function SessionTableRows({
             />
           </div>
         </TableCell>
-        <TableCell className="w-px px-4 text-right align-top whitespace-nowrap">
+        <TableCell className="px-4 text-right align-top whitespace-nowrap">
           {actions}
         </TableCell>
       </TableRow>
@@ -82,6 +86,16 @@ export default function SessionTableRows({
                 acknowledgements={view.acknowledgements}
               />
             </div>
+          </TableCell>
+        </TableRow>
+      ) : null}
+      {panel ? (
+        <TableRow className="bg-muted/40 hover:bg-muted/40">
+          <TableCell
+            colSpan={SESSION_TABLE_COLUMNS}
+            className="px-4 pt-3 pb-4 whitespace-normal"
+          >
+            <div className="max-w-xl">{panel}</div>
           </TableCell>
         </TableRow>
       ) : null}
