@@ -1,4 +1,7 @@
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+
+const CREW_ROW_KEYS = ['first', 'second']
 
 // Mirrors the detail page's header card and two-column body so nothing jumps when it loads.
 export default function AppointmentDetailLoading() {
@@ -22,7 +25,25 @@ export default function AppointmentDetailLoading() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-3">
-        <Skeleton className="h-64 xl:col-span-2" />
+        <div className="space-y-6 xl:col-span-2">
+          <Skeleton className="h-64" />
+          <Card className="gap-0 py-0">
+            <div className="space-y-2 p-4 sm:p-5">
+              <Skeleton className="h-5 w-32" />
+              <Skeleton className="h-4 w-64 max-w-full" />
+            </div>
+            <ul className="divide-y border-t">
+              {CREW_ROW_KEYS.map((key) => (
+                <li key={key} className="space-y-3 p-4">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-5 w-24 rounded-full" />
+                  <Skeleton className="h-11 w-full" />
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
         <Skeleton className="h-48" />
       </section>
     </div>

@@ -120,6 +120,8 @@ export default async function SchedulePage() {
 			`
 		)
 		.eq('employee_id', currentEmployee.id)
+		// A re-added Cleaner also has her archived row from before; only the live one is hers.
+		.not('is_archived', 'is', true)
 
 	if (appointmentsError) {
 		console.error('Error fetching appointments:', appointmentsError)
@@ -153,6 +155,8 @@ export default async function SchedulePage() {
 				`
 				)
 				.in('appointment_id', appointmentIds)
+				// Crew-removed teammates' archived rows aren't crew; NULL counts as live.
+				.not('is_archived', 'is', true)
 		: { data: [], error: null }
 
 	if (teamError) {

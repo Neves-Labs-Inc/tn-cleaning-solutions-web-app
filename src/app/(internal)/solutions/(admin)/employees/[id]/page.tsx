@@ -3,7 +3,9 @@ import { format } from 'date-fns'
 import { ArrowLeft, Clock, Pencil } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
-import { Button } from '@/components/ui/button'
+import { buildTimeSheetsHref } from '@/components/admin/time-sheets/time-sheets-href'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/server'
 
 type EmployeeDetailPageProps = {
@@ -76,6 +78,8 @@ export default async function EmployeeDetailPage({ params }: EmployeeDetailPageP
 					`
 				)
 				.eq('employee_id', id)
+				// A visit she was removed from isn't her activity; NULL counts as live.
+				.not('is_archived', 'is', true)
 				.order('created_at', { ascending: false })
 				.limit(5),
 		])
@@ -159,14 +163,14 @@ export default async function EmployeeDetailPage({ params }: EmployeeDetailPageP
 			</section>
 
 			<section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-				<div className="flex items-center justify-between gap-3">
+				<div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
 						<h2 className="text-lg font-semibold text-neutral-950">Recent Activity</h2>
 						<p className="mt-1 text-sm text-neutral-600">Last five assigned appointments.</p>
 					</div>
 					<Link
-						href={`/solutions/employees/${employee.id}/time-sheets`}
-						className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+						href={buildTimeSheetsHref({ cleaner: employee.id })}
+						className={cn(buttonVariants({ variant: 'outline' }), 'active:bg-muted active:scale-[0.98]')}
 					>
 						View Time Sheets
 					</Link>

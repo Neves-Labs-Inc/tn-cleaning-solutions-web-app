@@ -116,6 +116,8 @@ export default async function AppointmentDetailPage({
 		)
 		.eq('employee_id', currentEmployee.id)
 		.eq('appointment_id', id)
+		// A re-added Cleaner also has her archived row from before; only the live one is hers.
+		.not('is_archived', 'is', true)
 		.maybeSingle()
 
 	if (assignmentError || !assignmentRows) {
@@ -140,6 +142,8 @@ export default async function AppointmentDetailPage({
 			`
 		)
 		.eq('appointment_id', appointment.appointment_id)
+		// Crew-removed teammates' archived rows aren't crew; NULL counts as live.
+		.not('is_archived', 'is', true)
 
 	const teamMembers: CrewMember[] = ((teamRows ?? []) as unknown as TeamMemberRecord[]).map((member) => ({
 		id: member.employees_employee_view.id,

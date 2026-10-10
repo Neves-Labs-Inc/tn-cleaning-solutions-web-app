@@ -17,9 +17,14 @@
 // target (`appointments_employee_view`, `employees_employee_view`, `clients`, `client_locations`,
 // `jobs_employee_view`). Functions lists the invoice write functions (20261009140000 onward), the
 // RPCs the invoice ledger calls through the typed session client; `p_lines` is the Billed amounts
-// TypeScript priced. The other SQL functions are called through untyped clients and stay out until a
+// TypeScript priced. It also lists the two Clock correction functions (20261010120000), which refuse
+// through `clock_error` the same way, with the overlap's clashing assignment id in `hint`. The
+// other SQL functions are called through untyped clients and stay out until a
 // typed caller needs them. Every invoice function refuses through `invoice_error`: the PostgREST
 // error's `details` is the code.
+//
+// `clock_corrections` and `odd_duration_acknowledgements` are append-only audit tables: admins can
+// select them, and only the SECURITY DEFINER functions above ever insert.
 //
 // `invoices_with_status` is a security_invoker projection of `invoices`, one row per invoice.
 // Its Row follows the database's real column nullability, not the narrowed `invoices` Row: `notes`,
@@ -602,6 +607,94 @@ export type Database = {
         }
         Relationships: []
       }
+      clock_corrections: {
+        Row: {
+          id: string
+          appointment_employee_id: string
+          corrected_by: string
+          corrected_by_name: string
+          corrected_at: string
+          old_clock_in: string | null
+          old_clock_out: string | null
+          new_clock_in: string | null
+          new_clock_out: string | null
+          reason: string | null
+        }
+        Insert: {
+          id?: string
+          appointment_employee_id: string
+          corrected_by: string
+          corrected_by_name: string
+          corrected_at?: string
+          old_clock_in?: string | null
+          old_clock_out?: string | null
+          new_clock_in?: string | null
+          new_clock_out?: string | null
+          reason?: string | null
+        }
+        Update: {
+          id?: string
+          appointment_employee_id?: string
+          corrected_by?: string
+          corrected_by_name?: string
+          corrected_at?: string
+          old_clock_in?: string | null
+          old_clock_out?: string | null
+          new_clock_in?: string | null
+          new_clock_out?: string | null
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'clock_corrections_appointment_employee_id_fkey'
+            columns: ['appointment_employee_id']
+            isOneToOne: false
+            referencedRelation: 'appointment_employees'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      odd_duration_acknowledgements: {
+        Row: {
+          id: string
+          appointment_employee_id: string
+          acknowledged_by: string
+          acknowledged_by_name: string
+          acknowledged_at: string
+          clock_in: string
+          clock_out: string
+          note: string
+        }
+        Insert: {
+          id?: string
+          appointment_employee_id: string
+          acknowledged_by: string
+          acknowledged_by_name: string
+          acknowledged_at?: string
+          clock_in: string
+          clock_out: string
+          note: string
+        }
+        Update: {
+          id?: string
+          appointment_employee_id?: string
+          acknowledged_by?: string
+          acknowledged_by_name?: string
+          acknowledged_at?: string
+          clock_in?: string
+          clock_out?: string
+          note?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'odd_duration_acknowledgements_appointment_employee_id_fkey'
+            columns: ['appointment_employee_id']
+            isOneToOne: false
+            referencedRelation: 'appointment_employees'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       appointment_employees_employee_view: {
@@ -682,6 +775,24 @@ export type Database = {
       }
     }
     Functions: {
+      acknowledge_odd_duration: {
+        Args: {
+          assignment_id: string
+          expected_clock_in: string | null
+          expected_clock_out: string | null
+          note: string
+        }
+        Returns: undefined
+      }
+      correct_session_clocks: {
+        Args: {
+          assignment_id: string
+          new_clock_in: string | null
+          new_clock_out: string | null
+          reason: string | null
+        }
+        Returns: undefined
+      }
       invoice_archive: {
         Args: { p_invoice_id: string }
         Returns: undefined
