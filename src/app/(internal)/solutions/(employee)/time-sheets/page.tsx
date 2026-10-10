@@ -6,8 +6,11 @@ import { WorkSessionsList } from '@/components/employee/work-sessions-list'
 import { Button, buttonVariants } from '@/components/ui/button'
 import PageHeader from '@/components/ui/page-header'
 import StatTile from '@/components/ui/stat-tile'
-import { formatDuration, resolveTimeSheetMonth, summarizeSessions, toBusinessWallClock } from '@/lib/schedule'
+import { formatDuration, toBusinessWallClock } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
+import { fetchCleanerSessions } from '@/lib/time-sheets/queries'
+import { summarizeCleanerMonth } from '@/lib/time-sheets/summaries'
+import { resolveTimeSheetMonth } from '@/lib/time-sheets/time-sheet-month'
 import { cn } from '@/lib/utils'
 import type { TimeSheetRecord } from '@/types/time-sheet-record'
 
@@ -96,38 +99,9 @@ export default async function TimeSheetsPage({ searchParams }: TimeSheetsPagePro
   const now = new Date()
   const selectedMonth = resolveTimeSheetMonth(month, toBusinessWallClock(now))
 
-  const { data: timeSheets, error } = await supabase
-    .from('appointment_employees_employee_view')
-    .select(
-      `
-        id,
-        clocked_in_at,
-        clocked_out_at,
-        appointments:appointments_employee_view!inner (
-          scheduled_date,
-          clients!inner (
-            name
-          ),
-          jobs:jobs_employee_view!inner (
-            name
-          )
-        )
-      `
-    )
-    .eq('employee_id', employee.id)
-    // A crew-removed session isn't hers, and a re-added Cleaner would count it twice; NULL is live.
-    .not('is_archived', 'is', true)
-    .not('clocked_in_at', 'is', null)
+  const records = [...(await fetchCleanerSessions(supabase, employee.id, selectedMonth))].sort(compareRecords)
 
-  if (error) {
-    throw new Error(`Error fetching time sheets: ${error.message}`)
-  }
-
-  const records = ((timeSheets ?? []) as unknown as TimeSheetRecord[])
-    .filter((record) => record.appointments.scheduled_date >= selectedMonth.start && record.appointments.scheduled_date <= selectedMonth.end)
-    .sort(compareRecords)
-
-  const { count, totalMinutes, averageMinutes } = summarizeSessions(records, now)
+  const { count, totalMinutes, averageMinutes } = summarizeCleanerMonth(records)
 
   return (
     <div className="animate-in space-y-6 fade-in-0 duration-slow">
@@ -140,7 +114,7 @@ export default async function TimeSheetsPage({ searchParams }: TimeSheetsPagePro
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile label="Appointments" value={String(count)} />
         <StatTile label="Total Hours" value={formatMinutes(totalMinutes)} />
-        <StatTile label="Avg per Job" value={count === 0 ? '—' : formatMinutes(averageMinutes)} className="col-span-2 sm:col-span-1" />
+        <StatTile label="Avg per Job" value={averageMinutes === null ? '—' : formatMinutes(averageMinutes)} className="col-span-2 sm:col-span-1" />
       </div>
 
       <WorkSessionsList records={records} monthLabel={selectedMonth.label} now={now.toISOString()}
