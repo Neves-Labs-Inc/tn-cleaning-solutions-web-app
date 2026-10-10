@@ -107,10 +107,7 @@ export default async function SchedulePage() {
 					scheduled_end_time,
 					status,
 					manually_completed,
-					clients!inner (
-						name,
-						phone
-					),
+					clients!inner ( name ),
 					client_locations (
 						label,
 						address

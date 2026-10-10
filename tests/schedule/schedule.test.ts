@@ -226,7 +226,7 @@ function assignment(clockedInAt: string | null = null) {
       scheduled_end_time: '11:00:00',
       status: 'scheduled' as const,
       manually_completed: false,
-      clients: { name: 'Acme', phone: null },
+      clients: { name: 'Acme' },
       client_locations: null,
       jobs: { name: 'Deep clean', description: null },
     },
@@ -256,6 +256,11 @@ test('buildStop: falls back to the own assignment row when the team view omits t
   const stop = buildStop(assignment('2026-10-14T12:00:00Z'), [teammate('a', 'Abe')], ME)
   assert.deepEqual(stop.crew.map((m) => m.id), ['me', 'a'])
   assert.equal(stop.you.clockStatus, 'clocked_in')
+})
+
+test('buildStop: does not expose the client phone to the Cleaner', () => {
+  const stop = buildStop(assignment(), [teammate('me', 'Zed Last')], ME)
+  assert.equal('clientPhone' in stop, false)
 })
 
 test('formatBusinessTime: renders Eastern clock time in summer and winter', () => {

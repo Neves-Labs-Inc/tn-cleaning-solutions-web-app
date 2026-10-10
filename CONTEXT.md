@@ -80,7 +80,7 @@ The amount frozen on an appointment's live invoice line. It wins over the Live p
 _Avoid_: billed price cache
 
 **Unpriced**:
-An appointment whose Live price can't be worked out. Every appointment has a Job today, so this is a defensive state the price module reports rather than one any screen creates. It is never billed as $0.
+An appointment whose Live price can't be worked out. Every appointment has a Job today, so this is a defensive state the price module reports rather than one any screen creates. It is never issued at $0: it goes on a draft as a $0 line, and that draft can't be issued until the line is priced.
 
 ### Invoicing
 
@@ -88,7 +88,7 @@ An appointment whose Live price can't be worked out. Every appointment has a Job
 An appointment's line on an invoice that has not been voided. An appointment has at most one Live claim.
 
 **Billable appointment**:
-An appointment that is not cancelled, has no Live claim, and is not Unpriced.
+An appointment that is not cancelled, has no Live claim, and is not Unpriced. This is what the manual invoice flow can add; an Automatic draft also takes Unpriced ones.
 
 **Automatic draft**:
 The draft invoice a client's completed visits join as each one is completed. A client has at most one at a time; issuing it means the next completion starts a new one. It never joins a draft an admin made.

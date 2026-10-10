@@ -13,7 +13,7 @@ export type AppointmentRecord = {
     scheduled_end_time: string
     status: ScheduleStop['status']
     manually_completed: boolean
-    clients: { name: string; phone: string | null }
+    clients: { name: string }
     client_locations: { label: string; address: string } | null
     jobs: { name: string; description: string | null }
   }
@@ -71,7 +71,6 @@ export function buildStop(
     jobName: appointment.jobs.name,
     jobDescription: appointment.jobs.description,
     clientName: appointment.clients.name,
-    clientPhone: appointment.clients.phone,
     address: appointment.client_locations?.address ?? null,
     crew: [you, ...others],
     you,

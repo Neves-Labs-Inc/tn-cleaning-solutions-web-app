@@ -22,7 +22,6 @@ export type ScheduleStop = {
 	jobName: string
 	jobDescription: string | null
 	clientName: string
-	clientPhone: string | null
 	address: string | null
 	crew: CrewMember[]
 	you: CrewMember
