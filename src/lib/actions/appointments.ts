@@ -763,7 +763,7 @@ export async function updateAppointment(
       }
 
       // An assignment row whose employee survives the edit is never rewritten: clocked_in_at,
-      // clocked_out_at, admin_notes and the row id that updateClockTime and employee_clock address
+      // clocked_out_at, admin_notes and the row id that correct_session_clocks and employee_clock address
       // all live on it, and the delete-and-reinsert this replaced destroyed them on every edit.
       // Archived rows are loaded too so the planner can tell a re-added Cleaner needs a fresh row.
       const { data: existingAssignments, error: existingAssignmentsError } = await adminClient
@@ -1142,35 +1142,6 @@ export async function markAppointmentComplete(id: string): Promise<AppointmentAc
 
 export async function undoAppointmentComplete(id: string): Promise<AppointmentActionResult> {
   return setManuallyCompleted(id, false)
-}
-
-export async function updateClockTime(
-  appointmentEmployeeId: string,
-  field: 'clocked_in_at' | 'clocked_out_at',
-  value: string | null
-): Promise<{ success: boolean; error?: string }> {
-  if (!appointmentEmployeeId) {
-    return { success: false, error: 'Appointment employee id is required.' }
-  }
-
-  const authResult = await requireAdminRole()
-  if (!authResult.success) {
-    return { success: false, error: authResult.error }
-  }
-
-  const adminClient = createAdminClient()
-  const { error } = await adminClient
-    .from('appointment_employees')
-    .update({ [field]: value || null })
-    .eq('id', appointmentEmployeeId)
-    .eq('is_archived', false)
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  revalidatePath('/solutions/appointments')
-  return { success: true }
 }
 
 export async function updateAppointmentEmployeeAdminNotes(

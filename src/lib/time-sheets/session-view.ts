@@ -41,6 +41,12 @@ export type AdminSessionRow = {
   odd_duration_acknowledgements: AcknowledgementRow[];
 };
 
+// fetchAppointmentCrew's shape: an admin session plus the Cleaner's phone and the admin notes.
+export type AppointmentCrewRow = AdminSessionRow & {
+  admin_notes: string | null;
+  employee: { id: string; full_name: string; phone: string | null };
+};
+
 export type SessionView = {
   assignmentId: string;
   appointmentId: string;

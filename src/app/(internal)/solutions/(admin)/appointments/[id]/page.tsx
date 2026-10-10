@@ -3,8 +3,9 @@ import { format, parseISO } from 'date-fns'
 import { ArrowLeft } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
-import { AdminClockOverride } from '@/components/admin/admin-clock-override'
+import AppointmentCrewClocks from '@/components/admin/appointment-crew-clocks'
 import AppointmentLifecycleActions, { CompletedByAdminHint } from '@/components/admin/appointment-lifecycle-actions'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import StatusBadge, { appointmentStatusBadge } from '@/components/ui/status-badge'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 import {
@@ -14,8 +15,9 @@ import {
   type PriceableAppointment,
 } from '@/lib/pricing'
 import { formatCents, formatRate, UNPRICED_LABEL } from '@/lib/pricing/money'
-import { formatBusinessDateTime } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
+import { buildCrewViews, type CrewMemberView } from '@/lib/time-sheets/crew-views'
+import { fetchAppointmentCrew } from '@/lib/time-sheets/queries'
 import { cn } from '@/lib/utils'
 
 type AppointmentDetailPageProps = {
@@ -52,19 +54,6 @@ type AppointmentDetailRow = PriceableAppointment & {
     max_occurrences: number | null
     is_active: boolean
   } | null
-  appointment_employees:
-    | Array<{
-        id: string
-        clocked_in_at: string | null
-        clocked_out_at: string | null
-        admin_notes: string
-        employees: {
-          id: string
-          full_name: string
-          phone: string | null
-        } | null
-      }>
-    | null
 }
 
 type PriceView = {
@@ -74,19 +63,9 @@ type PriceView = {
   isUnavailable: boolean
 }
 
-function employeeClockStatus(assignment: {
-  clocked_in_at: string | null
-  clocked_out_at: string | null
-}) {
-  if (!assignment.clocked_in_at) {
-    return 'Not started'
-  }
-
-  if (!assignment.clocked_out_at) {
-    return 'In progress'
-  }
-
-  return 'Completed'
+type CrewLoad = {
+  members: CrewMemberView[]
+  hasLoadError: boolean
 }
 
 export default async function AppointmentDetailPage({ params }: AppointmentDetailPageProps) {
@@ -102,16 +81,10 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
         clients!inner ( id, name, phone, email ),
         jobs!inner ( id, name, estimated_duration_minutes, description ),
         client_locations ( id, label, address ),
-        recurrence_series ( id, frequency, start_date, end_date, max_occurrences, is_active ),
-        appointment_employees (
-          id, clocked_in_at, clocked_out_at, admin_notes,
-          employees!inner ( id, full_name, phone )
-        )
+        recurrence_series ( id, frequency, start_date, end_date, max_occurrences, is_active )
       `
     )
     .eq('id', id)
-    // A crew-removed Cleaner's archived assignment is history, not crew; NULL counts as live.
-    .not('appointment_employees.is_archived', 'is', true)
     .maybeSingle()
 
   const appointment = data as AppointmentDetailRow | null
@@ -120,7 +93,10 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
     notFound()
   }
 
-  const priceView = await loadPriceView(supabase, appointment)
+  const [priceView, crew] = await Promise.all([
+    loadPriceView(supabase, appointment),
+    loadCrew(supabase, appointment.id),
+  ])
 
   const statusBadge = appointmentStatusBadge(appointment.status)
 
@@ -219,75 +195,17 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
             </div>
           </article>
 
-          <article className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-            <h2 className="text-lg font-semibold text-neutral-950">Team & Clock</h2>
-
-            {(appointment.appointment_employees ?? []).length > 0 ? (
-              <div className="mt-4 space-y-3">
-                {(appointment.appointment_employees ?? []).map((assignment) => (
-                  <div
-                    key={assignment.id}
-                    className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-neutral-900">
-                          {assignment.employees?.full_name ?? 'Unknown employee'}
-                        </p>
-                        <p className="text-xs text-neutral-500">{assignment.employees?.phone ?? 'No phone on file'}</p>
-                      </div>
-                      <span className="rounded-full border border-neutral-200 bg-white px-2 py-1 text-xs font-medium text-neutral-700">
-                        {employeeClockStatus(assignment)}
-                      </span>
-                    </div>
-
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                      <p className="text-xs text-neutral-600">
-                        Clock in:{' '}
-                        <span className="font-medium text-neutral-800">
-                          {assignment.clocked_in_at
-                            ? formatBusinessDateTime(new Date(assignment.clocked_in_at))
-                            : 'Not set'}
-                        </span>
-                      </p>
-                      <p className="text-xs text-neutral-600">
-                        Clock out:{' '}
-                        <span className="font-medium text-neutral-800">
-                          {assignment.clocked_out_at
-                            ? formatBusinessDateTime(new Date(assignment.clocked_out_at))
-                            : 'Not set'}
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-4 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/40 px-4 py-6 text-sm text-neutral-600">
-                No employees assigned yet.
-              </div>
-            )}
-
-            <div className="mt-5 border-t border-neutral-100 pt-5">
-              <h3 className="text-sm font-semibold text-neutral-900">Admin Clock Overrides</h3>
-              <p className="mt-1 text-xs text-neutral-500">
-                Update clock-in/out timestamps and internal admin notes per employee.
-              </p>
-              <div className="mt-3">
-                <AdminClockOverride
-                  appointmentEmployees={(appointment.appointment_employees ?? []).map((assignment) => ({
-                    id: assignment.id,
-                    employee_id: assignment.employees?.id ?? '',
-                    full_name: assignment.employees?.full_name ?? 'Unknown employee',
-                    phone: assignment.employees?.phone ?? null,
-                    clocked_in_at: assignment.clocked_in_at,
-                    clocked_out_at: assignment.clocked_out_at,
-                    admin_notes: assignment.admin_notes,
-                  }))}
-                />
-              </div>
-            </div>
-          </article>
+          <Card className="gap-0 py-0">
+            <CardHeader className="p-4 sm:p-5">
+              <CardTitle className="text-lg font-semibold tracking-tight">
+                <h2>Crew &amp; clocks</h2>
+              </CardTitle>
+              <CardDescription className="text-sm">
+                Fixes are saved to each Cleaner&apos;s history, the same as on Time Sheets.
+              </CardDescription>
+            </CardHeader>
+            <AppointmentCrewClocks members={crew.members} hasLoadError={crew.hasLoadError} />
+          </Card>
         </div>
 
         <div className="space-y-4">
@@ -326,6 +244,24 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
       </section>
     </div>
   )
+}
+
+// The crew reads on its own, so a failure shows an alert in the card instead of failing the page.
+async function loadCrew(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  appointmentId: string
+): Promise<CrewLoad> {
+  let load: CrewLoad
+
+  try {
+    const rows = await fetchAppointmentCrew(supabase, appointmentId)
+    load = { members: buildCrewViews(rows, new Date()), hasLoadError: false }
+  } catch (thrown) {
+    console.error('Error loading appointment crew:', appointmentId, thrown)
+    load = { members: [], hasLoadError: true }
+  }
+
+  return load
 }
 
 async function loadPriceView(

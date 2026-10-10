@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { TimeSheetRecord } from "@/types/time-sheet-record";
 import type { DayRange } from "./range.ts";
-import type { AdminSessionRow } from "./session-view.ts";
+import type { AdminSessionRow, AppointmentCrewRow } from "./session-view.ts";
 import type { TimeSheetMonth } from "./time-sheet-month.ts";
 
 // Time-sheet reads. Each takes the user-session client and throws on a failed read, to the
@@ -29,6 +29,19 @@ const ADMIN_SESSION_COLUMNS = `
     job:jobs ( name )
   ),
   employee:employees!inner ( id, full_name ),
+  clock_corrections ( * ),
+  odd_duration_acknowledgements ( * )
+`;
+
+// The admin session shape plus what the appointment page shows per Cleaner.
+const APPOINTMENT_CREW_COLUMNS = `
+  id, employee_id, clocked_in_at, clocked_out_at, admin_notes,
+  appointment:appointments!inner (
+    id, scheduled_date, scheduled_start_time, scheduled_end_time, status, manually_completed,
+    client:clients ( name ),
+    job:jobs ( name )
+  ),
+  employee:employees!inner ( id, full_name, phone ),
   clock_corrections ( * ),
   odd_duration_acknowledgements ( * )
 `;
@@ -84,6 +97,24 @@ export async function fetchAdminSessions(
     }
     return query.order("id", { ascending: true }).range(from, to);
   });
+}
+
+// One visit's live crew with each session's corrections and acknowledgements, for the admin
+// appointment page. A crew is a handful of rows, so one request covers it.
+export async function fetchAppointmentCrew(
+  db: Db,
+  appointmentId: string,
+): Promise<AppointmentCrewRow[]> {
+  const { data, error } = await db
+    .from("appointment_employees")
+    .select(APPOINTMENT_CREW_COLUMNS)
+    .eq("appointment_id", appointmentId)
+    .not("is_archived", "is", true)
+    .order("id", { ascending: true });
+  if (error) throw error;
+
+  // The select string above defines the row shape; the typed client can't infer the aliases.
+  return (data ?? []) as unknown as AppointmentCrewRow[];
 }
 
 // The Cleaner's own month: her clocked sessions, read through the employee views.

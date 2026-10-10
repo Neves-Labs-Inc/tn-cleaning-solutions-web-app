@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   fetchAdminSessions,
+  fetchAppointmentCrew,
   fetchCleanerSessions,
 } from "../../src/lib/time-sheets/queries.ts";
 import { createFakeSupabase } from "./fake-supabase.ts";
@@ -244,5 +245,37 @@ describe("fetchCleanerSessions", () => {
     const fake = createFakeSupabase({}, ["appointment_employees_employee_view"]);
 
     await assert.rejects(fetchCleanerSessions(fake.db, "ana", MONTH));
+  });
+});
+
+const VISIT_ID = "a1000000-0000-4000-8000-000000000001";
+
+function crewRow(id: string, appointmentId: string, isArchived: boolean | null = false) {
+  return { ...adminRow({ id, isArchived }), appointment_id: appointmentId, admin_notes: "" };
+}
+
+describe("fetchAppointmentCrew", () => {
+  it("reads the visit's live crew, leaving out archived assignments and other visits", async () => {
+    const fake = createFakeSupabase({
+      appointment_employees: [
+        crewRow("c-live", VISIT_ID),
+        crewRow("a-archived", VISIT_ID, true),
+        crewRow("b-null-archived", VISIT_ID, null),
+        crewRow("d-other-visit", "other-visit"),
+      ],
+    });
+
+    const rows = await fetchAppointmentCrew(fake.db, VISIT_ID);
+
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      ["b-null-archived", "c-live"],
+    );
+  });
+
+  it("throws when the read fails", async () => {
+    const fake = createFakeSupabase({}, ["appointment_employees"]);
+
+    await assert.rejects(fetchAppointmentCrew(fake.db, VISIT_ID));
   });
 });
