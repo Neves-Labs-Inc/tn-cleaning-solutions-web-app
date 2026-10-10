@@ -32,6 +32,7 @@ test('formatCents renders whole dollars, cents and thousands separators', () => 
   assert.equal(formatCents(0), '$0.00')
   assert.equal(formatCents(1), '$0.01')
   assert.equal(formatCents(100001), '$1,000.01')
+  assert.equal(formatCents(123456), '$1,234.56')
 })
 
 test('formatRate suffixes the hourly unit', () => {

@@ -1,28 +1,45 @@
 import Link from 'next/link'
 import { addDays, format } from 'date-fns'
-import { AlertCircle, CalendarDays, CheckCircle, FileText, Users } from 'lucide-react'
+import { AlertCircle, AlertTriangle, CalendarX2, FileText, Wallet } from 'lucide-react'
 
 import { createClient } from '@/lib/supabase/server'
 import { toBusinessWallClock } from '@/lib/schedule'
-import { 
-    formatCurrency, 
-    formatCreatedAtDate, 
-    formatDateLabel, 
-    formatTime, 
-    statusBadgeClasses, 
-    appointmentStatusBadgeClasses, 
-    invoiceEffectiveStatus, 
+import {
+    formatDateLabel,
+    formatTime,
+    appointmentStatusBadgeClasses,
     assignedEmployeeNames,
     relationName,
     relationLocation,
-    invoiceRef
 } from '@/lib/helpers/dashboard'
-import type { 
-    TodayAppointmentRow, 
-    RecentInvoiceRow, 
-    UpcomingAppointmentRow 
+import type {
+    TodayAppointmentRow,
+    UpcomingAppointmentRow
 } from '@/lib/helpers/dashboard'
-import StatCard from '@/components/dashboard/statCard'
+import { countUnbilledVisits, listInvoices } from '@/lib/invoices/queries'
+import { receivablesTotals } from '@/lib/invoices/view'
+import type { ReceivablesTotals } from '@/lib/invoices/view'
+import { formatCents } from '@/lib/pricing/money'
+import StatTile from '@/components/ui/stat-tile'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+
+const RECEIVABLES_HREF = '/solutions/invoices/receivables'
+
+type ReceivablesSummary = { totals: ReceivablesTotals; unbilledCount: number }
+type Db = Awaited<ReturnType<typeof createClient>>
+
+// A failed read returns null so the page shows an error, never a wrong $0.00.
+async function loadReceivablesSummary(db: Db): Promise<ReceivablesSummary | null> {
+    try {
+        const [invoices, unbilledCount] = await Promise.all([listInvoices(db), countUnbilledVisits(db)])
+        return { totals: receivablesTotals(invoices.filter((invoice) => !invoice.is_archived)), unbilledCount }
+    } catch (error) {
+        console.error('Dashboard receivables failed to load', error)
+        return null
+    }
+}
 
 
 export default async function DashboardPage() {
@@ -35,12 +52,8 @@ export default async function DashboardPage() {
 
     const [
         todayAppointmentsResult,
-        openInvoicesResult,
-        overdueInvoicesResult,
-        paidInvoicesResult,
-        totalInvoicesResult,
-        recentInvoicesResult,
         upcomingAppointmentsResult,
+        receivables,
     ] = await Promise.all([
         supabase
             .from('appointments')
@@ -54,37 +67,6 @@ export default async function DashboardPage() {
             .order('scheduled_start_time'),
 
         supabase
-            .from('invoices')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'issued')
-            .eq('is_archived', false),
-
-        supabase
-            .from('invoices')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'issued')
-            .lt('due_date', today)
-            .eq('is_archived', false),
-
-        supabase
-            .from('invoices')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'paid')
-            .eq('is_archived', false),
-        
-        supabase
-            .from('invoices')
-            .select('id', { count: 'exact', head: true })
-            .eq('is_archived', false),
-
-        supabase
-            .from('invoices')
-            .select(`id, status, total_cents, created_at, due_date, clients!inner(name)`)
-            .eq('is_archived', false)
-            .order('created_at', { ascending: false })
-            .limit(5),
-
-        supabase
             .from('appointments')
             .select(`id, scheduled_date, scheduled_start_time, status,
       clients!inner(name), jobs!inner(name)`)
@@ -95,67 +77,14 @@ export default async function DashboardPage() {
             .order('scheduled_date')
             .order('scheduled_start_time')
             .limit(8),
+
+        loadReceivablesSummary(supabase),
     ])
 
-    const loadError =
-        todayAppointmentsResult.error ??
-        openInvoicesResult.error ??
-        overdueInvoicesResult.error ??
-        paidInvoicesResult.error ??
-        recentInvoicesResult.error ??
-        upcomingAppointmentsResult.error
+    const loadError = todayAppointmentsResult.error ?? upcomingAppointmentsResult.error
 
     const todayAppointments = (todayAppointmentsResult.data ?? []) as unknown as TodayAppointmentRow[]
-    const recentInvoices = (recentInvoicesResult.data ?? []) as unknown as RecentInvoiceRow[]
     const upcomingAppointments = (upcomingAppointmentsResult.data ?? []) as unknown as UpcomingAppointmentRow[]
-
-    const paidInvoicesCount = paidInvoicesResult.count ?? 0
-    const openInvoicesCount = openInvoicesResult.count ?? 0
-    const overdueInvoicesCount = overdueInvoicesResult.count ?? 0
-    const totalInvoicesCount = totalInvoicesResult.count ?? 0
-
-    const statCards = [
-        {
-            statValue: openInvoicesCount,
-            statLabel: "Open Invoices",
-            statDescription: "Invoices that are currently open and awaiting payment.",
-            href: "/solutions/invoices",
-            icon: <FileText className="size-4 sm:size-5" aria-hidden="true" />,
-            classColor: "bg-amber-50 text-amber-700",
-            borderColor: { color: 'border-amber-200', onHover: 'amber-300' },
-            shadowColor: "shadow-emerald-950/5",
-        },
-        {
-            statValue: overdueInvoicesCount,
-            statLabel: "Overdue Invoices",
-            statDescription: "Invoices that are past their due date and require immediate attention.",
-            href: "/solutions/invoices",
-            icon: <AlertCircle className="size-4 sm:size-5" aria-hidden="true" />,
-            classColor: "bg-red-50 text-red-700",
-            borderColor: { color: 'border-red-200', onHover: 'red-300' },
-            shadowColor: "shadow-emerald-950/5",
-        },
-        {
-            statValue: paidInvoicesCount,
-            statLabel: "Paid Invoices",
-            statDescription: "Invoices that have been paid in full.",
-            href: "/solutions/invoices",
-            icon: <CheckCircle className="size-4 sm:size-5" aria-hidden="true" />,
-            classColor: "bg-green-50 text-green-700",
-            borderColor: { color: 'border-green-200', onHover: 'green-300' },
-            shadowColor: "shadow-emerald-950/5",
-        },
-        {
-            statValue: totalInvoicesCount,
-            statLabel: "Total Invoices",
-            statDescription: "All invoices regardless of their status.",
-            href: "/solutions/invoices",
-            icon: <FileText className="size-4 sm:size-5" aria-hidden="true" />,
-            classColor: "bg-blue-50 text-blue-700",
-            borderColor: { color: 'border-blue-200', onHover: 'blue-300' },
-            shadowColor: "shadow-emerald-950/5",
-        }
-    ]
 
     return (
         <div className="space-y-6 sm:space-y-8">
@@ -167,25 +96,62 @@ export default async function DashboardPage() {
                 <section className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{loadError.message}</section>
             ) : null}
 
-            <section className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-
-                {statCards.map((card, index) => (
-                    <StatCard
-                        key={index}
-                        statValue={card.statValue}
-                        statLabel={card.statLabel}
-                        statDescription={card.statDescription}
-                        href={card.href}
-                        icon={card.icon}
-                        classColor={card.classColor}
-                        borderColor={card.borderColor}
-                        shadowColor={card.shadowColor}
+            {receivables ? (
+                <section
+                    aria-label="Receivables"
+                    className="grid grid-cols-2 gap-3 animate-in fade-in-0 duration-slow sm:gap-4 md:grid-cols-4"
+                >
+                    <StatTile
+                        fitValue
+                        href={RECEIVABLES_HREF}
+                        label="Outstanding"
+                        value={formatCents(receivables.totals.outstandingCents)}
+                        caption={receivables.totals.outstandingCents > 0 ? 'Issued invoices' : 'Nothing owed'}
+                        icon={<Wallet className="size-5" aria-hidden="true" />}
                     />
-                ))}
-            </section>
+                    <StatTile
+                        fitValue
+                        href={RECEIVABLES_HREF}
+                        label="Overdue"
+                        value={formatCents(receivables.totals.overdueCents)}
+                        caption={receivables.totals.overdueCents > 0 ? 'Past due date' : 'Nothing past due'}
+                        icon={<AlertTriangle className="size-5" aria-hidden="true" />}
+                    />
+                    <StatTile
+                        fitValue
+                        href={RECEIVABLES_HREF}
+                        label="Unbilled"
+                        value={String(receivables.unbilledCount)}
+                        caption={receivables.unbilledCount > 0 ? 'Visits not invoiced' : 'All visits billed'}
+                        icon={<CalendarX2 className="size-5" aria-hidden="true" />}
+                    />
+                    <StatTile
+                        fitValue
+                        href={RECEIVABLES_HREF}
+                        label="Unpaid invoices"
+                        value={String(receivables.totals.unpaidCount)}
+                        caption={receivables.totals.unpaidCount > 0 ? 'Issued, not paid' : 'All paid up'}
+                        icon={<FileText className="size-5" aria-hidden="true" />}
+                    />
+                </section>
+            ) : (
+                <section aria-label="Receivables" className="space-y-3">
+                    <Alert variant="destructive">
+                        <AlertCircle aria-hidden="true" />
+                        <AlertTitle>Couldn&apos;t load receivables</AlertTitle>
+                        <AlertDescription>Check your connection and try again.</AlertDescription>
+                    </Alert>
+                    <Link
+                        href="/solutions/dashboard"
+                        className={cn(buttonVariants({ variant: 'outline' }), 'active:bg-muted active:scale-[0.98]')}
+                    >
+                        Try again
+                    </Link>
+                </section>
+            )}
 
-            <section className="grid gap-6 xl:grid-cols-2">
-                <article className="rounded-2xl border border-neutral-200 bg-white shadow-sm shadow-emerald-950/5 flex flex-col">
+            <section>
+                <article className="min-w-0 rounded-2xl border border-neutral-200 bg-white shadow-sm shadow-emerald-950/5 flex flex-col">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-5 py-4">
                         <h2 className="text-base font-semibold text-neutral-950">Today&apos;s Schedule</h2>
                         <Link href="/solutions/appointments" className="text-sm font-medium text-emerald-700 hover:text-emerald-800 shrink-0">
@@ -233,51 +199,6 @@ export default async function DashboardPage() {
                                                     </p>
                                                 ) : null}
                                                 <p className="truncate text-xs text-neutral-400 mt-0.5">{assignedEmployeeNames(appointment)}</p>
-                                            </div>
-                                        </div>
-                                    </Link>
-                                )
-                            })
-                        )}
-                    </div>
-                </article>
-
-                <article className="rounded-2xl border border-neutral-200 bg-white shadow-sm shadow-emerald-950/5 flex flex-col">
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 px-5 py-4">
-                        <h2 className="text-base font-semibold text-neutral-950">Recent Invoices</h2>
-                        <Link href="/solutions/invoices" className="text-sm font-medium text-emerald-700 hover:text-emerald-800 shrink-0">
-                            View all invoices
-                        </Link>
-                    </div>
-
-                    <div className="divide-y divide-neutral-100">
-                        {recentInvoices.length === 0 ? (
-                            <p className="px-5 py-8 text-sm text-neutral-500">No invoices found.</p>
-                        ) : (
-                            recentInvoices.map((invoice) => {
-                                const effectiveStatus = invoiceEffectiveStatus(invoice, today)
-
-                                return (
-                                    <Link
-                                        key={invoice.id}
-                                        href={`/solutions/invoices/${invoice.id}`}
-                                        className="block px-5 py-4 transition-colors hover:bg-neutral-50"
-                                    >
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="min-w-0 space-y-1">
-                                                <p className="text-sm font-semibold text-neutral-950 truncate">{invoiceRef(invoice.id)}</p>
-                                                <p className="truncate text-sm text-neutral-600">{relationName(invoice.clients)}</p>
-                                                <p className="text-xs text-neutral-500">Created {formatCreatedAtDate(invoice.created_at)}</p>
-                                            </div>
-                                            <div className="shrink-0 text-right">
-                                                <span
-                                                    className={`inline-flex rounded-full px-2.5 py-1 text-[0.65rem] sm:text-xs font-semibold uppercase tracking-wide ${statusBadgeClasses(
-                                                        effectiveStatus,
-                                                    )}`}
-                                                >
-                                                    {effectiveStatus}
-                                                </span>
-                                                <p className="mt-2 text-sm font-semibold text-neutral-950">{formatCurrency(invoice.total_cents)}</p>
                                             </div>
                                         </div>
                                     </Link>

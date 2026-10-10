@@ -15,18 +15,22 @@
 // unexposed `private` schema (20261004120000), so they have no foreign keys for PostgREST to infer:
 // their embeds go through computed relationships, SQL functions in `public` named after the embed
 // target (`appointments_employee_view`, `employees_employee_view`, `clients`, `client_locations`,
-// `jobs_employee_view`). Functions is empty for the same reason as the view relationships -- the
-// schema's SQL functions are called through untyped clients, so typing them here would be guesswork
-// nobody checks.
+// `jobs_employee_view`). Functions lists the invoice write functions (20261009140000 onward), the
+// RPCs the invoice ledger calls through the typed session client; `p_lines` is the Billed amounts
+// TypeScript priced. The other SQL functions are called through untyped clients and stay out until a
+// typed caller needs them. Every invoice function refuses through `invoice_error`: the PostgREST
+// error's `details` is the code.
 //
-// `invoices_with_status` is a plain security_invoker projection of `invoices`, one row per invoice.
+// `invoices_with_status` is a security_invoker projection of `invoices`, one row per invoice.
 // Its Row follows the database's real column nullability, not the narrowed `invoices` Row: `notes`,
-// `created_at`, `updated_at` and `is_archived` have no NOT NULL constraint on the table, so they are
-// nullable here. `effective_status` is `status` with an issued, past-due invoice reported as
-// 'overdue'.
+// `created_at` and `updated_at` have no NOT NULL constraint on the table, so they are nullable here.
+// `total_cents` is derived: the sum of the invoice's live, uncancelled lines (0 when none).
+// `effective_status` is `status` with an issued, past-due invoice reported as 'overdue'.
 //
 // `npm run db:check-types` (run in CI) fails when a table, view or column name here and in the
 // database `public` schema disagree. It compares names only, never types or nullability.
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
+
 export type Database = {
   public: {
     Tables: {
@@ -81,6 +85,7 @@ export type Database = {
           address: string
           notes: string
           is_active: boolean
+          automatic_invoicing: boolean
           created_at: string
           updated_at: string
           is_archived: boolean
@@ -93,6 +98,7 @@ export type Database = {
           address: string
           notes: string
           is_active: boolean
+          automatic_invoicing?: boolean
           created_at?: string
           updated_at?: string
           is_archived?: boolean
@@ -105,6 +111,7 @@ export type Database = {
           address?: string
           notes?: string
           is_active?: boolean
+          automatic_invoicing?: boolean
           created_at?: string
           updated_at?: string
           is_archived?: boolean
@@ -317,9 +324,10 @@ export type Database = {
           scheduled_start_time: string
           scheduled_end_time: string
           price_override_cents: number | null
-          billed_price_cents: number | null
           status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
-          status_before_cancel: 'scheduled' | 'in_progress' | 'completed' | null
+          manually_completed: boolean
+          completed_at: string | null
+          excluded_from_automatic: boolean
           notes: string
           created_at: string
           updated_at: string
@@ -335,9 +343,10 @@ export type Database = {
           scheduled_start_time: string
           scheduled_end_time: string
           price_override_cents?: number | null
-          billed_price_cents?: number | null
           status?: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
-          status_before_cancel?: 'scheduled' | 'in_progress' | 'completed' | null
+          manually_completed?: boolean
+          completed_at?: string | null
+          excluded_from_automatic?: boolean
           notes: string
           created_at?: string
           updated_at?: string
@@ -353,9 +362,10 @@ export type Database = {
           scheduled_start_time?: string
           scheduled_end_time?: string
           price_override_cents?: number | null
-          billed_price_cents?: number | null
           status?: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
-          status_before_cancel?: 'scheduled' | 'in_progress' | 'completed' | null
+          manually_completed?: boolean
+          completed_at?: string | null
+          excluded_from_automatic?: boolean
           notes?: string
           created_at?: string
           updated_at?: string
@@ -450,11 +460,15 @@ export type Database = {
           status: 'draft' | 'issued' | 'paid' | 'void'
           issued_date: string | null
           due_date: string | null
-          total_cents: number
           notes: string
           created_at: string
           updated_at: string
           is_archived: boolean
+          invoice_number: string | null
+          is_automatic: boolean
+          paid_date: string | null
+          payment_method: string | null
+          payment_reference: string | null
         }
         Insert: {
           id?: string
@@ -462,11 +476,15 @@ export type Database = {
           status?: 'draft' | 'issued' | 'paid' | 'void'
           issued_date?: string | null
           due_date?: string | null
-          total_cents: number
           notes: string
           created_at?: string
           updated_at?: string
           is_archived?: boolean
+          invoice_number?: string | null
+          is_automatic?: boolean
+          paid_date?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
         }
         Update: {
           id?: string
@@ -474,11 +492,15 @@ export type Database = {
           status?: 'draft' | 'issued' | 'paid' | 'void'
           issued_date?: string | null
           due_date?: string | null
-          total_cents?: number
           notes?: string
           created_at?: string
           updated_at?: string
           is_archived?: boolean
+          invoice_number?: string | null
+          is_automatic?: boolean
+          paid_date?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
         }
         Relationships: [
           {
@@ -494,9 +516,10 @@ export type Database = {
         Row: {
           invoice_id: string
           appointment_id: string
-          billed_amount_cents: number
+          billed_amount_cents: number | null
           billed_rate_cents: number | null
           billed_minutes: number | null
+          cancelled_at: string | null
           created_at: string
           updated_at: string
           is_archived: boolean
@@ -504,9 +527,10 @@ export type Database = {
         Insert: {
           invoice_id: string
           appointment_id: string
-          billed_amount_cents: number
+          billed_amount_cents?: number | null
           billed_rate_cents?: number | null
           billed_minutes?: number | null
+          cancelled_at?: string | null
           created_at?: string
           updated_at?: string
           is_archived?: boolean
@@ -514,9 +538,10 @@ export type Database = {
         Update: {
           invoice_id?: string
           appointment_id?: string
-          billed_amount_cents?: number
+          billed_amount_cents?: number | null
           billed_rate_cents?: number | null
           billed_minutes?: number | null
+          cancelled_at?: string | null
           created_at?: string
           updated_at?: string
           is_archived?: boolean
@@ -537,6 +562,45 @@ export type Database = {
             referencedColumns: ['id']
           },
         ]
+      }
+      payment_methods: {
+        Row: {
+          id: string
+          name: string
+          is_hidden: boolean
+          sort_order: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          is_hidden?: boolean
+          sort_order: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          is_hidden?: boolean
+          sort_order?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
+      invoice_number_counters: {
+        Row: {
+          year: number
+          last_value: number
+        }
+        Insert: {
+          year: number
+          last_value?: number
+        }
+        Update: {
+          year?: number
+          last_value?: number
+        }
+        Relationships: []
       }
     }
     Views: {
@@ -568,6 +632,7 @@ export type Database = {
           updated_at: string | null
           is_archived: boolean | null
           location_id: string | null
+          manually_completed: boolean | null
         }
         Relationships: []
       }
@@ -592,11 +657,16 @@ export type Database = {
           status: 'draft' | 'issued' | 'paid' | 'void'
           issued_date: string | null
           due_date: string | null
-          total_cents: number
           notes: string | null
           created_at: string | null
           updated_at: string | null
-          is_archived: boolean | null
+          is_archived: boolean
+          invoice_number: string | null
+          is_automatic: boolean
+          paid_date: string | null
+          payment_method: string | null
+          payment_reference: string | null
+          total_cents: number
           effective_status: 'draft' | 'issued' | 'paid' | 'void' | 'overdue'
         }
         Relationships: []
@@ -611,7 +681,55 @@ export type Database = {
         Relationships: []
       }
     }
-    Functions: Record<string, never>
+    Functions: {
+      invoice_archive: {
+        Args: { p_invoice_id: string }
+        Returns: undefined
+      }
+      invoice_create_draft: {
+        Args: {
+          p_client_id: string
+          p_appointment_ids: string[]
+          p_due_date: string | null
+          p_notes: string | null
+        }
+        Returns: string
+      }
+      invoice_issue: {
+        Args: { p_invoice_id: string; p_lines: Json; p_due_date: string | null }
+        Returns: string
+      }
+      invoice_record_payment: {
+        Args: { p_invoice_id: string; p_paid_date: string | null; p_method: string; p_reference: string | null }
+        Returns: undefined
+      }
+      invoice_unarchive: {
+        Args: { p_invoice_id: string }
+        Returns: undefined
+      }
+      invoice_undo_payment: {
+        Args: { p_invoice_id: string }
+        Returns: undefined
+      }
+      invoice_update_draft: {
+        Args: {
+          p_invoice_id: string
+          p_add_appointment_ids: string[]
+          p_remove_appointment_ids: string[]
+          p_due_date: string | null
+          p_notes: string | null
+        }
+        Returns: undefined
+      }
+      invoice_update_payment: {
+        Args: { p_invoice_id: string; p_paid_date: string | null; p_method: string; p_reference: string | null }
+        Returns: undefined
+      }
+      invoice_void: {
+        Args: { p_invoice_id: string }
+        Returns: undefined
+      }
+    }
   }
 }
 

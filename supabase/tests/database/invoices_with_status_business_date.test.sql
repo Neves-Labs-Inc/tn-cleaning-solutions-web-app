@@ -21,13 +21,13 @@ select plan(11);
 insert into public.clients (id, name) values
 	('c0000000-0000-4000-8000-000000000011', 'pgTAP Invoice Client');
 
-insert into public.invoices (id, client_id, status, issued_date, due_date, total_cents) values
+insert into public.invoices (id, client_id, status, invoice_number, issued_date, due_date) values
 	-- due today in New York
-	('10000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000011', 'issued',
-	 (now() at time zone 'America/New_York')::date - 14, (now() at time zone 'America/New_York')::date, 10000),
+	('10000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000011', 'issued', 'INV-001-PGT2026',
+	 (now() at time zone 'America/New_York')::date - 14, (now() at time zone 'America/New_York')::date),
 	-- due yesterday in New York
-	('10000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000011', 'issued',
-	 (now() at time zone 'America/New_York')::date - 15, (now() at time zone 'America/New_York')::date - 1, 10000);
+	('10000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000011', 'issued', 'INV-002-PGT2026',
+	 (now() at time zone 'America/New_York')::date - 15, (now() at time zone 'America/New_York')::date - 1);
 
 
 -- Helpers --------------------------------------------------------------------------------------
@@ -39,13 +39,14 @@ create function public.pgtap_effective_status(invoice uuid) returns text
 $$;
 
 
--- Shape is unchanged from the snapshot --------------------------------------------------------
+-- Shape: every invoices column plus the derived total and status (20261009130000) ------------
 
 select view_owner_is('public', 'invoices_with_status', 'postgres', 'invoices_with_status is still owned by postgres');
 select columns_are('public', 'invoices_with_status', array[
-	'id', 'client_id', 'status', 'issued_date', 'due_date', 'total_cents', 'notes', 'created_at',
-	'updated_at', 'is_archived', 'effective_status'
-], 'invoices_with_status keeps the snapshot column list');
+	'id', 'client_id', 'status', 'issued_date', 'due_date', 'notes', 'created_at', 'updated_at',
+	'is_archived', 'invoice_number', 'is_automatic', 'paid_date', 'payment_method',
+	'payment_reference', 'total_cents', 'effective_status'
+], 'invoices_with_status lists every invoices column plus total_cents and effective_status');
 select is(
 	(select reloptions::text[] @> array['security_invoker=true'] from pg_class where oid = 'public.invoices_with_status'::regclass),
 	true, 'invoices_with_status keeps security_invoker');
@@ -83,11 +84,14 @@ select is(public.pgtap_effective_status('10000000-0000-4000-8000-000000000002'),
 
 -- Other statuses are passed through unchanged ---------------------------------------------------
 
-update public.invoices set status = 'paid' where id = '10000000-0000-4000-8000-000000000002';
+update public.invoices set status = 'paid', paid_date = issued_date, payment_method = 'Cash'
+where id = '10000000-0000-4000-8000-000000000002';
 select is(public.pgtap_effective_status('10000000-0000-4000-8000-000000000002'),
 	'paid', 'a paid invoice past its due date is paid, not overdue');
 
-update public.invoices set status = 'draft', due_date = null where id = '10000000-0000-4000-8000-000000000002';
+update public.invoices
+set status = 'draft', invoice_number = null, issued_date = null, due_date = null, paid_date = null, payment_method = null
+where id = '10000000-0000-4000-8000-000000000002';
 select is(public.pgtap_effective_status('10000000-0000-4000-8000-000000000002'),
 	'draft', 'a draft with no due date is draft');
 

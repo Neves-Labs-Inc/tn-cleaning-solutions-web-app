@@ -1,12 +1,14 @@
+import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 export type AppointmentSummary = {
   id: string
   scheduled_date: string
   scheduled_start_time: string
   scheduled_end_time: string
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+  status: AppointmentStatus
   notes: string | null
   price_override_cents: number | null
-  price_display_cents: number
+  // null when the visit is Unpriced.
+  price_display_cents: number | null
   price_is_billed: boolean
   client: {
     id: string

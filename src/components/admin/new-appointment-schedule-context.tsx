@@ -5,13 +5,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { endOfMonth, format, startOfMonth } from 'date-fns'
 
 import { createClient } from '@/lib/supabase/browser'
+import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
 type ContextAppointmentRow = {
   id: string
   scheduled_date: string
   scheduled_start_time: string
   scheduled_end_time: string
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+  status: AppointmentStatus
   clients: { id: string; name: string } | null
   jobs: { id: string; name: string } | null
   client_locations: { label: string | null; address: string | null } | null
