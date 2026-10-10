@@ -2,8 +2,11 @@ import { CheckCircle2, Clock, type LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import type { AppointmentStatus } from "@/lib/helpers/dashboard";
+import { invoiceStatusBadge, lineStateBadge } from "./status-badge-tones";
 import { formatBusinessTime } from "@/lib/schedule";
 import { cn } from "@/lib/utils";
+
+export { invoiceStatusBadge, lineStateBadge };
 
 export type StatusTone = "info" | "success" | "warning" | "danger" | "neutral";
 

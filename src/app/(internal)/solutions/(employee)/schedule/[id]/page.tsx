@@ -11,8 +11,7 @@ import { buildMapsUrl, getClockStatus } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 import { cn } from '@/lib/utils'
 import type { Views } from '@/types/database'
-
-type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
 type EmployeeSummary = {
 	id: string
@@ -31,6 +30,7 @@ type AppointmentRecord = {
 		scheduled_start_time: string
 		scheduled_end_time: string
 		status: AppointmentStatus
+		manually_completed: boolean
 		notes: string
 		clients: {
 			name: string
@@ -100,6 +100,7 @@ export default async function AppointmentDetailPage({
 					scheduled_start_time,
 					scheduled_end_time,
 					status,
+					manually_completed,
 					notes,
 					clients!inner ( name ),
 					client_locations (
@@ -175,7 +176,10 @@ export default async function AppointmentDetailPage({
 		<div className="mx-auto grid max-w-2xl grid-cols-1 animate-in gap-6 fade-in-0 duration-slow lg:max-w-4xl lg:grid-cols-2 lg:gap-8">
 			<div className="space-y-3 md:row-start-1 lg:col-span-2">
 				<h1 className="text-2xl font-semibold tracking-tight text-balance wrap-anywhere text-foreground">{job.name}</h1>
-				<StatusBadge tone={statusBadge.tone}>{statusBadge.label}</StatusBadge>
+				{/* Keyed on the status so the pill zooms in once when a late clock-in reopens a completed visit. */}
+				<span key={scheduled.status} className="inline-block animate-in fade-in-0 zoom-in-95 duration-base ease-out-quart">
+					<StatusBadge tone={statusBadge.tone}>{statusBadge.label}</StatusBadge>
+				</span>
 				<p className="text-sm text-muted-foreground tabular-nums">
 					{format(parseISO(scheduled.scheduled_date), DATE_FORMAT)} · {formatTimeLabel(scheduled.scheduled_date, scheduled.scheduled_start_time)} –{' '}
 					{formatTimeLabel(scheduled.scheduled_date, scheduled.scheduled_end_time)}
@@ -234,6 +238,7 @@ export default async function AppointmentDetailPage({
 						appointmentEmployeeId={currentAssignmentId}
 						clockStatus={currentClockStatus}
 						appointmentStatus={scheduled.status}
+						manuallyCompleted={scheduled.manually_completed}
 						jobName={job.name}
 					/>
 				</div>

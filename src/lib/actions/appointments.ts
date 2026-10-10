@@ -3,6 +3,13 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+import {
+  canCancel,
+  canMarkComplete,
+  canRestore,
+  canUndoComplete,
+  type AppointmentStatus,
+} from '@/lib/appointments/lifecycle'
 import { parseDollarsToCents } from '@/lib/pricing/money'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -19,7 +26,6 @@ type AppointmentFieldErrors = {
   recurrence_frequency?: string
   recurrence_end_date?: string
   recurrence_max_occurrences?: string
-  status?: string
 }
 
 export type AppointmentActionResult =
@@ -52,7 +58,6 @@ type ParsedUpdateAppointmentInput = {
   scheduled_end_time: string
   price_override_cents: number | null
   notes: string
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
   employee_ids: string[]
 }
 
@@ -63,8 +68,6 @@ type ParsedUpdateRecurrenceInput = {
   recurrence_end_date: string | null
   recurrence_max_occurrences: number | null
 }
-
-type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
 
 function isValidDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -310,7 +313,6 @@ function parseUpdateAppointmentFormData(formData: FormData):
   const scheduledEndTime = String(formData.get('scheduled_end_time') ?? '').trim()
   const priceOverride = String(formData.get('price_override') ?? '').trim()
   const notes = String(formData.get('notes') ?? '').trim()
-  const statusRaw = String(formData.get('status') ?? '').trim()
   const employeeIds = uniqueIds(formData.getAll('employee_ids'))
 
   const fieldErrors: AppointmentFieldErrors = {}
@@ -346,17 +348,6 @@ function parseUpdateAppointmentFormData(formData: FormData):
     fieldErrors.price_override = 'Enter a valid dollar amount.'
   }
 
-  if (
-    statusRaw !== 'scheduled' &&
-    statusRaw !== 'in_progress' &&
-    statusRaw !== 'completed' &&
-    statusRaw !== 'cancelled'
-  ) {
-    fieldErrors.status = 'Select a valid status.'
-  }
-
-  const status = statusRaw as AppointmentStatus
-
   if (Object.keys(fieldErrors).length > 0) {
     return {
       success: false,
@@ -375,7 +366,6 @@ function parseUpdateAppointmentFormData(formData: FormData):
       scheduled_end_time: scheduledEndTime,
       price_override_cents: priceOverrideCents,
       notes,
-      status,
       employee_ids: employeeIds,
     },
   }
@@ -665,7 +655,7 @@ export async function updateAppointment(
     if (existingAppointment.status === 'cancelled') {
       return {
         success: false,
-        error: 'This appointment cannot be edited because it has been cancelled. Reopen it first.',
+        error: 'This appointment cannot be edited because it has been cancelled. Restore it first.',
       }
     }
 
@@ -736,8 +726,6 @@ export async function updateAppointment(
           scheduled_end_time: parsed.data.scheduled_end_time,
           price_override_cents: parsed.data.price_override_cents,
           notes: parsed.data.notes,
-          status: parsed.data.status,
-          status_before_cancel: parsed.data.status === 'cancelled' ? existingAppointment.status : null,
         })
         .eq('id', id)
         .eq('is_archived', false)
@@ -954,7 +942,12 @@ export async function updateAppointment(
   return { success: true, data: { id } }
 }
 
-export async function cancelAppointment(id: string): Promise<AppointmentActionResult> {
+type LifecycleLoadResult =
+  | { success: true; appointment: { id: string; status: AppointmentStatus; manually_completed: boolean } }
+  | { success: false; error: string }
+
+// Admin check plus the row read every lifecycle action starts from.
+async function loadAppointmentForLifecycle(id: string): Promise<LifecycleLoadResult> {
   if (!id) {
     return { success: false, error: 'Appointment id is required.' }
   }
@@ -964,39 +957,44 @@ export async function cancelAppointment(id: string): Promise<AppointmentActionRe
     return { success: false, error: authResult.error }
   }
 
-  const adminClient = createAdminClient()
-  const { data: currentAppointment, error: loadError } = await adminClient
+  const { data, error } = await createAdminClient()
     .from('appointments')
-    .select('id, status')
+    .select('id, status, manually_completed')
     .eq('id', id)
     .eq('is_archived', false)
     .maybeSingle()
 
-  if (loadError) {
-    return { success: false, error: loadError.message }
+  if (error) {
+    return { success: false, error: error.message }
   }
 
-  if (!currentAppointment) {
+  if (!data) {
     return { success: false, error: 'Appointment not found.' }
   }
 
-  if (currentAppointment.status === 'completed') {
-    return {
-      success: false,
-      error: 'A completed appointment cannot be cancelled. Completed is a final status.',
-    }
-  }
+  return { success: true, appointment: data }
+}
 
-  if (currentAppointment.status === 'cancelled') {
+function revalidateAppointment(id: string) {
+  revalidatePath('/solutions/appointments')
+  revalidatePath(`/solutions/appointments/${id}`)
+}
+
+export async function cancelAppointment(id: string): Promise<AppointmentActionResult> {
+  const loaded = await loadAppointmentForLifecycle(id)
+  if (!loaded.success) return loaded
+
+  if (!canCancel(loaded.appointment.status)) {
     return { success: false, error: 'This appointment is already cancelled.' }
   }
 
-  const { data: cancelledAppointment, error } = await adminClient
+  // The database error is returned verbatim: a paid-invoice trigger refuses with a message the admin must read.
+  const { data, error } = await createAdminClient()
     .from('appointments')
-    .update({ status: 'cancelled', status_before_cancel: currentAppointment.status })
+    .update({ status: 'cancelled' })
     .eq('id', id)
     .eq('is_archived', false)
-    .eq('status', currentAppointment.status)
+    .eq('status', loaded.appointment.status)
     .select('id')
     .maybeSingle()
 
@@ -1004,54 +1002,30 @@ export async function cancelAppointment(id: string): Promise<AppointmentActionRe
     return { success: false, error: error.message }
   }
 
-  if (!cancelledAppointment) {
+  if (!data) {
     return {
       success: false,
       error: 'The appointment changed while you were cancelling it. Refresh and try again.',
     }
   }
 
-  revalidatePath('/solutions/appointments')
-  revalidatePath(`/solutions/appointments/${id}`)
+  revalidateAppointment(id)
 
   return { success: true, data: { id } }
 }
 
-export async function uncancelAppointment(id: string): Promise<AppointmentActionResult> {
-  if (!id) {
-    return { success: false, error: 'Appointment id is required.' }
-  }
+export async function restoreAppointment(id: string): Promise<AppointmentActionResult> {
+  const loaded = await loadAppointmentForLifecycle(id)
+  if (!loaded.success) return loaded
 
-  const authResult = await requireAdminRole()
-  if (!authResult.success) {
-    return { success: false, error: authResult.error }
-  }
-
-  const adminClient = createAdminClient()
-  const { data: currentAppointment, error: loadError } = await adminClient
-    .from('appointments')
-    .select('id, status, status_before_cancel')
-    .eq('id', id)
-    .eq('is_archived', false)
-    .maybeSingle()
-
-  if (loadError) {
-    return { success: false, error: loadError.message }
-  }
-
-  if (!currentAppointment) {
-    return { success: false, error: 'Appointment not found.' }
-  }
-
-  if (currentAppointment.status !== 'cancelled') {
+  if (!canRestore(loaded.appointment.status)) {
     return { success: false, error: 'This appointment is not cancelled.' }
   }
 
-  const restoredStatus = currentAppointment.status_before_cancel ?? 'scheduled'
-
-  const { data: restoredAppointment, error } = await adminClient
+  // Any non-cancelled status will do: the appointments trigger replaces it with the derived one.
+  const { data, error } = await createAdminClient()
     .from('appointments')
-    .update({ status: restoredStatus, status_before_cancel: null })
+    .update({ status: 'scheduled' })
     .eq('id', id)
     .eq('is_archived', false)
     .eq('status', 'cancelled')
@@ -1062,17 +1036,65 @@ export async function uncancelAppointment(id: string): Promise<AppointmentAction
     return { success: false, error: error.message }
   }
 
-  if (!restoredAppointment) {
+  if (!data) {
     return {
       success: false,
-      error: 'The appointment changed while you were reopening it. Refresh and try again.',
+      error: 'The appointment changed while you were restoring it. Refresh and try again.',
     }
   }
 
-  revalidatePath('/solutions/appointments')
-  revalidatePath(`/solutions/appointments/${id}`)
+  revalidateAppointment(id)
 
   return { success: true, data: { id } }
+}
+
+async function setManuallyCompleted(id: string, manuallyCompleted: boolean): Promise<AppointmentActionResult> {
+  const loaded = await loadAppointmentForLifecycle(id)
+  if (!loaded.success) return loaded
+
+  const { appointment } = loaded
+  if (appointment.status === 'cancelled') {
+    return { success: false, error: 'This appointment is cancelled. Restore it first.' }
+  }
+
+  if (manuallyCompleted && !canMarkComplete(appointment)) {
+    return { success: false, error: 'This appointment is already marked complete.' }
+  }
+
+  if (!manuallyCompleted && !canUndoComplete(appointment)) {
+    return { success: false, error: 'This appointment is not marked complete.' }
+  }
+
+  // The flag change makes the trigger re-derive the status from the flag and the clocks.
+  const { data, error } = await createAdminClient()
+    .from('appointments')
+    .update({ manually_completed: manuallyCompleted })
+    .eq('id', id)
+    .eq('is_archived', false)
+    .eq('manually_completed', !manuallyCompleted)
+    .neq('status', 'cancelled')
+    .select('id')
+    .maybeSingle()
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  if (!data) {
+    return { success: false, error: 'The appointment changed in the meantime. Refresh and try again.' }
+  }
+
+  revalidateAppointment(id)
+
+  return { success: true, data: { id } }
+}
+
+export async function markAppointmentComplete(id: string): Promise<AppointmentActionResult> {
+  return setManuallyCompleted(id, true)
+}
+
+export async function undoAppointmentComplete(id: string): Promise<AppointmentActionResult> {
+  return setManuallyCompleted(id, false)
 }
 
 export async function updateClockTime(

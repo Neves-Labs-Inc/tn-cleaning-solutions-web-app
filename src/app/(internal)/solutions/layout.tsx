@@ -29,7 +29,7 @@ export default async function SolutionsLayout({
                 <NextTopLoader color="#10b981" showSpinner={false} />
                 <Toaster position="top-center" offset={{ top: TOAST_TOP_OFFSET }} mobileOffset={{ top: TOAST_TOP_OFFSET }} />
                 <AdminSidebar onLogout={signOutAction} />
-                <main className="min-w-0 flex-1 overflow-auto">
+                <main className="min-w-0 flex-1 overflow-x-clip">
                     <div className="mx-auto w-full max-w-7xl p-6 md:p-8">
                         {children}
                     </div>

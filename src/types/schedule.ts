@@ -18,6 +18,7 @@ export type ScheduleStop = {
 	scheduled_start_time: string
 	scheduled_end_time: string
 	status: AppointmentStatus
+	manually_completed: boolean
 	jobName: string
 	jobDescription: string | null
 	clientName: string

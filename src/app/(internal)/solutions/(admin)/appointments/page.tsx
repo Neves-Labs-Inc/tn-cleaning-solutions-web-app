@@ -2,29 +2,25 @@ import { endOfMonth, format, startOfMonth } from 'date-fns'
 
 import { AppointmentsViewToggle } from '@/components/admin/appointments-view-toggle'
 import type { AppointmentSummary } from '@/components/admin/appointments-types'
-import { fetchClientJobRules } from '@/lib/pricing/lookup'
-import { durationMinutes } from '@/lib/pricing/money'
-import { pickEffectiveRule, resolveAppointmentPrice, type ClientJobRule } from '@/lib/pricing/resolve'
+import {
+  APPOINTMENT_PRICE_COLUMNS,
+  priceAppointments,
+  type PriceableAppointment,
+  type PricedAppointment,
+} from '@/lib/pricing'
 import { toBusinessWallClock } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
+import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
 type AppointmentsPageProps = {
   searchParams: Promise<{ month?: string | string[]; year?: string | string[] }>
 }
 
-type RawAppointmentRow = {
-  id: string
-  client_id: string
-  job_id: string
-  scheduled_date: string
-  scheduled_start_time: string
-  scheduled_end_time: string
-  status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+type RawAppointmentRow = PriceableAppointment & {
+  status: AppointmentStatus
   notes: string | null
-  price_override_cents: number | null
-  billed_price_cents: number | null
   clients: { id: string; name: string } | null
-  jobs: { id: string; name: string; hourly_rate_cents: number } | null
+  jobs: { id: string; name: string } | null
   client_locations: { label: string; address: string } | null
   appointment_employees:
     | Array<{
@@ -74,10 +70,10 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
     .from('appointments')
     .select(
       `
-        id, client_id, job_id, scheduled_date, scheduled_start_time, scheduled_end_time,
-        status, notes, price_override_cents, billed_price_cents,
+        ${APPOINTMENT_PRICE_COLUMNS},
+        status, notes,
         clients!inner ( id, name ),
-        jobs!inner ( id, name, hourly_rate_cents ),
+        jobs!inner ( id, name ),
         client_locations ( label, address ),
         appointment_employees ( id, employee_id, employees!inner ( full_name ) )
       `
@@ -90,33 +86,21 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
 
   const rows = (data as RawAppointmentRow[] | null) ?? []
 
-  let rulesByPair = new Map<string, ClientJobRule[]>()
-  let rulesErrorMessage: string | null = null
+  let pricesById = new Map<string, PricedAppointment>()
+  let pricesErrorMessage: string | null = null
 
   try {
-    rulesByPair = await fetchClientJobRules(
-      supabase,
-      rows.map((row) => ({ clientId: row.client_id, jobId: row.job_id }))
-    )
+    pricesById = await priceAppointments(supabase, rows)
   } catch (thrown) {
-    console.error('Error fetching client job pricing:', thrown)
-    rulesErrorMessage =
-      thrown instanceof Error ? thrown.message : 'Client pricing rules could not be loaded.'
+    console.error('Error pricing appointments:', thrown)
+    pricesErrorMessage = thrown instanceof Error ? thrown.message : 'Appointment prices could not be loaded.'
   }
 
-  const loadErrorMessage = error?.message ?? rulesErrorMessage
+  const loadErrorMessage = error?.message ?? pricesErrorMessage
   const renderableRows = loadErrorMessage ? [] : rows
 
   const appointments: AppointmentSummary[] = renderableRows.map((row) => {
-    const resolved = resolveAppointmentPrice({
-      job: { hourly_rate_cents: row.jobs?.hourly_rate_cents ?? 0 },
-      rule: pickEffectiveRule(
-        rulesByPair.get(`${row.client_id}:${row.job_id}`) ?? [],
-        row.scheduled_date
-      ),
-      minutes: durationMinutes(row.scheduled_start_time, row.scheduled_end_time),
-      appointmentOverrideCents: row.price_override_cents,
-    })
+    const display = pricesById.get(row.id)?.display
 
     return {
       id: row.id,
@@ -126,8 +110,8 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
       status: row.status,
       notes: row.notes,
       price_override_cents: row.price_override_cents,
-      price_display_cents: row.billed_price_cents ?? resolved.amount_cents,
-      price_is_billed: row.billed_price_cents !== null,
+      price_display_cents: display && display.source !== 'unpriced' ? display.amount_cents : null,
+      price_is_billed: display?.source === 'billed',
       client: {
         id: row.clients?.id ?? '',
         name: row.clients?.name ?? 'Unknown client',
