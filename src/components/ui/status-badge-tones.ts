@@ -53,13 +53,16 @@ type TimeSheetBadgeView = Pick<
   "state" | "flags" | "oddRatioPercent" | "isAcknowledged" | "isManualCompletion" | "isEdited"
 >;
 
+// The per-kind tone, icon and plain label; the Odd duration pill adds its ratio in a session row.
+export const TIME_SHEET_FLAG_SPECS: Record<FlagKind, StatusBadgeSpec> = {
+  open_shift: { tone: "warning", label: "Open shift", icon: Clock },
+  missing_clock: { tone: "danger", label: "Missing clock", icon: CircleDashed },
+  odd_duration: { tone: "warning", label: "Odd duration", icon: Hourglass },
+};
+
 function timeSheetFlagBadge(flag: FlagKind, oddRatioPercent: number | null): StatusBadgeSpec {
-  const specs: Record<FlagKind, StatusBadgeSpec> = {
-    open_shift: { tone: "warning", label: "Open shift", icon: Clock },
-    missing_clock: { tone: "danger", label: "Missing clock", icon: CircleDashed },
-    odd_duration: { tone: "warning", label: `Odd duration · ${oddRatioPercent}%`, icon: Hourglass },
-  };
-  return specs[flag];
+  const spec = TIME_SHEET_FLAG_SPECS[flag];
+  return flag === "odd_duration" ? { ...spec, label: `Odd duration · ${oddRatioPercent}%` } : spec;
 }
 
 // The pills a session wears, in fixed order: its flags, In progress or Upcoming, an acknowledged
