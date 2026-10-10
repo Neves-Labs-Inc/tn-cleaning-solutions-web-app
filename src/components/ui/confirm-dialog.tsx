@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 
 import {
@@ -34,6 +34,9 @@ type ConfirmDialogProps = {
   pendingLabel: string;
   keepLabel: string;
   onConfirm: () => Promise<void>;
+  // Where focus goes on close; defaults to the element focused when the dialog opened. Pass it when
+  // that element is gone by then (a More item).
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
 };
 
 type KeepButtonProps = {
@@ -74,14 +77,33 @@ export default function ConfirmDialog({
   pendingLabel,
   keepLabel,
   onConfirm,
+  returnFocusRef,
 }: ConfirmDialogProps): React.ReactNode {
   const isMobile = useIsMobile();
   const keepRef = useRef<HTMLButtonElement>(null);
+  // The element focused when the dialog opened: the fallback return target. Captured in a layout
+  // effect, before the drawer's content mounts and Keep takes focus.
+  const openerRef = useRef<HTMLElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (open) openerRef.current = document.activeElement as HTMLElement | null;
+  }, [open]);
+
+  // Radix's own restore is unreliable inside vaul, so focus goes back explicitly: to the given ref,
+  // else to whatever was focused when the dialog opened.
+  function handleCloseAutoFocus(event: Event): void {
+    const target = returnFocusRef?.current ?? openerRef.current;
+    if (target?.isConnected) {
+      event.preventDefault();
+      target.focus();
+    }
+  }
 
   if (isMobile) {
     return (
-      <Drawer open={open} onOpenChange={onOpenChange} direction="bottom">
-        <DrawerContent>
+      // vaul defaults autoFocus to false, which loses focus to <body> on close.
+      <Drawer open={open} onOpenChange={onOpenChange} direction="bottom" autoFocus>
+        <DrawerContent onCloseAutoFocus={handleCloseAutoFocus}>
           <DrawerHeader className="group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
             <DrawerTitle>{title}</DrawerTitle>
             <DrawerDescription>{description}</DrawerDescription>
@@ -106,6 +128,7 @@ export default function ConfirmDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent
         initialFocus={keepRef}
+        finalFocus={returnFocusRef ?? true}
         className="data-open:duration-base data-open:ease-out-quart data-closed:duration-[140ms] data-closed:ease-in-quart"
       >
         <AlertDialogHeader>

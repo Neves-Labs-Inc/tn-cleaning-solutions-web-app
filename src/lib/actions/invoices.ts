@@ -141,7 +141,9 @@ export async function updateDraft(
   if ('refusal' in admin) return admin.refusal
 
   const result = await admin.ledger.updateDraft(invoiceId, { addAppointmentIds, removeAppointmentIds, dueDate, notes })
-  revalidateInvoicing(invoiceId)
+  // A deleted draft's page would re-render as not-found before the client leaves it.
+  const isDeleted = result.ok && result.data.isDeleted
+  revalidateInvoicing(isDeleted ? undefined : invoiceId)
   return toActionResult(result)
 }
 

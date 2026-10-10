@@ -8,7 +8,7 @@ import type { Database, Views } from '@/types/database'
 import { priceAppointmentsInBatches } from './batch'
 import { loadDraftLines, type DraftLine } from './draft-lines'
 import { draftTotalCents, hasUnpricedLine, lineAmountCents, lineState } from './lines'
-import type { InvoiceViewRow, LineState, UnbilledVisit } from './view'
+import { sortByActivity, type InvoiceViewRow, type LineState, type UnbilledVisit } from './view'
 
 // The read shapes the invoice screens need, so pages never rebuild these joins. Read failures throw
 // to the route's error boundary. Every function takes the user-session client.
@@ -211,10 +211,12 @@ async function loadUnbilled(db: Db, clientId: string | null): Promise<UnbilledVi
   })
 }
 
-// Newest first, with client contact and has_unpriced on drafts.
+// Newest activity first (issue date, else created date), with client contact and has_unpriced on
+// drafts. PostgREST can't order by that expression, so the database returns the newest-created rows
+// (up to INVOICE_LIST_LIMIT) and they are reordered here.
 export async function listInvoices(db: Db): Promise<InvoiceListRow[]> {
   const { rows } = await loadInvoiceRows(db, null)
-  return rows
+  return sortByActivity(rows)
 }
 
 export async function getInvoiceDetail(db: Db, invoiceId: string): Promise<InvoiceDetail | null> {
