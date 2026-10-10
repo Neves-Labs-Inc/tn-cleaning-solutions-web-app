@@ -115,6 +115,8 @@ export default async function TimeSheetsPage({ searchParams }: TimeSheetsPagePro
       `
     )
     .eq('employee_id', employee.id)
+    // A crew-removed session isn't hers, and a re-added Cleaner would count it twice; NULL is live.
+    .not('is_archived', 'is', true)
     .not('clocked_in_at', 'is', null)
 
   if (error) {

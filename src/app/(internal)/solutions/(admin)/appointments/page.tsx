@@ -79,6 +79,8 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
       `
     )
     .eq('is_archived', false)
+    // A crew-removed Cleaner's archived assignment is history, not crew; NULL counts as live.
+    .not('appointment_employees.is_archived', 'is', true)
     .gte('scheduled_date', firstDayOfMonth)
     .lte('scheduled_date', lastDayOfMonth)
     .order('scheduled_date')

@@ -76,6 +76,8 @@ export default async function EmployeeDetailPage({ params }: EmployeeDetailPageP
 					`
 				)
 				.eq('employee_id', id)
+				// A visit she was removed from isn't her activity; NULL counts as live.
+				.not('is_archived', 'is', true)
 				.order('created_at', { ascending: false })
 				.limit(5),
 		])

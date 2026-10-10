@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+import { hasSessionHistory, planCrewChange, planFutureVisitCleanup } from '@/lib/appointments/crew'
 import {
   canCancel,
   canMarkComplete,
@@ -764,31 +765,55 @@ export async function updateAppointment(
       // An assignment row whose employee survives the edit is never rewritten: clocked_in_at,
       // clocked_out_at, admin_notes and the row id that updateClockTime and employee_clock address
       // all live on it, and the delete-and-reinsert this replaced destroyed them on every edit.
+      // Archived rows are loaded too so the planner can tell a re-added Cleaner needs a fresh row.
       const { data: existingAssignments, error: existingAssignmentsError } = await adminClient
         .from('appointment_employees')
-        .select('id, employee_id')
+        .select(
+          'id, employee_id, is_archived, clocked_in_at, clocked_out_at, clock_corrections(count), odd_duration_acknowledgements(count)'
+        )
         .eq('appointment_id', id)
 
       if (existingAssignmentsError) {
         return { success: false, error: existingAssignmentsError.message }
       }
 
-      const assignmentRows = existingAssignments ?? []
-      const submittedEmployeeIds = new Set(parsed.data.employee_ids)
-      const assignedEmployeeIds = new Set(assignmentRows.map((row) => row.employee_id))
-
-      const staleAssignmentIds = assignmentRows
-        .filter((row) => !submittedEmployeeIds.has(row.employee_id))
-        .map((row) => row.id)
-      const newEmployeeIds = parsed.data.employee_ids.filter(
-        (employeeId) => !assignedEmployeeIds.has(employeeId)
+      const crewPlan = planCrewChange(
+        (existingAssignments ?? []).map((row) => ({
+          id: row.id,
+          employee_id: row.employee_id,
+          is_archived: row.is_archived,
+          hasHistory: hasSessionHistory({
+            clocked_in_at: row.clocked_in_at,
+            clocked_out_at: row.clocked_out_at,
+            correctionCount: row.clock_corrections[0]?.count ?? 0,
+            acknowledgementCount: row.odd_duration_acknowledgements[0]?.count ?? 0,
+          }),
+        })),
+        parsed.data.employee_ids
       )
+      const newEmployeeIds = crewPlan.insertEmployeeIds
 
-      if (staleAssignmentIds.length > 0) {
+      // Hours records and their corrections must survive 6 years, so a removed Cleaner with any
+      // history is archived; the crew trigger re-derives status on archive as it does on delete.
+      if (crewPlan.archiveIds.length > 0) {
+        const { error: archiveAssignmentsError } = await adminClient
+          .from('appointment_employees')
+          .update({ is_archived: true })
+          .in('id', crewPlan.archiveIds)
+
+        if (archiveAssignmentsError) {
+          return { success: false, error: archiveAssignmentsError.message }
+        }
+      }
+
+      if (crewPlan.deleteIds.length > 0) {
         const { error: deleteAssignmentsError } = await adminClient
           .from('appointment_employees')
           .delete()
-          .in('id', staleAssignmentIds)
+          .in('id', crewPlan.deleteIds)
+          // A clock-in since the read makes the row history; it is left in place, not deleted.
+          .is('clocked_in_at', null)
+          .is('clocked_out_at', null)
 
         if (deleteAssignmentsError) {
           return { success: false, error: deleteAssignmentsError.message }
@@ -845,11 +870,12 @@ export async function updateAppointment(
           return { success: false, error: preservedAppointmentsError.message }
         }
 
-        const preservedDates = new Set((preservedAppointments ?? []).map((row) => row.scheduled_date))
-
+        // Every assignment, archived or not, so a removed Cleaner's hours keep their visit alive.
         const { data: futurePendingAppointments, error: futurePendingAppointmentsError } = await adminClient
           .from('appointments')
-          .select('id')
+          .select(
+            'id, scheduled_date, appointment_employees(clocked_in_at, clocked_out_at, clock_corrections(count), odd_duration_acknowledgements(count))'
+          )
           .eq('recurrence_series_id', recurrenceSeriesId)
           .gt('scheduled_date', appointment.scheduled_date)
           .eq('status', 'scheduled')
@@ -859,7 +885,38 @@ export async function updateAppointment(
           return { success: false, error: futurePendingAppointmentsError.message }
         }
 
-        const futurePendingAppointmentIds = (futurePendingAppointments ?? []).map((row) => row.id)
+        const cleanupPlan = planFutureVisitCleanup(
+          (futurePendingAppointments ?? []).map((row) => ({
+            id: row.id,
+            scheduled_date: row.scheduled_date,
+            assignments: row.appointment_employees.map((assignment) => ({
+              clocked_in_at: assignment.clocked_in_at,
+              clocked_out_at: assignment.clocked_out_at,
+              correctionCount: assignment.clock_corrections[0]?.count ?? 0,
+              acknowledgementCount: assignment.odd_duration_acknowledgements[0]?.count ?? 0,
+            })),
+          }))
+        )
+
+        // Delete before regenerating: if the delete is refused (a RESTRICT audit FK, or a race),
+        // nothing has been inserted yet, so no date ends up with two visits.
+        if (cleanupPlan.deleteIds.length > 0) {
+          const { error: deleteFuturePendingError } = await adminClient
+            .from('appointments')
+            .delete()
+            .in('id', cleanupPlan.deleteIds)
+            // A clock-in since the read moves the visit out of scheduled, so it isn't deleted.
+            .eq('status', 'scheduled')
+
+          if (deleteFuturePendingError) {
+            return { success: false, error: deleteFuturePendingError.message }
+          }
+        }
+
+        const preservedDates = new Set([
+          ...(preservedAppointments ?? []).map((row) => row.scheduled_date),
+          ...cleanupPlan.preservedDates,
+        ])
 
         const nextDate = formatDate(addDays(parseDate(appointment.scheduled_date), 1))
         const recurrenceDates = generateRecurrenceDates(
@@ -919,16 +976,6 @@ export async function updateAppointment(
           }
         }
 
-        if (futurePendingAppointmentIds.length > 0) {
-          const { error: deleteFuturePendingError } = await adminClient
-            .from('appointments')
-            .delete()
-            .in('id', futurePendingAppointmentIds)
-
-          if (deleteFuturePendingError) {
-            return { success: false, error: deleteFuturePendingError.message }
-          }
-        }
       }
     }
   } catch {

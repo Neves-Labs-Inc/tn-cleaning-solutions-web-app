@@ -110,6 +110,8 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
       `
     )
     .eq('id', id)
+    // A crew-removed Cleaner's archived assignment is history, not crew; NULL counts as live.
+    .not('appointment_employees.is_archived', 'is', true)
     .maybeSingle()
 
   const appointment = data as AppointmentDetailRow | null

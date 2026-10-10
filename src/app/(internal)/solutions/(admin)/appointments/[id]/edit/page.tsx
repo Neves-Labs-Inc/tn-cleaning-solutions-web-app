@@ -57,6 +57,8 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
         `
       )
       .eq('id', id)
+      // An archived assignment is a removed Cleaner, so the form must not pre-select her.
+      .not('appointment_employees.is_archived', 'is', true)
       .maybeSingle(),
     supabase
       .from('clients')
