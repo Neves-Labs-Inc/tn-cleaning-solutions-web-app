@@ -13,6 +13,8 @@ type SubmitButtonProps = Omit<
   label: string;
   pendingLabel: string;
   icon?: React.ReactNode;
+  // For a submit driven by onSubmit + useTransition rather than a form action.
+  isPending?: boolean;
 };
 
 export default function SubmitButton({
@@ -20,9 +22,11 @@ export default function SubmitButton({
   pendingLabel,
   icon,
   disabled,
+  isPending,
   ...rest
 }: SubmitButtonProps): React.ReactNode {
-  const { pending } = useFormStatus();
+  const formStatus = useFormStatus();
+  const pending = isPending ?? formStatus.pending;
 
   return (
     <Button

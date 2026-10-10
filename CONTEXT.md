@@ -25,10 +25,25 @@ _Avoid_: price, pay rate
 The time between a Cleaner's clock-in and clock-out on an appointment. An admin can correct it. Clocked time is what Pay rate is multiplied by.
 
 **Time sheet**:
-One Cleaner's sessions for a date range, placed by each appointment's scheduled date, with total and average Clocked time.
+One Cleaner's sessions for a date range, placed by each appointment's scheduled date, with total and average Clocked time. An admin's Time sheet defaults to a week running Monday to Sunday.
 
 **Open shift**:
 A session with a clock-in but no clock-out. It appears on a Time sheet as in progress, but never counts toward totals or pay.
+
+**Clock correction**:
+An admin changing a session's clocks after the fact: editing a time, closing an Open shift, entering the clocks for an assigned Cleaner who never clocked in, or clearing a session's clocks. Every one is kept for good with who, when, the old and new times, and an optional reason, and the session is marked edited. Entering clocks for a Cleaner who never clocked in needs a clock-out once the visit is an hour past its scheduled end. It counts exactly like a clock the Cleaner made, so it can move Appointment status. It is refused on a cancelled visit, on a Cleaner no longer on the crew, if it would overlap another of the Cleaner's sessions, or on a visit in a paid Pay run, but allowed on a Manual completion.
+_Avoid_: correction (that is a Pay run fix), override, manual session
+
+**Time sheet flag**:
+A warning an admin sees on a session that may need fixing before pay. The problem flags are an Open shift still open an hour after the visit's scheduled end, a Missing clock, and an Odd duration that hasn't been acknowledged. A session with a Clock correction is marked edited, but that is not a problem. Flags never stop a Pay run. Cleaners don't see them.
+_Avoid_: alert, issue, error
+
+**Missing clock**:
+An assigned Cleaner who never clocked in on a visit an hour past its scheduled end. A Manual completion does not clear it, because the visit pays only what was clocked. Cancelled visits never have one.
+_Avoid_: no-show (it may be a forgotten clock-in)
+
+**Odd duration**:
+A closed session whose Clocked time is under half or over one and a half times the visit's scheduled length. An admin can acknowledge it with a note; the acknowledgement lapses if the clock times change.
 
 **Visit add-on**:
 An extra amount paid to one Cleaner for one appointment, of kind gasoline, extra, or tip. Gasoline and extra are business money; a tip is client money. None appear on an invoice. Each is paid once, by the first Pay run after it is entered.
@@ -50,7 +65,7 @@ An extra on a Cleaner's next Pay run, positive or negative, that fixes a mistake
 ### Appointments
 
 **Appointment status**:
-Follows the Cleaners' clocks: scheduled until someone clocks in, in progress while anyone has clocked in and not every assigned Cleaner has clocked out, completed once every assigned Cleaner has clocked out. Cancelled is set by an admin and ignores the clocks. A completed or cancelled appointment refuses further clocks until an admin reopens it.
+Follows the Cleaners' clocks: scheduled until someone clocks in, in progress while anyone who clocked in has not yet clocked out, completed once every Cleaner who clocked in has clocked out (a Cleaner who never clocks in does not hold it open). Cancelled is set by an admin and ignores the clocks. A completed or cancelled appointment refuses further clocks until an admin reopens it.
 
 **Manual completion**:
 An admin marking an appointment completed regardless of its clocks. It holds until undone. Hours on it are only what was clocked.

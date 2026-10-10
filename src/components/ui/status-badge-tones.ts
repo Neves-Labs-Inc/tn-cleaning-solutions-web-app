@@ -1,6 +1,9 @@
 // Plain .ts so node:test can load it; status-badge.tsx re-exports these, keeping
 // the status-to-tone mapping next to the component (DESIGN.md §3.2, §10).
+import { CheckCircle2, CircleDashed, Clock, Hourglass, Pencil } from "lucide-react";
+
 import type { InvoiceEffectiveStatus, LineState } from '../../lib/invoices/view'
+import type { FlagKind, SessionView } from "../../lib/time-sheets/session-view";
 import type { StatusBadgeSpec } from './status-badge'
 
 const INVOICE_STATUS_BADGES: Record<InvoiceEffectiveStatus, StatusBadgeSpec> = {
@@ -43,4 +46,53 @@ export function invoiceFlagBadges(row: InvoiceFlagRow): StatusBadgeSpec[] {
     row.has_unpriced ? lineStateBadge('unpriced') : null,
   ]
   return badges.filter((badge) => badge !== null)
+}
+
+type TimeSheetBadgeView = Pick<
+  SessionView,
+  | "state"
+  | "flags"
+  | "oddRatioPercent"
+  | "isAcknowledged"
+  | "isManualCompletion"
+  | "isEdited"
+  | "fixAction"
+>;
+
+// An upcoming session is offered Add session once its scheduled start passes (fixAction "add"),
+// so from then on the badge stops promising a future visit.
+function upcomingBadge(view: TimeSheetBadgeView): StatusBadgeSpec | null {
+  if (view.state !== "upcoming") return null;
+
+  const label = view.fixAction === "add" ? "Not clocked in" : "Upcoming";
+  return { tone: "info", label };
+}
+
+// The per-kind tone, icon and plain label; the Odd duration pill adds its ratio in a session row.
+export const TIME_SHEET_FLAG_SPECS: Record<FlagKind, StatusBadgeSpec> = {
+  open_shift: { tone: "warning", label: "Open shift", icon: Clock },
+  missing_clock: { tone: "danger", label: "Missing clock", icon: CircleDashed },
+  odd_duration: { tone: "warning", label: "Odd duration", icon: Hourglass },
+};
+
+function timeSheetFlagBadge(flag: FlagKind, oddRatioPercent: number | null): StatusBadgeSpec {
+  const spec = TIME_SHEET_FLAG_SPECS[flag];
+  return flag === "odd_duration" ? { ...spec, label: `Odd duration · ${oddRatioPercent}%` } : spec;
+}
+
+// The pills a session wears, in fixed order: its flags, In progress or Upcoming (Not clocked in
+// once due), an acknowledged Odd duration, Manual completion, Edited. Admin screens only:
+// Cleaners never see flags.
+export function timeSheetFlagBadges(view: TimeSheetBadgeView): StatusBadgeSpec[] {
+  const badges: Array<StatusBadgeSpec | null> = [
+    ...view.flags.map((flag) => timeSheetFlagBadge(flag, view.oddRatioPercent)),
+    view.state === "in_progress" ? { tone: "success", label: "In progress" } : null,
+    upcomingBadge(view),
+    view.isAcknowledged
+      ? { tone: "neutral", label: "Odd duration · OK'd", icon: CheckCircle2 }
+      : null,
+    view.isManualCompletion ? { tone: "neutral", label: "Manual completion" } : null,
+    view.isEdited ? { tone: "neutral", label: "Edited", icon: Pencil } : null,
+  ];
+  return badges.filter((badge) => badge !== null);
 }
