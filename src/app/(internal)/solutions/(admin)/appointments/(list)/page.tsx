@@ -8,6 +8,7 @@ import PageHeader from '@/components/ui/page-header'
 import { listFilterOptions } from '@/lib/appointments/filter-options'
 import { resolveFilterOptions, type FilterOptions } from '@/lib/appointments/filters'
 import { listMonthAppointments } from '@/lib/appointments/month-appointments'
+import { listNeedsCompletion, type NeedsCompletionAppointment } from '@/lib/appointments/needs-completion'
 import {
   parseAppointmentsQuery,
   summarizeOverview,
@@ -36,6 +37,7 @@ type Db = Awaited<ReturnType<typeof createClient>>
 type ScreenData = {
   appointments: ScheduleAppointment[]
   needsBilling: NeedsBillingAppointment[]
+  needsCompletion: NeedsCompletionAppointment[]
   methods: PaymentMethod[]
   filterOptions: FilterOptions
 }
@@ -52,13 +54,14 @@ async function loadScreen(db: Db, query: AppointmentsQuery, now: Date): Promise<
   let data: ScreenData | null
 
   try {
-    const [appointments, needsBilling, methods, filterOptions] = await Promise.all([
+    const [appointments, needsBilling, needsCompletion, methods, filterOptions] = await Promise.all([
       listMonthAppointments(db, query, now),
       listNeedsBilling(db),
+      listNeedsCompletion(db, now),
       query.view === 'needs-billing' ? loadMethods(db) : Promise.resolve([]),
       listFilterOptions(db),
     ])
-    data = { appointments, needsBilling, methods, filterOptions }
+    data = { appointments, needsBilling, needsCompletion, methods, filterOptions }
   } catch (thrown) {
     console.error('Error loading appointments:', query, thrown)
     data = null
@@ -94,10 +97,11 @@ export default async function AppointmentsPage({ searchParams }: AppointmentsPag
         <AppointmentsViewToggle
           // A client or job the selects can't show reads as All, so it never filters unseen.
           query={resolveFilterOptions(parsedQuery, data.filterOptions)}
-          overview={summarizeOverview(data.needsBilling, data.appointments)}
+          overview={summarizeOverview(data.needsBilling, data.appointments, data.needsCompletion)}
           appointments={data.appointments}
           // Only the Needs billing view lists them; the tile above already has its total.
           needsBilling={parsedQuery.view === 'needs-billing' ? data.needsBilling : []}
+          needsCompletion={parsedQuery.view === 'needs-completion' ? data.needsCompletion : []}
           methods={data.methods}
           filterOptions={data.filterOptions}
           businessDate={businessDate}

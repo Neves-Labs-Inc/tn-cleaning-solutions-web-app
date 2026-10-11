@@ -1,5 +1,6 @@
 import type { NeedsBillingAppointment } from '../invoices/payment-state-queries.ts'
 import type { PaymentClaim, PaymentState } from '../invoices/payment-state.ts'
+import type { NeedsCompletionAppointment } from './needs-completion.ts'
 import { getGraceEnd } from '../time-sheets/session-view.ts'
 import {
   appointmentsFilterEntries,
@@ -50,9 +51,9 @@ export function isNotClocked(
 // Unpriced appointments count toward count and unpricedCount, never the money.
 export type TileTotal = { totalCents: number; count: number; unpricedCount: number }
 
-export type Overview = { needsBilling: TileTotal; billed: TileTotal; paid: TileTotal }
+export type Overview = { needsCompletion: TileTotal; needsBilling: TileTotal; billed: TileTotal; paid: TileTotal }
 
-export type AppointmentsView = 'schedule' | 'needs-billing' | 'billed' | 'paid'
+export type AppointmentsView = 'schedule' | 'needs-completion' | 'needs-billing' | 'billed' | 'paid'
 
 export type AppointmentsQuery = AppointmentsFilter & {
   view: AppointmentsView
@@ -71,7 +72,7 @@ type AppointmentsSearchParams = AppointmentsFilterParams & {
 }
 
 const APPOINTMENTS_PATH = '/solutions/appointments'
-const FILTERED_VIEWS: AppointmentsView[] = ['needs-billing', 'billed', 'paid']
+const FILTERED_VIEWS: AppointmentsView[] = ['needs-completion', 'needs-billing', 'billed', 'paid']
 const MIN_YEAR = 2000
 const MAX_YEAR = 2100
 const MONTHS_IN_YEAR = 12
@@ -139,12 +140,14 @@ function totalInState(appointments: ScheduleAppointment[], state: PaymentState):
   )
 }
 
-// Needs billing covers every month; Billed and Paid cover the selected month.
+// Needs billing and Needs completion cover every month; Billed and Paid cover the selected month.
 export function summarizeOverview(
   needsBilling: NeedsBillingAppointment[],
-  monthAppointments: ScheduleAppointment[]
+  monthAppointments: ScheduleAppointment[],
+  needsCompletion: NeedsCompletionAppointment[]
 ): Overview {
   return {
+    needsCompletion: totalPrices(needsCompletion.map((appointment) => appointment.priceCents)),
     needsBilling: totalPrices(needsBilling.map((appointment) => appointment.livePriceCents)),
     billed: totalInState(monthAppointments, 'billed'),
     paid: totalInState(monthAppointments, 'paid'),
@@ -153,21 +156,21 @@ export function summarizeOverview(
 
 export type TileScope = 'all months' | 'this month'
 
-// "14 appointments · all months · 2 Unpriced". Only Needs billing names its Unpriced ones.
+// "14 appointments · all months · 2 Unpriced". Only the all-months tiles name their Unpriced ones.
 export function tileCaption(count: number, scope: TileScope, unpricedCount: number = 0): string {
   const noun = count === 1 ? 'appointment' : 'appointments'
   const unpriced = unpricedCount > 0 ? ` · ${unpricedCount} Unpriced` : ''
   return `${count} ${noun} · ${scope}${unpriced}`
 }
 
-// The month's appointments a schedule view shows, narrowed by the filters. Needs billing lists every
-// month instead, so it shows none of these.
+// The month's appointments a schedule view shows, narrowed by the filters. Needs billing and Needs
+// completion list every month instead, so they show none of these.
 export function appointmentsInView(
   monthAppointments: ScheduleAppointment[],
   query: AppointmentsQuery
 ): ScheduleAppointment[] {
   const { view, showCancelled } = query
-  if (view === 'needs-billing') return []
+  if (view === 'needs-billing' || view === 'needs-completion') return []
 
   return monthAppointments.filter(
     (appointment) =>

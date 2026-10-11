@@ -1,6 +1,7 @@
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatTileSkeleton } from '@/components/ui/stat-tile'
 
+const TILES = 4
 const PHONE_BANDS = 2
 const ROWS_PER_BAND = 3
 const CALENDAR_CELLS = 35
@@ -18,10 +19,10 @@ export default function AppointmentsLoading() {
         <Skeleton className="h-11 w-full sm:w-44" />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTileSkeleton icon caption fitValue className="col-span-2 sm:col-span-1" />
-        <StatTileSkeleton icon caption fitValue />
-        <StatTileSkeleton icon caption fitValue />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {Array.from({ length: TILES }, (_, tile) => (
+          <StatTileSkeleton key={tile} icon caption fitValue />
+        ))}
       </div>
 
       <div className="space-y-3">

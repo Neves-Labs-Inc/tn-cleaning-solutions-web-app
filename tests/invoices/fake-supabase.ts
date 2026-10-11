@@ -37,6 +37,8 @@ export const MAX_IN_VALUES = 250
 // an object embed (`!inner`) it filters the parent row.
 // `tables` is live: a test can change it between calls to simulate a concurrent write.
 // `failingTables` makes every read of those tables answer with an error, like a dropped connection.
+// `.update(values)` takes the same filters, writes the values into the matching rows and, like
+// `.select()` after it, answers with the updated rows.
 function isNullish(value: unknown): boolean {
   return value === null || value === undefined || (Array.isArray(value) && value.length === 0)
 }
@@ -69,6 +71,7 @@ export function createFakeSupabase(
     let window: { from: number; to: number } | null = null
     let isUrlTooLong = false
     let isSingle = false
+    let updateValues: Row | null = null
 
     // A dotted column on an array embed filters the embed; anything else filters the row.
     function addFilter(column: string, test: (value: unknown) => boolean) {
@@ -85,6 +88,10 @@ export function createFakeSupabase(
 
     const builder = {
       select: () => builder,
+      update: (values: Row) => {
+        updateValues = values
+        return builder
+      },
       in: (column: string, values: unknown[]) => {
         isUrlTooLong = isUrlTooLong || values.length > MAX_IN_VALUES
         return addFilter(column, (value) => values.includes(value))
@@ -121,6 +128,13 @@ export function createFakeSupabase(
         if (isUrlTooLong) {
           const error = { message: 'URI too long', details: null, hint: null, code: '414' }
           return Promise.resolve({ data: null, error }).then(resolve)
+        }
+
+        if (updateValues) {
+          const changes = updateValues
+          const updated = (tables[table] ?? []).filter((row) => filters.every((filter) => filter(row)))
+          updated.forEach((row) => Object.assign(row, changes))
+          return Promise.resolve({ data: isSingle ? (updated[0] ?? null) : updated, error: null }).then(resolve)
         }
 
         const matching = (tables[table] ?? [])

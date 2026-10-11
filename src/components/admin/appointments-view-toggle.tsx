@@ -27,6 +27,7 @@ import {
   type Overview,
   type ScheduleAppointment,
 } from '@/lib/appointments/overview'
+import type { NeedsCompletionAppointment } from '@/lib/appointments/needs-completion'
 import type { PaymentMethod } from '@/lib/invoices/ledger'
 import type { NeedsBillingAppointment } from '@/lib/invoices/payment-state-queries'
 import { cn } from '@/lib/utils'
@@ -36,6 +37,7 @@ import AppointmentsFilters from './appointments-filters'
 import AppointmentsList from './appointments-list'
 import AppointmentsMonthNav from './appointments-month-nav'
 import AppointmentsNeedsBilling from './appointments-needs-billing'
+import AppointmentsNeedsCompletion from './appointments-needs-completion'
 import AppointmentsOverviewTiles from './appointments-overview-tiles'
 
 type AppointmentsViewToggleProps = {
@@ -45,6 +47,8 @@ type AppointmentsViewToggleProps = {
   appointments: ScheduleAppointment[]
   // Read only for the Needs billing view; empty otherwise.
   needsBilling: NeedsBillingAppointment[]
+  // Read only for the Needs completion view; empty otherwise.
+  needsCompletion: NeedsCompletionAppointment[]
   methods: PaymentMethod[]
   filterOptions: FilterOptions
   businessDate: string
@@ -163,12 +167,13 @@ function filterOf({ clientId, jobId, status }: AppointmentsQuery): AppointmentsF
 }
 
 // The overview tiles and the appointments card: the month's schedule (calendar on desktop, list everywhere), filtered to
-// Billed or Paid when that tile is active, or the Needs billing list.
+// Billed or Paid when that tile is active, or the Needs billing or Needs completion list.
 export function AppointmentsViewToggle({
   query,
   overview,
   appointments,
   needsBilling,
+  needsCompletion,
   methods,
   filterOptions,
   businessDate,
@@ -181,6 +186,7 @@ export function AppointmentsViewToggle({
   const clientTriggerId = useId()
 
   const isNeedsBilling = query.view === 'needs-billing'
+  const isNeedsCompletion = query.view === 'needs-completion'
   const isStateView = query.view === 'billed' || query.view === 'paid'
   const visible = appointmentsInView(appointments, query)
   const isCalendar = layout === 'calendar'
@@ -240,7 +246,8 @@ export function AppointmentsViewToggle({
         <AppointmentsOverviewTiles overview={overview} query={query} />
       </div>
       <div className="space-y-3">
-        {isNeedsBilling ? null : (
+        {/* The Needs views list every month unfiltered for now. */}
+        {isNeedsBilling || isNeedsCompletion ? null : (
           <>
             <AppointmentsFilters
               filter={optimisticFilter}
@@ -265,6 +272,8 @@ export function AppointmentsViewToggle({
         >
           {isNeedsBilling ? (
             <AppointmentsNeedsBilling appointments={needsBilling} methods={methods} businessDate={businessDate} />
+          ) : isNeedsCompletion ? (
+            <AppointmentsNeedsCompletion appointments={needsCompletion} businessDate={businessDate} />
           ) : (
             <>
               <div className="flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between">
