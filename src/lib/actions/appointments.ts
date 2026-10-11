@@ -3,7 +3,12 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-import { hasSessionHistory, planCrewChange, planFutureVisitCleanup } from '@/lib/appointments/crew'
+import {
+  hasSessionHistory,
+  planCrewChange,
+  planFutureVisitCleanup,
+  preservedSeriesDates,
+} from '@/lib/appointments/crew'
 import { toAppointmentErrorMessage } from '@/lib/appointments/errors'
 import {
   canCancel,
@@ -14,7 +19,6 @@ import {
   completedDateError,
   type AppointmentStatus,
 } from '@/lib/appointments/lifecycle'
-import { LIVE_CLAIM_EMBED } from '@/lib/invoices/unbilled-query'
 import { parseDollarsToCents } from '@/lib/pricing/money'
 import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -921,15 +925,14 @@ export async function updateAppointment(
           return { success: false, error: toAppointmentErrorMessage(recurrenceUpdateError, 'updateAppointment') }
         }
 
-        // Every later appointment, Protected or not, with its Live claim and every assignment
-        // (archived or not, so a removed Cleaner's hours keep their appointment alive).
+        // Every later appointment, Protected or not, with every invoice line (released or
+        // Cancelled ones too, since deleting the appointment would cascade them off their invoice)
+        // and every assignment (archived or not, so a removed Cleaner's hours keep it alive).
         const { data: laterAppointments, error: laterAppointmentsError } = await adminClient
           .from('appointments')
           .select(
-            `id, scheduled_date, status, manually_completed, appointment_employees(clocked_in_at, clocked_out_at, clock_corrections(count), odd_duration_acknowledgements(count)), ${LIVE_CLAIM_EMBED}`
+            'id, scheduled_date, status, manually_completed, appointment_employees(clocked_in_at, clocked_out_at, clock_corrections(count), odd_duration_acknowledgements(count)), invoice_lines:invoice_appointments(appointment_id)'
           )
-          .eq('live.is_archived', false)
-          .is('live.cancelled_at', null)
           .eq('recurrence_series_id', recurrenceSeriesId)
           .gt('scheduled_date', appointment.scheduled_date)
           .eq('is_archived', false)
@@ -944,7 +947,7 @@ export async function updateAppointment(
             scheduled_date: row.scheduled_date,
             status: row.status,
             manually_completed: row.manually_completed,
-            hasLiveClaim: row.live.length > 0,
+            hasInvoiceLine: row.invoice_lines.length > 0,
             assignments: row.appointment_employees.map((assignment) => ({
               clocked_in_at: assignment.clocked_in_at,
               clocked_out_at: assignment.clocked_out_at,
@@ -956,7 +959,7 @@ export async function updateAppointment(
 
         // Delete before regenerating: if the delete is refused (a RESTRICT audit FK), nothing has
         // been inserted yet. The function re-checks under lock, so an appointment clocked into or
-        // claimed since the read survives, and its date is kept instead of getting a twin.
+        // invoiced since the read survives, and its date is kept instead of getting a twin.
         let deletedIds = new Set<string>()
         if (cleanupPlan.deleteIds.length > 0) {
           const { data: deletedRows, error: deleteLaterError } = await adminClient.rpc(
@@ -970,13 +973,7 @@ export async function updateAppointment(
           deletedIds = new Set(deletedRows ?? [])
         }
 
-        const plannedDeleteIds = new Set(cleanupPlan.deleteIds)
-        const preservedDates = new Set([
-          ...cleanupPlan.preservedDates,
-          ...(laterAppointments ?? [])
-            .filter((row) => plannedDeleteIds.has(row.id) && !deletedIds.has(row.id))
-            .map((row) => row.scheduled_date),
-        ])
+        const preservedDates = preservedSeriesDates(cleanupPlan, laterAppointments ?? [], deletedIds)
 
         const nextDate = formatDate(addDays(parseDate(appointment.scheduled_date), 1))
         const recurrenceDates = generateRecurrenceDates(

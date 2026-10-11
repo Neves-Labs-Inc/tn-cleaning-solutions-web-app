@@ -79,7 +79,8 @@ export type FutureVisit = {
   scheduled_date: string;
   status: AppointmentStatus;
   manually_completed: boolean;
-  hasLiveClaim: boolean;
+  // Any invoice_appointments row: a Live claim, a Cancelled line, or a released one.
+  hasInvoiceLine: boolean;
   assignments: SessionHistoryFacts[];
 };
 
@@ -89,13 +90,14 @@ export type FutureVisitCleanupPlan = {
   preservedDates: string[];
 };
 
-// A Series edit never deletes a Protected appointment (CONTEXT.md): deleting one on a Live claim
-// would cascade its line off the invoice, and no hours record is ever deleted.
+// A Series edit never deletes a Protected appointment (CONTEXT.md): deleting one with any invoice
+// line would cascade that line off its invoice, even a void or issued one, and erase what the
+// client was billed. No hours record is ever deleted either.
 function isProtected(visit: FutureVisit): boolean {
   return (
     visit.status !== "scheduled" ||
     visit.manually_completed ||
-    visit.hasLiveClaim ||
+    visit.hasInvoiceLine ||
     visit.assignments.some(hasSessionHistory)
   );
 }
@@ -111,4 +113,18 @@ export function planFutureVisitCleanup(
       .filter(isProtected)
       .map((visit) => visit.scheduled_date),
   };
+}
+
+// The dates regeneration must skip. delete_unprotected_series_appointments re-checks under lock,
+// so a planned delete it skipped (clocked into or invoiced since the read) keeps its date too.
+export function preservedSeriesDates(
+  plan: FutureVisitCleanupPlan,
+  laterAppointments: Pick<FutureVisit, "id" | "scheduled_date">[],
+  deletedIds: ReadonlySet<string>,
+): Set<string> {
+  const plannedDeleteIds = new Set(plan.deleteIds);
+  const skippedDates = laterAppointments
+    .filter((visit) => plannedDeleteIds.has(visit.id) && !deletedIds.has(visit.id))
+    .map((visit) => visit.scheduled_date);
+  return new Set([...plan.preservedDates, ...skippedDates]);
 }

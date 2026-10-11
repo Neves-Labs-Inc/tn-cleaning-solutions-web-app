@@ -84,7 +84,7 @@ A set of recurring appointments for one client and Job, generated from a recurre
 _Avoid_: recurrence, recurring appointment
 
 **Protected appointment**:
-An appointment in a Series that a Series edit never changes: completed, in progress, cancelled, manually completed, clocked into, or on a Live claim.
+An appointment in a Series that a Series edit never changes: completed, in progress, cancelled, manually completed, clocked into, or on any invoice line (a Live claim, a Cancelled line, or a line released by a void or an archived draft).
 _Avoid_: protected visit
 
 **This and following**:

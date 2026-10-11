@@ -5,6 +5,7 @@ import {
   hasSessionHistory,
   planCrewChange,
   planFutureVisitCleanup,
+  preservedSeriesDates,
   type ExistingAssignment,
   type FutureVisit,
 } from "../../src/lib/appointments/crew.ts";
@@ -264,7 +265,7 @@ describe("planFutureVisitCleanup", () => {
     return {
       status: "scheduled",
       manually_completed: false,
-      hasLiveClaim: false,
+      hasInvoiceLine: false,
       assignments: [],
       ...overrides,
     };
@@ -331,9 +332,9 @@ describe("planFutureVisitCleanup", () => {
     assert.deepEqual(plan, { deleteIds: [], preservedDates: ["2026-10-20"] });
   });
 
-  it("keeps a scheduled appointment on a Live claim", () => {
+  it("keeps a scheduled appointment with an invoice line and preserves its date", () => {
     const plan = planFutureVisitCleanup([
-      laterAppointment({ id: "visit-1", scheduled_date: "2026-10-20", hasLiveClaim: true }),
+      laterAppointment({ id: "visit-1", scheduled_date: "2026-10-20", hasInvoiceLine: true }),
       laterAppointment({ id: "visit-2", scheduled_date: "2026-10-27" }),
     ]);
 
@@ -381,5 +382,43 @@ describe("planFutureVisitCleanup", () => {
     ]);
 
     assert.deepEqual(plan, { deleteIds: [], preservedDates: ["2026-10-20"] });
+  });
+});
+
+describe("preservedSeriesDates", () => {
+  const laterAppointments = [
+    { id: "visit-1", scheduled_date: "2026-10-20" },
+    { id: "visit-2", scheduled_date: "2026-10-27" },
+    { id: "visit-3", scheduled_date: "2026-11-03" },
+  ];
+
+  it("keeps the date of a planned delete the function skipped", () => {
+    const dates = preservedSeriesDates(
+      { deleteIds: ["visit-1", "visit-2"], preservedDates: [] },
+      laterAppointments,
+      new Set(["visit-2"]),
+    );
+
+    assert.deepEqual([...dates], ["2026-10-20"]);
+  });
+
+  it("frees the date of every planned delete that went through", () => {
+    const dates = preservedSeriesDates(
+      { deleteIds: ["visit-1", "visit-2"], preservedDates: [] },
+      laterAppointments,
+      new Set(["visit-1", "visit-2"]),
+    );
+
+    assert.deepEqual([...dates], []);
+  });
+
+  it("keeps the dates the plan already preserved", () => {
+    const dates = preservedSeriesDates(
+      { deleteIds: ["visit-2"], preservedDates: ["2026-11-03"] },
+      laterAppointments,
+      new Set(),
+    );
+
+    assert.deepEqual([...dates].sort(), ["2026-10-27", "2026-11-03"]);
   });
 });
