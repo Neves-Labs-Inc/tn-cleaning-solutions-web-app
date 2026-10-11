@@ -822,6 +822,16 @@ export type Database = {
           draft_count: number
         }[]
       }
+      invoice_mark_paid: {
+        Args: {
+          p_client_id: string
+          p_lines: Json
+          p_paid_date: string | null
+          p_method: string
+          p_reference: string | null
+        }
+        Returns: Json
+      }
       invoice_record_payment: {
         Args: { p_invoice_id: string; p_paid_date: string | null; p_method: string; p_reference: string | null }
         Returns: undefined

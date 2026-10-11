@@ -203,3 +203,69 @@ test('bulkIssue keeps going and reports each draft whose read failed', async () 
     },
   })
 })
+
+test('markPaid sends the lines, paid date, method and reference to invoice_mark_paid and returns the new invoice', async () => {
+  const { ledger, rpcCalls } = setup({ appointments: [], invoice_appointments: [] }, () =>
+    success({ invoice_id: 'inv-9', invoice_number: 'INV-007-SMI2026' })
+  )
+
+  const result = await ledger.markPaid({
+    clientId: CLIENT_ID,
+    lines: [
+      { appointmentId: 'appt-1', amountCents: 9000 },
+      { appointmentId: 'appt-2', amountCents: 0 },
+    ],
+    paidDate: '2026-10-10',
+    method: 'Cash',
+    reference: 'receipt 12',
+  })
+
+  assert.deepEqual(result, { ok: true, data: { invoiceId: 'inv-9', invoiceNumber: 'INV-007-SMI2026' } })
+  assert.deepEqual(rpcCalls, [
+    {
+      name: 'invoice_mark_paid',
+      args: {
+        p_client_id: CLIENT_ID,
+        p_lines: [
+          { appointment_id: 'appt-1', billed_amount_cents: 9000 },
+          { appointment_id: 'appt-2', billed_amount_cents: 0 },
+        ],
+        p_paid_date: '2026-10-10',
+        p_method: 'Cash',
+        p_reference: 'receipt 12',
+      },
+    },
+  ])
+})
+
+test('markPaid returns a refusal by its code, in the appointment wording', async () => {
+  const { ledger } = setup({ appointments: [], invoice_appointments: [] }, () => refusal('invoice_issued'))
+
+  const result = await ledger.markPaid({
+    clientId: CLIENT_ID,
+    lines: [{ appointmentId: 'appt-1', amountCents: 9000 }],
+    paidDate: null,
+    method: 'Cash',
+    reference: null,
+  })
+
+  assert.deepEqual(result, { ok: false, code: 'invoice_issued', message: messageFor('invoice_issued') })
+  assert.match(result.ok ? '' : result.message, /appointment/)
+})
+
+test('markPaid keeps the raw message of an error that is not a refusal', async () => {
+  const { ledger } = setup({ appointments: [], invoice_appointments: [] }, () => ({
+    data: null,
+    error: { message: 'connection reset', details: null, hint: null, code: '08006' },
+  }))
+
+  const result = await ledger.markPaid({
+    clientId: CLIENT_ID,
+    lines: [{ appointmentId: 'appt-1', amountCents: 9000 }],
+    paidDate: null,
+    method: 'Cash',
+    reference: null,
+  })
+
+  assert.deepEqual(result, { ok: false, code: 'unknown', message: 'connection reset' })
+})

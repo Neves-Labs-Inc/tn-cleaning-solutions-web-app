@@ -18,6 +18,10 @@ export type CreateDraftInput = DraftInput & { clientId: string; appointmentIds: 
 // details null leaves the stored due date and notes alone; only the details form's Save sends them.
 export type UpdateDraftInput = { addAppointmentIds: string[]; removeAppointmentIds: string[]; details: DraftInput | null }
 export type PaymentInput = { paidDate: string | null; method: string; reference: string | null }
+export type MarkPaidInput = PaymentInput & {
+  clientId: string
+  lines: Array<{ appointmentId: string; amountCents: number }>
+}
 export type PaymentMethod = { id: string; name: string; is_hidden: boolean; sort_order: number }
 export type BulkIssueOutcome = {
   issued: string[]
@@ -25,6 +29,7 @@ export type BulkIssueOutcome = {
 }
 
 type Logger = { warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
+type MarkPaidResult = { invoice_id: string; invoice_number: string }
 type BilledLine = {
   appointment_id: string
   billed_amount_cents: number
@@ -134,6 +139,23 @@ export class InvoiceLedger {
       p_reference: payment.reference,
     })
     return this.settle('recordPayment', { invoiceId }, error, null)
+  }
+
+  // Mark paid: one new invoice, issued and paid at once, for appointments that were never invoiced
+  // or sat on a draft. The caller prices the lines; SQL never recomputes them.
+  async markPaid(input: MarkPaidInput): Promise<LedgerResult<{ invoiceId: string; invoiceNumber: string }>> {
+    const { data, error } = await this.db.rpc('invoice_mark_paid', {
+      p_client_id: input.clientId,
+      p_lines: input.lines.map((line) => ({ appointment_id: line.appointmentId, billed_amount_cents: line.amountCents })),
+      p_paid_date: input.paidDate,
+      p_method: input.method,
+      p_reference: input.reference,
+    })
+    const created = data as MarkPaidResult | null
+    return this.settle('markPaid', { clientId: input.clientId }, error, {
+      invoiceId: created?.invoice_id ?? '',
+      invoiceNumber: created?.invoice_number ?? '',
+    })
   }
 
   async updatePayment(invoiceId: string, payment: PaymentInput): Promise<LedgerResult<null>> {
