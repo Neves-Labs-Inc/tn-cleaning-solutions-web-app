@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { SearchableMultiSelect } from '@/components/ui/searchable-multi-select'
 import {
@@ -169,6 +170,7 @@ export function AppointmentForm({
             </Label>
             <input type="hidden" name="client_id" value={selectedClientId} />
             <SearchableSelect
+              id="client_id"
               options={clientOptions}
               value={selectedClientId}
               onValueChange={handleClientChange}
@@ -185,20 +187,20 @@ export function AppointmentForm({
             <Label htmlFor="location_id" className="text-sm font-medium text-neutral-700">
               Location
             </Label>
-            <select
+            <NativeSelect
               id="location_id"
               name="location_id"
               value={selectedLocationId}
               onChange={(event) => setSelectedLocationId(event.target.value)}
-              className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="w-full"
             >
-              <option value="">No location</option>
+              <NativeSelectOption value="">No location</NativeSelectOption>
               {visibleLocations.map((location) => (
-                <option key={location.id} value={location.id}>
+                <NativeSelectOption key={location.id} value={location.id}>
                   {location.label} - {location.address}
-                </option>
+                </NativeSelectOption>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         </div>
 
@@ -206,23 +208,23 @@ export function AppointmentForm({
           <Label htmlFor="job_id" className="text-sm font-medium text-neutral-700">
             Job
           </Label>
-          <select
+          <NativeSelect
             id="job_id"
             name="job_id"
             required
             value={selectedJobId}
             onChange={(event) => setSelectedJobId(event.target.value)}
-            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="w-full"
           >
-            <option value="" disabled>
+            <NativeSelectOption value="" disabled>
               Select job
-            </option>
+            </NativeSelectOption>
             {jobs.map((job) => (
-              <option key={job.id} value={job.id}>
+              <NativeSelectOption key={job.id} value={job.id}>
                 {job.name}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
+          </NativeSelect>
           {rateHint ? <p className="text-xs text-neutral-500">{rateHint}</p> : null}
           {'fieldErrors' in state && state.fieldErrors?.job_id ? (
             <p className="text-xs text-red-600">{state.fieldErrors.job_id}</p>
@@ -240,7 +242,6 @@ export function AppointmentForm({
               type="date"
               required
               defaultValue={appointment?.scheduled_date ?? defaultDate ?? ''}
-              className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
             />
             {'fieldErrors' in state && state.fieldErrors?.scheduled_date ? (
               <p className="text-xs text-red-600">{state.fieldErrors.scheduled_date}</p>
@@ -257,7 +258,6 @@ export function AppointmentForm({
               type="time"
               required
               defaultValue={appointment?.scheduled_start_time?.slice(0, 5) ?? ''}
-              className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
             />
             {'fieldErrors' in state && state.fieldErrors?.scheduled_start_time ? (
               <p className="text-xs text-red-600">{state.fieldErrors.scheduled_start_time}</p>
@@ -274,7 +274,6 @@ export function AppointmentForm({
               type="time"
               required
               defaultValue={appointment?.scheduled_end_time?.slice(0, 5) ?? ''}
-              className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
             />
             {'fieldErrors' in state && state.fieldErrors?.scheduled_end_time ? (
               <p className="text-xs text-red-600">{state.fieldErrors.scheduled_end_time}</p>
@@ -298,7 +297,6 @@ export function AppointmentForm({
                   ? (appointment.price_override_cents / 100).toFixed(2)
                   : ''
               }
-              className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
               placeholder="Leave blank to bill this client's hourly rate for the scheduled time"
             />
             {'fieldErrors' in state && state.fieldErrors?.price_override ? (
@@ -311,11 +309,14 @@ export function AppointmentForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label className="text-sm font-medium text-neutral-700">Assigned Employees</Label>
+          <Label htmlFor="employee_ids" className="text-sm font-medium text-neutral-700">
+            Assigned Employees
+          </Label>
           {selectedEmployeeIds.map((id) => (
             <input key={id} type="hidden" name="employee_ids" value={id} />
           ))}
           <SearchableMultiSelect
+            id="employee_ids"
             options={employeeOptions}
             value={selectedEmployeeIds}
             onValueChange={setSelectedEmployeeIds}
@@ -333,7 +334,7 @@ export function AppointmentForm({
             id="notes"
             name="notes"
             defaultValue={appointment?.notes ?? ''}
-            className="min-h-28 rounded-xl border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-950 shadow-sm"
+            className="min-h-28"
           />
         </div>
 
@@ -356,17 +357,17 @@ export function AppointmentForm({
                   <Label htmlFor="recurrence_frequency" className="text-sm font-medium text-neutral-700">
                     Frequency
                   </Label>
-                  <select
+                  <NativeSelect
                     id="recurrence_frequency"
                     name="recurrence_frequency"
                     defaultValue="weekly"
-                    className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    className="w-full"
                   >
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="biweekly">Biweekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
+                    <NativeSelectOption value="daily">Daily</NativeSelectOption>
+                    <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
+                    <NativeSelectOption value="biweekly">Biweekly</NativeSelectOption>
+                    <NativeSelectOption value="monthly">Monthly</NativeSelectOption>
+                  </NativeSelect>
                 </div>
 
                 <div className="space-y-1.5">
@@ -377,7 +378,6 @@ export function AppointmentForm({
                     id="recurrence_end_date"
                     name="recurrence_end_date"
                     type="date"
-                    className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
                   />
                 </div>
 
@@ -391,7 +391,6 @@ export function AppointmentForm({
                     type="number"
                     min="1"
                     step="1"
-                    className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
                     placeholder="Optional"
                   />
                 </div>
@@ -464,18 +463,18 @@ export function AppointmentForm({
                   <Label htmlFor="recurrence_frequency" className="text-sm font-medium text-neutral-700">
                     Frequency
                   </Label>
-                  <select
+                  <NativeSelect
                     id="recurrence_frequency"
                     name="recurrence_frequency"
                     defaultValue={recurrenceSeries.frequency}
                     required={showRecurringEditFields}
-                    className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    className="w-full"
                   >
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="biweekly">Biweekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
+                    <NativeSelectOption value="daily">Daily</NativeSelectOption>
+                    <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
+                    <NativeSelectOption value="biweekly">Biweekly</NativeSelectOption>
+                    <NativeSelectOption value="monthly">Monthly</NativeSelectOption>
+                  </NativeSelect>
                 </div>
 
                 <div className="space-y-1.5">
@@ -487,7 +486,6 @@ export function AppointmentForm({
                     name="recurrence_end_date"
                     type="date"
                     defaultValue={recurrenceSeries.end_date ?? ''}
-                    className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
                   />
                 </div>
 
@@ -502,7 +500,6 @@ export function AppointmentForm({
                     min="1"
                     step="1"
                     defaultValue={recurrenceSeries.max_occurrences ?? ''}
-                    className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
                     placeholder="Optional"
                   />
                 </div>
