@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
 
 import PaymentStatePill from '@/components/ui/payment-state-pill'
-import { appointmentStatusBadge } from '@/components/ui/status-badge'
+import { appointmentDisplayBadge, NOT_CLOCKED_BADGE } from '@/components/ui/status-badge'
 import type { ScheduleAppointment } from '@/lib/appointments/overview'
 import { cn } from '@/lib/utils'
 
@@ -17,9 +17,18 @@ type AppointmentsCalendarProps = {
   businessDate: string
 }
 
+// Warning text only for the Not clocked spec; every other status stays muted.
+const STATUS_TEXT_CLASSES = {
+  warning: 'text-status-warning-foreground',
+  default: 'text-muted-foreground',
+}
+
 const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 function CalendarEvent({ appointment }: { appointment: ScheduleAppointment }): React.ReactNode {
+  const status = appointmentDisplayBadge(appointment.status, appointment.isNotClocked)
+  const statusTextClass = status === NOT_CLOCKED_BADGE ? STATUS_TEXT_CLASSES.warning : STATUS_TEXT_CLASSES.default
+
   return (
     <Link
       href={`/solutions/appointments/${appointment.id}`}
@@ -34,7 +43,7 @@ function CalendarEvent({ appointment }: { appointment: ScheduleAppointment }): R
       </p>
       <p className="truncate text-muted-foreground">{appointment.clientName}</p>
       <div className="flex flex-wrap items-center gap-1">
-        <span className="text-xs text-muted-foreground">{appointmentStatusBadge(appointment.status).label}</span>
+        <span className={cn('text-xs', statusTextClass)}>{status.label}</span>
         <PaymentStatePill state={appointment.paymentState} className="h-5 max-w-full min-w-0 overflow-hidden px-1.5 text-xs [&>svg]:size-3" />
       </div>
     </Link>

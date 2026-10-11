@@ -7,7 +7,7 @@ import { paymentStateOf } from '../invoices/payment-state.ts'
 import { loadClaims } from '../invoices/payment-state-queries.ts'
 import { APPOINTMENT_PRICE_COLUMNS, type DisplayPrice, type PriceableAppointment } from '../pricing/index.ts'
 import type { AppointmentStatus } from './lifecycle.ts'
-import type { ScheduleAppointment } from './overview.ts'
+import { isNotClocked, type ScheduleAppointment } from './overview.ts'
 
 // The appointments screen's month read. Admin pages only: it reads client names and invoice
 // numbers. No `server-only` import, so node:test can load it; call it from server code only.
@@ -37,7 +37,8 @@ function displayedCents(display: DisplayPrice | undefined): number | null {
 // state. Prices and claims are read in batches, never per row.
 export async function listMonthAppointments(
   db: Db,
-  { month, year }: { month: number; year: number }
+  { month, year }: { month: number; year: number },
+  now: Date
 ): Promise<ScheduleAppointment[]> {
   const firstDay = new Date(year, month - 1, 1)
   const from = format(firstDay, 'yyyy-MM-dd')
@@ -74,6 +75,10 @@ export async function listMonthAppointments(
       priceCents: displayedCents(prices.get(row.id)?.display),
       paymentState: paymentStateOf({ status: row.status, completed_at: row.completed_at, claim }),
       claim,
+      isNotClocked: isNotClocked(
+        { status: row.status, scheduledDate: row.scheduled_date, endTime: row.scheduled_end_time },
+        now
+      ),
     }
   })
 }

@@ -6,6 +6,7 @@ import { createFakeSupabase } from '../invoices/fake-supabase.ts'
 
 const JOB_RATE_CENTS = 4000
 const OCTOBER_2026 = { month: 10, year: 2026 }
+const NOW = new Date('2026-10-11T12:00:00Z')
 
 type AppointmentSeed = {
   id: string
@@ -65,7 +66,7 @@ describe('listMonthAppointments', () => {
       invoice_appointments: [line('oct-9-paid', PAID, 9900), line('oct-7-on-draft', DRAFT, null)],
     })
 
-    const appointments = await listMonthAppointments(db, OCTOBER_2026)
+    const appointments = await listMonthAppointments(db, OCTOBER_2026, NOW)
 
     assert.deepEqual(appointments, [
       {
@@ -80,6 +81,7 @@ describe('listMonthAppointments', () => {
         priceCents: 12000,
         paymentState: 'billed',
         claim: { id: 'inv-draft', number: null, status: 'draft' },
+        isNotClocked: false,
       },
       {
         id: 'oct-7-afternoon',
@@ -93,6 +95,7 @@ describe('listMonthAppointments', () => {
         priceCents: 10000,
         paymentState: 'unbilled',
         claim: null,
+        isNotClocked: false,
       },
       {
         id: 'oct-9-paid',
@@ -106,6 +109,7 @@ describe('listMonthAppointments', () => {
         priceCents: 9900,
         paymentState: 'paid',
         claim: { id: 'inv-paid', number: 'INV-002-SMI2026', status: 'paid' },
+        isNotClocked: false,
       },
       {
         id: 'oct-20-upcoming',
@@ -119,6 +123,7 @@ describe('listMonthAppointments', () => {
         priceCents: null,
         paymentState: null,
         claim: null,
+        isNotClocked: false,
       },
     ])
   })
@@ -134,7 +139,7 @@ describe('listMonthAppointments', () => {
       ],
     })
 
-    const appointments = await listMonthAppointments(db, OCTOBER_2026)
+    const appointments = await listMonthAppointments(db, OCTOBER_2026, NOW)
 
     assert.deepEqual(
       appointments.map((row) => row.id),
@@ -149,7 +154,7 @@ describe('listMonthAppointments', () => {
       invoice_appointments: ids.map((id) => line(id, PAID, 12000)),
     })
 
-    const appointments = await listMonthAppointments(db, OCTOBER_2026)
+    const appointments = await listMonthAppointments(db, OCTOBER_2026, NOW)
 
     assert.equal(appointments.length, ids.length)
     assert.ok(appointments.every((row) => row.paymentState === 'paid'))

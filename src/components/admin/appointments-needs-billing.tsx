@@ -39,6 +39,7 @@ function toListRow(appointment: NeedsBillingAppointment): ScheduleAppointment {
     priceCents: appointment.livePriceCents,
     paymentState: 'unbilled',
     claim: null,
+    isNotClocked: false,
   }
 }
 

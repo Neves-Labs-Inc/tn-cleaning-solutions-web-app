@@ -10,8 +10,9 @@ import { BillingMismatchNote } from '@/components/invoices/visit-line-summary'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
-import StatusBadge, { appointmentStatusBadge } from '@/components/ui/status-badge'
+import StatusBadge, { appointmentDisplayBadge } from '@/components/ui/status-badge'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
+import { isNotClocked } from '@/lib/appointments/overview'
 import { loadAppointmentBilling } from '@/lib/invoices/appointment-billing'
 import {
   APPOINTMENT_PRICE_COLUMNS,
@@ -109,7 +110,17 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
     loadAppointmentBilling(supabase, appointment),
   ])
 
-  const statusBadge = appointmentStatusBadge(appointment.status)
+  const statusBadge = appointmentDisplayBadge(
+    appointment.status,
+    isNotClocked(
+      {
+        status: appointment.status,
+        scheduledDate: appointment.scheduled_date,
+        endTime: appointment.scheduled_end_time,
+      },
+      new Date()
+    )
+  )
 
   return (
     <div className="space-y-6">
@@ -131,7 +142,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
             {appointment.scheduled_start_time.slice(0, 5)} - {appointment.scheduled_end_time.slice(0, 5)}
           </p>
 
-          <StatusBadge tone={statusBadge.tone}>{statusBadge.label}</StatusBadge>
+          <StatusBadge tone={statusBadge.tone} icon={statusBadge.icon}>{statusBadge.label}</StatusBadge>
 
           <CompletedByAdminHint status={appointment.status} manuallyCompleted={appointment.manually_completed} />
         </div>

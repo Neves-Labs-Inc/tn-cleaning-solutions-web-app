@@ -6,7 +6,7 @@ import { format, parseISO } from 'date-fns'
 
 import { Checkbox } from '@/components/ui/checkbox'
 import PaymentStatePill from '@/components/ui/payment-state-pill'
-import StatusBadge, { appointmentStatusBadge, lineStateBadge } from '@/components/ui/status-badge'
+import StatusBadge, { appointmentDisplayBadge, lineStateBadge } from '@/components/ui/status-badge'
 import { isLockedRow, type ScheduleAppointment } from '@/lib/appointments/overview'
 import { formatCents, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { cn } from '@/lib/utils'
@@ -71,7 +71,7 @@ type RowProps = {
 }
 
 function AppointmentRowLink({ appointment, hasUnpricedTag }: RowProps): React.ReactNode {
-  const status = appointmentStatusBadge(appointment.status)
+  const status = appointmentDisplayBadge(appointment.status, appointment.isNotClocked)
   const isUnpriced = appointment.priceCents === null
 
   return (
@@ -89,7 +89,7 @@ function AppointmentRowLink({ appointment, hasUnpricedTag }: RowProps): React.Re
         <p className="font-mono text-xs text-muted-foreground tabular-nums">{timeRange(appointment)}</p>
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-1.5 md:shrink-0 md:flex-nowrap">
-        <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+        <StatusBadge tone={status.tone} icon={status.icon}>{status.label}</StatusBadge>
         <PaymentStatePill state={appointment.paymentState} />
         {hasUnpricedTag && isUnpriced && UNPRICED_BADGE ? (
           <StatusBadge tone={UNPRICED_BADGE.tone}>{UNPRICED_BADGE.label}</StatusBadge>

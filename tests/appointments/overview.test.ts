@@ -103,6 +103,7 @@ function scheduled(
     priceCents: 12000,
     paymentState: null,
     claim: null,
+    isNotClocked: false,
     ...overrides,
   }
 }

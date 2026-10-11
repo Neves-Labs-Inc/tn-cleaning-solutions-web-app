@@ -112,6 +112,11 @@ function toScheduledInstant(date: string, time: string): Date {
   return fromBusinessWallClock(new Date(year, month - 1, day, hour, minute, second));
 }
 
+// The instant a visit's clock-in window closes: its Eastern wall-clock end + FLAG_GRACE_HOURS.
+export function getGraceEnd(date: string, endTime: string): Date {
+  return new Date(toScheduledInstant(date, endTime).getTime() + FLAG_GRACE_HOURS * MS_PER_HOUR);
+}
+
 function newestFirst<T>(rows: T[], getTime: (row: T) => string): T[] {
   return [...rows].sort((a, b) => toEpochMicros(getTime(b)) - toEpochMicros(getTime(a)));
 }
@@ -153,7 +158,7 @@ export function buildSessionView(row: AdminSessionRow, now: Date): SessionView {
     appointment.scheduled_start_time,
   );
   const scheduledEnd = toScheduledInstant(appointment.scheduled_date, appointment.scheduled_end_time);
-  const graceEnd = new Date(scheduledEnd.getTime() + FLAG_GRACE_HOURS * MS_PER_HOUR);
+  const graceEnd = getGraceEnd(appointment.scheduled_date, appointment.scheduled_end_time);
   const scheduledMinutes = Math.round(
     (scheduledEnd.getTime() - scheduledStart.getTime()) / MS_PER_MINUTE,
   );

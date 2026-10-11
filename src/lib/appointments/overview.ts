@@ -1,5 +1,6 @@
 import type { NeedsBillingAppointment } from '../invoices/payment-state-queries.ts'
 import type { PaymentClaim, PaymentState } from '../invoices/payment-state.ts'
+import { getGraceEnd } from '../time-sheets/session-view.ts'
 import type { AppointmentStatus } from './lifecycle.ts'
 
 // The appointments screen: its URL state, overview tiles and views. Pure, so node:test, the server
@@ -19,6 +20,23 @@ export type ScheduleAppointment = {
   priceCents: number | null
   paymentState: PaymentState | null
   claim: PaymentClaim | null
+  // Still scheduled an hour past its end; computed on the server so every render agrees.
+  isNotClocked: boolean
+}
+
+// Scheduled means nobody has a counted clock-in, so no clock read is needed. Display only.
+export function isNotClocked(
+  appointment: Pick<ScheduleAppointment, 'status' | 'scheduledDate' | 'endTime'>,
+  now: Date
+): boolean {
+  if (appointment.status !== 'scheduled') return false
+
+  // An unreadable date or time reads as "not flagged": a render must never throw over a label.
+  try {
+    return now.getTime() > getGraceEnd(appointment.scheduledDate, appointment.endTime).getTime()
+  } catch {
+    return false
+  }
 }
 
 // Unpriced appointments count toward count and unpricedCount, never the money.

@@ -3,22 +3,26 @@ import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   activeStateBadge,
+  appointmentDisplayBadge,
   appointmentStatusBadge,
   ARCHIVED_BADGE,
   clockStatusBadge,
   invoiceStatusBadge,
   lineStateBadge,
+  NOT_CLOCKED_BADGE,
   paymentStateBadge,
 } from "./status-badge-tones";
 import { cn } from "@/lib/utils";
 
 export {
   activeStateBadge,
+  appointmentDisplayBadge,
   appointmentStatusBadge,
   ARCHIVED_BADGE,
   clockStatusBadge,
   invoiceStatusBadge,
   lineStateBadge,
+  NOT_CLOCKED_BADGE,
   paymentStateBadge,
 };
 

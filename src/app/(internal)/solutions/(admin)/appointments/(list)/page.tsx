@@ -42,12 +42,12 @@ async function loadMethods(db: Db): Promise<PaymentMethod[]> {
 
 // Every read the screen needs, or null when any fails: the tiles never show partial totals.
 // Payment methods are only read for Needs billing, whose bar opens the Mark paid dialog.
-async function loadScreen(db: Db, query: AppointmentsQuery): Promise<ScreenData | null> {
+async function loadScreen(db: Db, query: AppointmentsQuery, now: Date): Promise<ScreenData | null> {
   let data: ScreenData | null
 
   try {
     const [appointments, needsBilling, methods] = await Promise.all([
-      listMonthAppointments(db, query),
+      listMonthAppointments(db, query, now),
       listNeedsBilling(db),
       query.view === 'needs-billing' ? loadMethods(db) : Promise.resolve([]),
     ])
@@ -61,9 +61,10 @@ async function loadScreen(db: Db, query: AppointmentsQuery): Promise<ScreenData 
 }
 
 export default async function AppointmentsPage({ searchParams }: AppointmentsPageProps) {
-  const businessDate = getBusinessDate(new Date())
+  const now = new Date()
+  const businessDate = getBusinessDate(now)
   const query = parseAppointmentsQuery(await searchParams, businessDate)
-  const data = await loadScreen(await createClient(), query)
+  const data = await loadScreen(await createClient(), query, now)
 
   return (
     <div className="space-y-6">
