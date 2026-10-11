@@ -43,6 +43,15 @@ export function useCompleteAppointments(
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dialog, setDialog] = useState<DialogState>({ isOpen: false, count: 0 });
 
+  // `appointments` can narrow under a filter; a hidden row drops out for good, so a bulk action
+  // never touches it and widening the filter shows it unchecked.
+  const visibleSelectedIds = selectedIds.filter((id) =>
+    appointments.some((appointment) => appointment.id === id),
+  );
+  if (visibleSelectedIds.length !== selectedIds.length) {
+    setSelectedIds(visibleSelectedIds);
+  }
+
   const selected = appointments.filter((appointment) =>
     selectedIds.includes(appointment.id),
   );

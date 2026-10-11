@@ -108,3 +108,15 @@ export function matchesFilters(
     matchesStatus(appointment, filter.status)
   )
 }
+
+// Needs billing and Needs completion rows all share one status, so only Client and Job narrow
+// them; a leftover status param is ignored.
+export function filterNeedsRows<T extends { clientId: string; jobId: string }>(
+  rows: T[],
+  filter: AppointmentsFilter
+): T[] {
+  const clientAndJob: AppointmentsFilter = { ...filter, status: 'all' }
+  return rows.filter((row) =>
+    matchesFilters({ clientId: row.clientId, jobId: row.jobId, status: 'completed', isNotClocked: false }, clientAndJob, true)
+  )
+}

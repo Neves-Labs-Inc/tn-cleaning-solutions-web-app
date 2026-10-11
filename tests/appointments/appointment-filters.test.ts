@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
 import {
+  filterNeedsRows,
   isAppointmentsFilterActive,
   matchesFilters,
   resolveFilterOptions,
@@ -183,5 +184,18 @@ describe('filtering the schedule', () => {
 
     assert.equal(matchesFilters(row('a', { status: 'scheduled', isNotClocked: true }), filter, false), true)
     assert.equal(matchesFilters(row('b', { status: 'scheduled' }), filter, false), false)
+  })
+
+  it('narrows Needs billing and Needs completion rows by client and job, ignoring status', () => {
+    const rows = [
+      { id: 'smith-standard', clientId: 'smith', jobId: 'standard' },
+      { id: 'smith-deep', clientId: 'smith', jobId: 'deep' },
+      { id: 'jones-deep', clientId: 'jones', jobId: 'deep' },
+    ]
+    const filter = { clientId: '', jobId: 'deep', status: 'cancelled' as const }
+
+    assert.deepEqual(filterNeedsRows(rows, filter).map((r) => r.id), ['smith-deep', 'jones-deep'])
+    assert.deepEqual(filterNeedsRows(rows, { ...filter, clientId: 'jones' }).map((r) => r.id), ['jones-deep'])
+    assert.equal(filterNeedsRows(rows, { clientId: '', jobId: '', status: 'completed' }).length, 3)
   })
 })

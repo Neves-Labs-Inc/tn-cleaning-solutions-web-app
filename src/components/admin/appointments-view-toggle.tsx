@@ -12,6 +12,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   ALL_APPOINTMENTS_FILTER,
+  filterNeedsRows,
   isAppointmentsFilterActive,
   type AppointmentsFilter,
   type FilterOptions,
@@ -144,6 +145,11 @@ type FilteredEmptyProps = {
 // The filters match nothing: replaces both the calendar and the list, which has nowhere for Clear.
 function FilteredEmpty({ query, onClear }: FilteredEmptyProps): React.ReactNode {
   const isStateView = query.view === 'billed' || query.view === 'paid'
+  // The Needs views list every month, so there is no month to name.
+  const isNeedsView = query.view === 'needs-billing' || query.view === 'needs-completion'
+  const description = isNeedsView
+    ? 'Nothing across all months matches these filters.'
+    : `Nothing in ${monthLabel(query)} matches these filters.`
   return (
     <Empty className="animate-in fade-in-0 duration-base ease-out-quart">
       <EmptyHeader>
@@ -151,7 +157,7 @@ function FilteredEmpty({ query, onClear }: FilteredEmptyProps): React.ReactNode 
           <SearchX aria-hidden="true" />
         </EmptyMedia>
         <EmptyTitle>{isStateView ? `No ${query.view} appointments match` : 'No appointments match'}</EmptyTitle>
-        <EmptyDescription>Nothing in {monthLabel(query)} matches these filters.</EmptyDescription>
+        <EmptyDescription>{description}</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         <Button type="button" variant="outline" className={PRESS_CLASS} onClick={onClear}>
@@ -191,6 +197,14 @@ export function AppointmentsViewToggle({
   const visible = appointmentsInView(appointments, query)
   const isCalendar = layout === 'calendar'
   const isFilteredEmpty = isAppointmentsFilterActive(query) && visible.length === 0
+  // Status doesn't apply to a Needs view, so it neither narrows nor counts as a filter there.
+  const isNeedsView = isNeedsBilling || isNeedsCompletion
+  const needsFilter = { ...optimisticFilter, status: 'all' as const }
+  const visibleNeedsBilling = filterNeedsRows(needsBilling, optimisticFilter)
+  const visibleNeedsCompletion = filterNeedsRows(needsCompletion, optimisticFilter)
+  const visibleNeedsCount = isNeedsBilling ? visibleNeedsBilling.length : visibleNeedsCompletion.length
+  const isNeedsFiltered = isAppointmentsFilterActive(needsFilter) && visibleNeedsCount === 0
+  const needsFilteredEmpty = isNeedsFiltered ? <FilteredEmpty query={query} onClear={handleClearFilters} /> : null
 
   // Next keeps this state across search-param changes, so the pending tile is synced to the URL on render.
   const syncedTile = syncPendingTile(pendingTile, query)
@@ -212,7 +226,8 @@ export function AppointmentsViewToggle({
   }
 
   function handleClearFilters(): void {
-    handleFilterChange(ALL_APPOINTMENTS_FILTER)
+    // A Needs view hides Status, so a Clear there leaves it in the URL for the schedule.
+    handleFilterChange(isNeedsView ? { clientId: '', jobId: '' } : ALL_APPOINTMENTS_FILTER)
     // Both Clear buttons unmount, so focus moves to the first control instead of falling to body.
     document.getElementById(clientTriggerId)?.focus()
   }
@@ -246,22 +261,18 @@ export function AppointmentsViewToggle({
         <AppointmentsOverviewTiles overview={overview} query={query} />
       </div>
       <div className="space-y-3">
-        {/* The Needs views list every month unfiltered for now. */}
-        {isNeedsBilling || isNeedsCompletion ? null : (
-          <>
-            <AppointmentsFilters
-              filter={optimisticFilter}
-              clients={filterOptions.clients}
-              jobs={filterOptions.jobs}
-              clientTriggerId={clientTriggerId}
-              onChange={handleFilterChange}
-              onClear={handleClearFilters}
-            />
-            <p aria-live="polite" className="sr-only">
-              {countLabel(visible.length)}
-            </p>
-          </>
-        )}
+        <AppointmentsFilters
+          filter={isNeedsView ? needsFilter : optimisticFilter}
+          clients={filterOptions.clients}
+          jobs={filterOptions.jobs}
+          clientTriggerId={clientTriggerId}
+          showStatus={!isNeedsView}
+          onChange={handleFilterChange}
+          onClear={handleClearFilters}
+        />
+        <p aria-live="polite" className="sr-only">
+          {countLabel(isNeedsView ? visibleNeedsCount : visible.length)}
+        </p>
         <Card
           aria-busy={isPending || undefined}
           className={cn(
@@ -271,9 +282,18 @@ export function AppointmentsViewToggle({
           )}
         >
           {isNeedsBilling ? (
-            <AppointmentsNeedsBilling appointments={needsBilling} methods={methods} businessDate={businessDate} />
+            <AppointmentsNeedsBilling
+              appointments={visibleNeedsBilling}
+              methods={methods}
+              businessDate={businessDate}
+              filteredEmpty={needsFilteredEmpty}
+            />
           ) : isNeedsCompletion ? (
-            <AppointmentsNeedsCompletion appointments={needsCompletion} businessDate={businessDate} />
+            <AppointmentsNeedsCompletion
+              appointments={visibleNeedsCompletion}
+              businessDate={businessDate}
+              filteredEmpty={needsFilteredEmpty}
+            />
           ) : (
             <>
               <div className="flex flex-col gap-3 border-b p-4 md:flex-row md:items-center md:justify-between">

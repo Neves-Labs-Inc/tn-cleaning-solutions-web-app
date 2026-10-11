@@ -25,6 +25,8 @@ type AppointmentsNeedsCompletionProps = {
   // Every Not clocked appointment, oldest first.
   appointments: NeedsCompletionAppointment[];
   businessDate: string;
+  // Shown instead of the view's own empty state when the filters leave nothing.
+  filteredEmpty: React.ReactNode;
 };
 
 const CONFIRM_DESCRIPTION =
@@ -54,6 +56,7 @@ function toListRow(appointment: NeedsCompletionAppointment): ScheduleAppointment
 export default function AppointmentsNeedsCompletion({
   appointments,
   businessDate,
+  filteredEmpty,
 }: AppointmentsNeedsCompletionProps): React.ReactNode {
   const completion = useCompleteAppointments(appointments);
   const selectAllRef = useRef<HTMLElement>(null);
@@ -70,7 +73,9 @@ export default function AppointmentsNeedsCompletion({
         </p>
       </div>
 
-      {appointments.length === 0 ? (
+      {appointments.length === 0 && filteredEmpty ? (
+        filteredEmpty
+      ) : appointments.length === 0 ? (
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
