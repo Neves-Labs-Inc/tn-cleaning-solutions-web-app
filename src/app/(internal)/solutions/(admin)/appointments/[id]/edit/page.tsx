@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, TriangleAlert } from 'lucide-react'
 import type { PostgrestError } from '@supabase/supabase-js'
 
-import { AppointmentForm } from '@/components/admin/appointment-form'
+import { AppointmentForm, type InvoiceClaim } from '@/components/admin/appointment-form'
 import { AppointmentScheduleContext } from '@/components/admin/new-appointment-schedule-context'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   APPOINTMENT_PRICE_COLUMNS,
   priceAppointments,
@@ -28,6 +29,10 @@ type RecurrenceSeriesRow = {
   max_occurrences: number | null
 }
 
+type LiveClaimRow = {
+  invoice: { id: string; invoice_number: string | null; status: 'draft' | 'issued' | 'paid' | 'void' } | null
+}
+
 type AppointmentRow = PriceableAppointment & {
   location_id: string | null
   recurrence_series_id: string | null
@@ -46,6 +51,7 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
     { data: clients, error: clientsError },
     { data: jobs, error: jobsError },
     { data: employees, error: employeesError },
+    { data: liveClaim, error: liveClaimError },
   ] = await Promise.all([
     supabase
       .from('appointments')
@@ -76,6 +82,14 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
       .select('id, full_name')
       .eq('is_archived', false)
       .order('full_name', { ascending: true }),
+    // The appointment's Live claim, if any: a released or Cancelled line claims nothing.
+    supabase
+      .from('invoice_appointments')
+      .select('invoice:invoices ( id, invoice_number, status )')
+      .eq('appointment_id', id)
+      .eq('is_archived', false)
+      .is('cancelled_at', null)
+      .maybeSingle(),
   ])
 
   if (appointmentError || !appointment || appointment.is_archived) {
@@ -98,7 +112,9 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
     recurrenceSeriesError = error
   }
 
-  const loadError = clientsError ?? jobsError ?? employeesError ?? recurrenceSeriesError
+  // A failed claim read blocks the form: it must never show without knowing whether it's invoiced.
+  const loadError = clientsError ?? jobsError ?? employeesError ?? liveClaimError ?? recurrenceSeriesError
+  const invoiceClaim = toInvoiceClaim(liveClaim as LiveClaimRow | null)
 
   const jobRows = jobs ?? []
 
@@ -179,11 +195,12 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
             {loadErrorMessage}
           </section>
         ) : !canEdit(typedAppointment.status) ? (
-          <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            {typedAppointment.status === 'completed'
-              ? 'This appointment cannot be edited because it has already been completed.'
-              : 'This appointment cannot be edited because it has been cancelled. Restore it to make changes.'}
-          </section>
+          <Alert role="status" className={WARNING_ALERT_CLASSES}>
+            <TriangleAlert aria-hidden="true" />
+            <AlertDescription className="text-status-warning-foreground">
+              This appointment cannot be edited because it has been cancelled. Restore it to make changes.
+            </AlertDescription>
+          </Alert>
         ) : (
           // Keyed on the status so a clock-driven change remounts the form with the fresh expected_status.
           <AppointmentForm
@@ -203,11 +220,23 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
             employees={employees ?? []}
             appointment={appointmentFormAppointment}
             recurrenceSeries={recurrenceSeries ?? null}
+            invoiceClaim={invoiceClaim}
           />
         )}
       </div>
     </div>
   )
+}
+
+const WARNING_ALERT_CLASSES = 'border-status-warning-border bg-status-warning text-status-warning-foreground'
+
+// Only an issued or paid invoice froze a price the edit won't reach; a draft line follows the edit.
+function toInvoiceClaim(row: LiveClaimRow | null): InvoiceClaim | null {
+  const invoice = row?.invoice ?? null
+  if (!invoice || invoice.invoice_number === null) return null
+  if (invoice.status !== 'issued' && invoice.status !== 'paid') return null
+
+  return { id: invoice.id, number: invoice.invoice_number, status: invoice.status }
 }
 
 function formatDisplayPrice(display: DisplayPrice) {

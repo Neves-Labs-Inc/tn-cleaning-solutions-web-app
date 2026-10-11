@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 
 import AppointmentCrewClocks from '@/components/admin/appointment-crew-clocks'
 import AppointmentLifecycleActions, { CompletedByAdminHint } from '@/components/admin/appointment-lifecycle-actions'
+import { BillingMismatchNote } from '@/components/invoices/visit-line-summary'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
@@ -16,6 +17,7 @@ import {
   type DisplayPrice,
   type PriceableAppointment,
 } from '@/lib/pricing'
+import { billingMismatchLiveLabel } from '@/lib/pricing/billing-mismatch'
 import { formatCents, formatRate, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
 import { buildCrewViews, type CrewMemberView } from '@/lib/time-sheets/crew-views'
@@ -63,6 +65,8 @@ type PriceView = {
   breakdown: string | null
   label: string
   isUnavailable: boolean
+  // Set when the appointment was edited after its invoice was issued: its Live price now.
+  mismatchLiveLabel: string | null
 }
 
 type CrewLoad = {
@@ -170,6 +174,9 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
                 <p className={cn('text-xs', priceView.isUnavailable ? 'text-red-700' : 'text-neutral-500')}>
                   {priceView.label}
                 </p>
+                {priceView.mismatchLiveLabel !== null ? (
+                  <BillingMismatchNote liveLabel={priceView.mismatchLiveLabel} className="mt-1" />
+                ) : null}
               </div>
 
               <div>
@@ -271,8 +278,11 @@ async function loadPriceView(
   let view: PriceView
 
   try {
-    const priced = await priceAppointments(supabase, [appointment])
-    view = toPriceView(priced.get(appointment.id)?.display ?? { source: 'unpriced' })
+    const priced = (await priceAppointments(supabase, [appointment])).get(appointment.id)
+    view = {
+      ...toPriceView(priced?.display ?? { source: 'unpriced' }),
+      mismatchLiveLabel: priced ? billingMismatchLiveLabel(priced) : null,
+    }
   } catch (thrown) {
     console.error('Error pricing appointment:', appointment.id, thrown)
     view = {
@@ -280,14 +290,15 @@ async function loadPriceView(
       breakdown: null,
       label: 'This appointment’s price could not be loaded, so no price is shown.',
       isUnavailable: true,
+      mismatchLiveLabel: null,
     }
   }
 
   return view
 }
 
-function toPriceView(display: DisplayPrice): PriceView {
-  let view: PriceView
+function toPriceView(display: DisplayPrice): Omit<PriceView, 'mismatchLiveLabel'> {
+  let view: Omit<PriceView, 'mismatchLiveLabel'>
 
   if (display.source === 'unpriced') {
     view = {

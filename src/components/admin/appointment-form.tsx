@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState, useMemo, useState } from 'react'
-import { useFormStatus } from 'react-dom'
+import { startTransition, useActionState, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertCircle, TriangleAlert } from 'lucide-react'
 
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,6 +19,9 @@ import {
 } from '@/lib/actions/appointments'
 import { formatRate } from '@/lib/pricing/money'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
+
+// A Live claim on an issued or paid invoice: its price is frozen, so the form warns the edit won't reach it.
+export type InvoiceClaim = { id: string; number: string; status: 'issued' | 'paid' }
 
 type AppointmentFormProps = {
   clients: Array<{
@@ -54,6 +58,7 @@ type AppointmentFormProps = {
     end_date: string | null
     max_occurrences: number | null
   } | null
+  invoiceClaim?: InvoiceClaim | null
 }
 
 const initialState: AppointmentActionResult = {
@@ -61,17 +66,51 @@ const initialState: AppointmentActionResult = {
   error: '',
 }
 
-function SubmitButton({ isEditMode }: { isEditMode: boolean }) {
-  const { pending } = useFormStatus()
+const SCHEDULED_DATE_ERROR_ID = 'scheduled_date-error'
 
+function SubmitButton({ isEditMode, pending }: { isEditMode: boolean; pending: boolean }) {
   return (
     <Button
       type="submit"
       disabled={pending}
+      aria-busy={pending || undefined}
       className="h-10 rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white hover:bg-emerald-700"
     >
       {pending ? 'Saving...' : isEditMode ? 'Save Changes' : 'Create Appointment'}
     </Button>
+  )
+}
+
+type FieldErrorProps = { id?: string; message: string | undefined }
+
+function FieldError({ id, message }: FieldErrorProps) {
+  if (!message) return null
+
+  return (
+    <p
+      id={id}
+      className="text-sm text-destructive animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart"
+    >
+      {message}
+    </p>
+  )
+}
+
+function InvoiceClaimBanner({ claim }: { claim: InvoiceClaim }) {
+  return (
+    <Alert role="status" className="border-status-warning-border bg-status-warning text-status-warning-foreground">
+      <TriangleAlert aria-hidden="true" />
+      <AlertDescription className="break-words text-status-warning-foreground">
+        On invoice{' '}
+        <Link
+          href={`/solutions/invoices/${claim.id}`}
+          className="cursor-pointer rounded-sm font-medium whitespace-nowrap underline underline-offset-4 outline-none transition-[color,opacity] duration-fast focus-visible:ring-2 focus-visible:ring-ring/50 active:opacity-70 md:hover:text-foreground"
+        >
+          {claim.number}
+        </Link>{' '}
+        ({claim.status}). Changes won&apos;t update it.
+      </AlertDescription>
+    </Alert>
   )
 }
 
@@ -82,9 +121,39 @@ export function AppointmentForm({
   defaultDate,
   appointment,
   recurrenceSeries,
+  invoiceClaim = null,
 }: AppointmentFormProps) {
   const serverAction = appointment ? updateAppointment.bind(null, appointment.id) : createAppointment
-  const [state, formAction] = useActionState(serverAction, initialState)
+  const [state, formAction, isPending] = useActionState(serverAction, initialState)
+  const scheduledDateRef = useRef<HTMLInputElement>(null)
+  const fieldErrors = 'fieldErrors' in state ? state.fieldErrors : undefined
+  const scheduledDateError = fieldErrors?.scheduled_date
+  const formError = 'error' in state ? state.error : ''
+  const formErrorRef = useRef<HTMLDivElement>(null)
+
+  // A refused date is fixed in place, so focus lands on it when the action returns.
+  useEffect(() => {
+    if (scheduledDateError) {
+      scheduledDateRef.current?.focus()
+    }
+  }, [state, scheduledDateError])
+
+  // A refusal renders at the top of a long form, out of view after a mobile save: bring it to the admin.
+  useEffect(() => {
+    if (formError && !scheduledDateError) {
+      const isReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      formErrorRef.current?.focus({ preventScroll: true })
+      formErrorRef.current?.scrollIntoView({ block: 'center', behavior: isReducedMotion ? 'auto' : 'smooth' })
+    }
+  }, [state, formError, scheduledDateError])
+
+  // Dispatched by hand rather than through <form action>: React resets an action form's fields after
+  // every submit, and a refused save must keep what the admin typed.
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    startTransition(() => formAction(formData))
+  }
 
   const [selectedClientId, setSelectedClientId] = useState(appointment?.client_id ?? clients[0]?.id ?? '')
   const [selectedLocationId, setSelectedLocationId] = useState(appointment?.location_id ?? '')
@@ -152,15 +221,19 @@ export function AppointmentForm({
 
   return (
     <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-      <form action={formAction} className="space-y-5">
-        {'error' in state && state.error ? (
-          <div
-            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
-            role="alert"
-            aria-live="polite"
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {invoiceClaim ? <InvoiceClaimBanner claim={invoiceClaim} /> : null}
+
+        {formError ? (
+          <Alert
+            ref={formErrorRef}
+            tabIndex={-1}
+            variant="destructive"
+            className="scroll-mt-24 outline-none animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart"
           >
-            {state.error}
-          </div>
+            <AlertCircle aria-hidden="true" />
+            <AlertDescription className="break-words">{formError}</AlertDescription>
+          </Alert>
         ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -178,9 +251,7 @@ export function AppointmentForm({
               searchPlaceholder="Search client..."
               emptyMessage="No client found."
             />
-            {'fieldErrors' in state && state.fieldErrors?.client_id ? (
-              <p className="text-xs text-red-600">{state.fieldErrors.client_id}</p>
-            ) : null}
+            <FieldError message={fieldErrors?.client_id} />
           </div>
 
           <div className="space-y-1.5">
@@ -226,9 +297,7 @@ export function AppointmentForm({
             ))}
           </NativeSelect>
           {rateHint ? <p className="text-xs text-neutral-500">{rateHint}</p> : null}
-          {'fieldErrors' in state && state.fieldErrors?.job_id ? (
-            <p className="text-xs text-red-600">{state.fieldErrors.job_id}</p>
-          ) : null}
+          <FieldError message={fieldErrors?.job_id} />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
@@ -237,15 +306,16 @@ export function AppointmentForm({
               Date
             </Label>
             <Input
+              ref={scheduledDateRef}
               id="scheduled_date"
               name="scheduled_date"
               type="date"
               required
               defaultValue={appointment?.scheduled_date ?? defaultDate ?? ''}
+              aria-invalid={scheduledDateError ? true : undefined}
+              aria-describedby={scheduledDateError ? SCHEDULED_DATE_ERROR_ID : undefined}
             />
-            {'fieldErrors' in state && state.fieldErrors?.scheduled_date ? (
-              <p className="text-xs text-red-600">{state.fieldErrors.scheduled_date}</p>
-            ) : null}
+            <FieldError id={SCHEDULED_DATE_ERROR_ID} message={scheduledDateError} />
           </div>
 
           <div className="space-y-1.5">
@@ -259,9 +329,7 @@ export function AppointmentForm({
               required
               defaultValue={appointment?.scheduled_start_time?.slice(0, 5) ?? ''}
             />
-            {'fieldErrors' in state && state.fieldErrors?.scheduled_start_time ? (
-              <p className="text-xs text-red-600">{state.fieldErrors.scheduled_start_time}</p>
-            ) : null}
+            <FieldError message={fieldErrors?.scheduled_start_time} />
           </div>
 
           <div className="space-y-1.5">
@@ -275,9 +343,7 @@ export function AppointmentForm({
               required
               defaultValue={appointment?.scheduled_end_time?.slice(0, 5) ?? ''}
             />
-            {'fieldErrors' in state && state.fieldErrors?.scheduled_end_time ? (
-              <p className="text-xs text-red-600">{state.fieldErrors.scheduled_end_time}</p>
-            ) : null}
+            <FieldError message={fieldErrors?.scheduled_end_time} />
           </div>
         </div>
 
@@ -299,9 +365,7 @@ export function AppointmentForm({
               }
               placeholder="Leave blank to bill this client's hourly rate for the scheduled time"
             />
-            {'fieldErrors' in state && state.fieldErrors?.price_override ? (
-              <p className="text-xs text-red-600">{state.fieldErrors.price_override}</p>
-            ) : null}
+            <FieldError message={fieldErrors?.price_override} />
           </div>
 
           {/* The status this form rendered with; the action refuses to save over a status that moved since. */}
@@ -515,7 +579,7 @@ export function AppointmentForm({
           >
             Cancel
           </Link>
-          <SubmitButton isEditMode={Boolean(appointment)} />
+          <SubmitButton isEditMode={Boolean(appointment)} pending={isPending} />
         </div>
       </form>
     </section>

@@ -55,7 +55,7 @@ export function messageFor(code: Exclude<LedgerErrorCode, 'unknown'>): string {
   return MESSAGES[code]
 }
 
-function isInvoiceErrorCode(value: string | null | undefined): value is InvoiceErrorCode {
+export function isInvoiceErrorCode(value: string | null | undefined): value is InvoiceErrorCode {
   return (INVOICE_ERROR_CODES as readonly (string | null | undefined)[]).includes(value)
 }
 

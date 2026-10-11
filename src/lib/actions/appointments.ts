@@ -7,12 +7,15 @@ import { hasSessionHistory, planCrewChange, planFutureVisitCleanup } from '@/lib
 import { toAppointmentErrorMessage } from '@/lib/appointments/errors'
 import {
   canCancel,
+  canEdit,
   canMarkComplete,
   canRestore,
   canUndoComplete,
+  completedDateError,
   type AppointmentStatus,
 } from '@/lib/appointments/lifecycle'
 import { parseDollarsToCents } from '@/lib/pricing/money'
+import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import type { TablesInsert } from '@/types/database'
@@ -53,6 +56,7 @@ type ParsedCreateAppointmentInput = {
 }
 
 type ParsedUpdateAppointmentInput = {
+  client_id: string
   job_id: string
   location_id: string | null
   scheduled_date: string
@@ -308,6 +312,7 @@ function parseCreateAppointmentFormData(formData: FormData):
 function parseUpdateAppointmentFormData(formData: FormData):
   | { success: true; data: ParsedUpdateAppointmentInput }
   | { success: false; error: string; fieldErrors: AppointmentFieldErrors } {
+  const clientId = String(formData.get('client_id') ?? '').trim()
   const jobId = String(formData.get('job_id') ?? '').trim()
   const locationId = String(formData.get('location_id') ?? '').trim()
   const scheduledDate = String(formData.get('scheduled_date') ?? '').trim()
@@ -318,6 +323,10 @@ function parseUpdateAppointmentFormData(formData: FormData):
   const employeeIds = uniqueIds(formData.getAll('employee_ids'))
 
   const fieldErrors: AppointmentFieldErrors = {}
+
+  if (!clientId) {
+    fieldErrors.client_id = 'Client is required.'
+  }
 
   if (!jobId) {
     fieldErrors.job_id = 'Job is required.'
@@ -361,6 +370,7 @@ function parseUpdateAppointmentFormData(formData: FormData):
   return {
     success: true,
     data: {
+      client_id: clientId,
       job_id: jobId,
       location_id: locationId || null,
       scheduled_date: scheduledDate,
@@ -619,6 +629,8 @@ export async function updateAppointment(
     return parsedRecurrence
   }
 
+  let claimingInvoiceId: string | null = null
+
   try {
     const adminClient = createAdminClient()
 
@@ -647,19 +659,39 @@ export async function updateAppointment(
       }
     }
 
-    if (existingAppointment.status === 'completed') {
-      return {
-        success: false,
-        error: 'This appointment cannot be edited because it has already been completed.',
-      }
-    }
-
-    if (existingAppointment.status === 'cancelled') {
+    if (!canEdit(existingAppointment.status)) {
       return {
         success: false,
         error: 'This appointment cannot be edited because it has been cancelled. Restore it first.',
       }
     }
+
+    const scheduledDateError = completedDateError({
+      status: existingAppointment.status,
+      scheduledDate: parsed.data.scheduled_date,
+      businessDate: getBusinessDate(new Date()),
+    })
+    if (scheduledDateError) {
+      return {
+        success: false,
+        error: 'Please correct the highlighted fields.',
+        fieldErrors: { scheduled_date: scheduledDateError },
+      }
+    }
+
+    // Read before the write: a client change drops a draft line, and that invoice's page must refresh too.
+    const { data: liveClaim, error: liveClaimError } = await adminClient
+      .from('invoice_appointments')
+      .select('invoice_id')
+      .eq('appointment_id', id)
+      .eq('is_archived', false)
+      .is('cancelled_at', null)
+      .maybeSingle()
+
+    if (liveClaimError) {
+      return { success: false, error: toAppointmentErrorMessage(liveClaimError, 'updateAppointment') }
+    }
+    claimingInvoiceId = liveClaim?.invoice_id ?? null
 
     if (parsedRecurrence.data.edit_scope === 'series' || parsedRecurrence.data.edit_scope === 'future') {
       if (!parsedRecurrence.data.recurrence_series_id) {
@@ -721,6 +753,8 @@ export async function updateAppointment(
       const { data: appointment, error: appointmentError } = await adminClient
         .from('appointments')
         .update({
+          // The invoicing trigger drops a draft line on a client change and refuses on an issued or paid one.
+          client_id: parsed.data.client_id,
           job_id: parsed.data.job_id,
           location_id: parsed.data.location_id,
           scheduled_date: parsed.data.scheduled_date,
@@ -985,6 +1019,9 @@ export async function updateAppointment(
 
   revalidatePath('/solutions/appointments')
   revalidatePath(`/solutions/appointments/${id}`)
+  if (claimingInvoiceId) {
+    revalidatePath(`/solutions/invoices/${claimingInvoiceId}`)
+  }
   redirect(`/solutions/appointments/${id}`)
 
   return { success: true, data: { id } }

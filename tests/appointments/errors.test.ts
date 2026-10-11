@@ -10,18 +10,62 @@ function silenceConsoleError(t: TestContext) {
 }
 
 describe("toAppointmentErrorMessage", () => {
-  it("passes a trigger refusal (P0001) through verbatim", (t) => {
+  it("maps a coded invoice refusal (P0001) to the appointment wording", (t) => {
     const logged = silenceConsoleError(t);
     const refusal = {
       code: "P0001",
+      message: "This visit is on an issued invoice. Void the invoice first.",
+      details: "invoice_issued",
+    };
+
+    assert.equal(
+      toAppointmentErrorMessage(refusal, "updateAppointment"),
+      "This appointment is on an issued invoice. Void the invoice first.",
+    );
+    assert.equal(logged.mock.callCount(), 0);
+  });
+
+  it("maps the paid-invoice refusal on Cancel to the appointment wording", (t) => {
+    silenceConsoleError(t);
+    const refusal = {
+      code: "P0001",
       message: "This visit is on a paid invoice. Void the invoice first.",
+      details: "invoice_paid",
     };
 
     assert.equal(
       toAppointmentErrorMessage(refusal, "cancelAppointment"),
-      "This visit is on a paid invoice. Void the invoice first.",
+      "This appointment is on a paid invoice. Void the invoice first.",
+    );
+  });
+
+  it("passes an uncoded trigger refusal (P0001) through verbatim", (t) => {
+    const logged = silenceConsoleError(t);
+    const refusal = {
+      code: "P0001",
+      message: "Clock-out must be after clock-in.",
+      details: null,
+    };
+
+    assert.equal(
+      toAppointmentErrorMessage(refusal, "correctClocks"),
+      "Clock-out must be after clock-in.",
     );
     assert.equal(logged.mock.callCount(), 0);
+  });
+
+  it("hides a non-P0001 error even when its details look like an invoice code", (t) => {
+    silenceConsoleError(t);
+    const error = {
+      code: "23505",
+      message: "duplicate key value",
+      details: "invoice_issued",
+    };
+
+    assert.equal(
+      toAppointmentErrorMessage(error, "updateAppointment"),
+      GENERIC_MESSAGE,
+    );
   });
 
   for (const code of ["23505", "42501", "PGRST116", "PGRST301"]) {
