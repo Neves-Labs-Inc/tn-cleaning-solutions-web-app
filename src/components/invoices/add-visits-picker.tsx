@@ -13,7 +13,7 @@ import SubmitButton from '@/components/ui/submit-button'
 import type { ClaimableVisit } from '@/lib/invoices/queries'
 
 import { ClaimableVisitList } from './claimable-visit-list'
-import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail, type DraftDetails } from './invoice-detail-context'
+import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail } from './invoice-detail-context'
 import { SHEET_BUTTON_CLASS, SheetButtons } from './sheet-buttons'
 import { submitDraftUpdate } from './submit-draft-update'
 
@@ -22,7 +22,6 @@ type AddVisitsPickerProps = {
   clientName: string
   visits: ClaimableVisit[]
   businessDate: string
-  savedDetails: DraftDetails
 }
 
 const ERROR_TITLE = "Couldn't add those appointments"
@@ -36,7 +35,6 @@ export default function AddVisitsPicker({
   clientName,
   visits,
   businessDate,
-  savedDetails,
 }: AddVisitsPickerProps) {
   const router = useRouter()
   const { showPageError } = useInvoiceDetail()
@@ -69,7 +67,7 @@ export default function AddVisitsPicker({
     showPageError(null)
 
     try {
-      const result = await submitDraftUpdate({ invoiceId, addIds: chosenIds, details: savedDetails })
+      const result = await submitDraftUpdate({ invoiceId, addIds: chosenIds })
       if (result.success) {
         toast.success(`Added ${visitCount(chosenIds.length)}`)
         setIsOpen(false)

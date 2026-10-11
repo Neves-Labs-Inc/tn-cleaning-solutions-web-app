@@ -4,7 +4,13 @@ import { revalidatePath } from 'next/cache'
 
 import { messageFor, type LedgerErrorCode } from '@/lib/invoices/errors'
 import { BULK_ISSUE_LIMIT } from '@/lib/invoices/view'
-import { InvoiceLedger, type BulkIssueOutcome, type LedgerResult, type PaymentInput } from '@/lib/invoices/ledger'
+import {
+  InvoiceLedger,
+  type BulkIssueOutcome,
+  type DraftInput,
+  type LedgerResult,
+  type PaymentInput,
+} from '@/lib/invoices/ledger'
 import { createClient } from '@/lib/supabase/server'
 
 // Thin by design: parse the form, check the session is an admin, call the ledger, revalidate,
@@ -86,6 +92,18 @@ function payment(formData: FormData): PaymentInput | undefined {
   return { paidDate, method, reference }
 }
 
+// Only the details form's Save posts write_details. A line change doesn't, so a page with stale
+// details can't overwrite a due date or notes saved elsewhere: null leaves them as stored.
+function draftDetails(formData: FormData): DraftInput | null | undefined {
+  if (!flag(formData, 'write_details')) return null
+
+  const dueDate = optionalDate(formData, 'due_date')
+  const notes = optionalText(formData, 'notes', MAX_NOTES_LENGTH)
+  if (dueDate === undefined || notes === undefined) return undefined
+
+  return { dueDate, notes }
+}
+
 // Called only with an id the parser accepted as a UUID, so the detail path is never free text.
 function revalidateInvoicing(invoiceId?: string) {
   revalidatePath(INVOICES_PATH)
@@ -123,8 +141,8 @@ export async function createInvoice(_previous: unknown, formData: FormData): Pro
   return toActionResult(result)
 }
 
-// Takes the visits added and removed against what the page loaded, and always the current due
-// date and notes: SQL overwrites both, so a missing value would clear it.
+// Takes the visits added and removed against what the page loaded, and the due date and notes only
+// from Save (see draftDetails).
 export async function updateDraft(
   _previous: unknown,
   formData: FormData
@@ -132,15 +150,14 @@ export async function updateDraft(
   const invoiceId = id(formData, 'invoice_id')
   const addAppointmentIds = ids(formData, 'add_appointment_ids')
   const removeAppointmentIds = ids(formData, 'remove_appointment_ids')
-  const dueDate = optionalDate(formData, 'due_date')
-  const notes = optionalText(formData, 'notes', MAX_NOTES_LENGTH)
-  const isValid = invoiceId && addAppointmentIds && removeAppointmentIds && dueDate !== undefined && notes !== undefined
+  const details = draftDetails(formData)
+  const isValid = invoiceId && addAppointmentIds && removeAppointmentIds && details !== undefined
   if (!isValid) return refuse('invalid_input')
 
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
 
-  const result = await admin.ledger.updateDraft(invoiceId, { addAppointmentIds, removeAppointmentIds, dueDate, notes })
+  const result = await admin.ledger.updateDraft(invoiceId, { addAppointmentIds, removeAppointmentIds, details })
   // A deleted draft's page would re-render as not-found before the client leaves it.
   const isDeleted = result.ok && result.data.isDeleted
   revalidateInvoicing(isDeleted ? undefined : invoiceId)

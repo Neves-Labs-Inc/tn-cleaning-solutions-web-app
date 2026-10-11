@@ -2,7 +2,8 @@
 --
 -- Pins each refusal code, the lines a draft ends up with, the Excluded flag on removal from an
 -- Automatic draft, that an update only applies the visits it names (a line that joined after the
--- page loaded stays), and deletion of a draft left with no lines. Rows are read back as postgres.
+-- page loaded stays), that only Save (write_details on) writes the due date and notes, and
+-- deletion of a draft left with no live line. Rows are read back as postgres.
 --
 -- Fixtures are built here and rolled back; nothing depends on seed.sql or test-data.sql.
 
@@ -10,7 +11,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(43);
+select plan(52);
 
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
@@ -28,7 +29,8 @@ insert into public.jobs (id, name, hourly_rate_cents) values
 
 -- d1-d3: client one, scheduled (Upcoming). d4: client one, completed. d5: client one, cancelled.
 -- d6: client one, archived. d7: client two. d8: client one, completed, on a manual draft below.
--- d9: client one, completed, on the Automatic draft below.
+-- d9: client one, completed, on the Automatic draft below. da-dd: client one, completed, on the
+-- live-line drafts below.
 insert into public.appointments (id, client_id, job_id, scheduled_date, scheduled_start_time, scheduled_end_time, status, is_archived)
 values
 	('d5000000-0000-4000-8000-000000000001', 'c5000000-0000-4000-8000-000000000001', 'b5000000-0000-4000-8000-000000000001', '2026-10-01', '09:00', '11:00', 'scheduled', false),
@@ -39,21 +41,39 @@ values
 	('d5000000-0000-4000-8000-000000000006', 'c5000000-0000-4000-8000-000000000001', 'b5000000-0000-4000-8000-000000000001', '2026-10-06', '09:00', '11:00', 'scheduled', true),
 	('d5000000-0000-4000-8000-000000000007', 'c5000000-0000-4000-8000-000000000002', 'b5000000-0000-4000-8000-000000000001', '2026-10-07', '09:00', '11:00', 'scheduled', false),
 	('d5000000-0000-4000-8000-000000000008', 'c5000000-0000-4000-8000-000000000001', 'b5000000-0000-4000-8000-000000000001', '2026-10-08', '09:00', '11:00', 'completed', false),
-	('d5000000-0000-4000-8000-000000000009', 'c5000000-0000-4000-8000-000000000001', 'b5000000-0000-4000-8000-000000000001', '2026-10-09', '09:00', '11:00', 'completed', false);
+	('d5000000-0000-4000-8000-000000000009', 'c5000000-0000-4000-8000-000000000001', 'b5000000-0000-4000-8000-000000000001', '2026-10-09', '09:00', '11:00', 'completed', false),
+	('d5000000-0000-4000-8000-00000000000a', 'c5000000-0000-4000-8000-000000000001', 'b5000000-0000-4000-8000-000000000001', '2026-10-10', '09:00', '11:00', 'completed', false),
+	('d5000000-0000-4000-8000-00000000000b', 'c5000000-0000-4000-8000-000000000001', 'b5000000-0000-4000-8000-000000000001', '2026-10-11', '09:00', '11:00', 'completed', false),
+	('d5000000-0000-4000-8000-00000000000c', 'c5000000-0000-4000-8000-000000000001', 'b5000000-0000-4000-8000-000000000001', '2026-10-12', '09:00', '11:00', 'completed', false),
+	('d5000000-0000-4000-8000-00000000000d', 'c5000000-0000-4000-8000-000000000001', 'b5000000-0000-4000-8000-000000000001', '2026-10-13', '09:00', '11:00', 'completed', false);
 
 -- i1: a manual draft holding d8. i2: client one's Automatic draft holding d9.
--- i3-i5: issued, paid and void invoices. i6: an archived draft.
+-- i3-i5: issued, paid and void invoices. i6: an archived draft. i7: a draft with one live line
+-- (da), a Cancelled line (d5) and a released line (db). i8: a draft with live lines dc and dd and
+-- a Cancelled line (d5). i9: an issued invoice whose only line is Cancelled (d5).
 insert into public.invoices (id, client_id, status, is_automatic, invoice_number, issued_date, paid_date, payment_method, is_archived) values
 	('15000000-0000-4000-8000-000000000001', 'c5000000-0000-4000-8000-000000000001', 'draft', false, null, null, null, null, false),
 	('15000000-0000-4000-8000-000000000002', 'c5000000-0000-4000-8000-000000000001', 'draft', true, null, null, null, null, false),
 	('15000000-0000-4000-8000-000000000003', 'c5000000-0000-4000-8000-000000000001', 'issued', false, 'INV-901-PGT2026', '2026-10-01', null, null, false),
 	('15000000-0000-4000-8000-000000000004', 'c5000000-0000-4000-8000-000000000001', 'paid', false, 'INV-902-PGT2026', '2026-10-01', '2026-10-02', 'Cash', false),
 	('15000000-0000-4000-8000-000000000005', 'c5000000-0000-4000-8000-000000000001', 'void', false, 'INV-903-PGT2026', '2026-10-01', null, null, false),
-	('15000000-0000-4000-8000-000000000006', 'c5000000-0000-4000-8000-000000000001', 'draft', false, null, null, null, null, true);
+	('15000000-0000-4000-8000-000000000006', 'c5000000-0000-4000-8000-000000000001', 'draft', false, null, null, null, null, true),
+	('15000000-0000-4000-8000-000000000007', 'c5000000-0000-4000-8000-000000000001', 'draft', false, null, null, null, null, false),
+	('15000000-0000-4000-8000-000000000008', 'c5000000-0000-4000-8000-000000000001', 'draft', false, null, null, null, null, false),
+	('15000000-0000-4000-8000-000000000009', 'c5000000-0000-4000-8000-000000000001', 'issued', false, 'INV-904-PGT2026', '2026-10-01', null, null, false);
 
 insert into public.invoice_appointments (invoice_id, appointment_id) values
 	('15000000-0000-4000-8000-000000000001', 'd5000000-0000-4000-8000-000000000008'),
 	('15000000-0000-4000-8000-000000000002', 'd5000000-0000-4000-8000-000000000009');
+
+insert into public.invoice_appointments (invoice_id, appointment_id, cancelled_at, is_archived) values
+	('15000000-0000-4000-8000-000000000007', 'd5000000-0000-4000-8000-00000000000a', null, false),
+	('15000000-0000-4000-8000-000000000007', 'd5000000-0000-4000-8000-000000000005', now(), false),
+	('15000000-0000-4000-8000-000000000007', 'd5000000-0000-4000-8000-00000000000b', null, true),
+	('15000000-0000-4000-8000-000000000008', 'd5000000-0000-4000-8000-00000000000c', null, false),
+	('15000000-0000-4000-8000-000000000008', 'd5000000-0000-4000-8000-00000000000d', null, false),
+	('15000000-0000-4000-8000-000000000008', 'd5000000-0000-4000-8000-000000000005', now(), false),
+	('15000000-0000-4000-8000-000000000009', 'd5000000-0000-4000-8000-000000000005', now(), false);
 
 
 -- Helpers --------------------------------------------------------------------------------------
@@ -172,49 +192,49 @@ set local request.jwt.claims = '{"sub": "a5000000-0000-4000-8000-000000000002", 
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000001',
-		array['d5000000-0000-4000-8000-000000000002']::uuid[], array[]::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000002']::uuid[], array[]::uuid[], false, null, null)
 $$), 'not_admin', 'an employee can''t edit a draft');
 
 set local request.jwt.claims = '{"sub": "a5000000-0000-4000-8000-000000000001", "role": "authenticated", "app_metadata": {"role": "admin"}}';
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-0000000000ff',
-		array['d5000000-0000-4000-8000-000000000002']::uuid[], array[]::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000002']::uuid[], array[]::uuid[], false, null, null)
 $$), 'invoice_not_found', 'an unknown invoice is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000006',
-		array['d5000000-0000-4000-8000-000000000002']::uuid[], array[]::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000002']::uuid[], array[]::uuid[], false, null, null)
 $$), 'archived_invoice', 'an archived draft is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000003',
-		array['d5000000-0000-4000-8000-000000000002']::uuid[], array[]::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000002']::uuid[], array[]::uuid[], false, null, null)
 $$), 'invalid_status', 'an issued invoice is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000004',
-		array['d5000000-0000-4000-8000-000000000002']::uuid[], array[]::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000002']::uuid[], array[]::uuid[], false, null, null)
 $$), 'invalid_status', 'a paid invoice is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000005',
-		array['d5000000-0000-4000-8000-000000000002']::uuid[], array[]::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000002']::uuid[], array[]::uuid[], false, null, null)
 $$), 'invalid_status', 'a void invoice is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000001',
-		array['d5000000-0000-4000-8000-000000000007']::uuid[], array[]::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000007']::uuid[], array[]::uuid[], false, null, null)
 $$), 'visit_other_client', 'adding a visit of another client is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000001',
-		array['d5000000-0000-4000-8000-000000000005']::uuid[], array[]::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000005']::uuid[], array[]::uuid[], false, null, null)
 $$), 'visit_cancelled', 'adding a cancelled visit is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000001',
-		array['d5000000-0000-4000-8000-000000000009']::uuid[], array[]::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000009']::uuid[], array[]::uuid[], false, null, null)
 $$), 'visit_claimed', 'adding a visit claimed by another draft is refused');
 
 
@@ -222,8 +242,21 @@ $$), 'visit_claimed', 'adding a visit claimed by another draft is refused');
 
 select lives_ok($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000001',
+		array[]::uuid[], array[]::uuid[], true, '2026-12-01', 'Edited')
+$$, 'an admin saves a draft''s due date and notes');
+
+reset role;
+
+select is((select row(due_date, notes)::text from public.invoices where id = '15000000-0000-4000-8000-000000000001'),
+	row('2026-12-01'::date, 'Edited')::text, 'Save writes the due date and notes');
+
+set local role authenticated;
+
+-- A line change from a stale page carries old details; with the flag off they must not land.
+select lives_ok($$
+	select public.invoice_update_draft('15000000-0000-4000-8000-000000000001',
 		array['d5000000-0000-4000-8000-000000000002', 'd5000000-0000-4000-8000-000000000008']::uuid[], null,
-		'2026-12-01', 'Edited')
+		false, '2027-01-01', 'Stale')
 $$, 'an admin adds a line to a manual draft; re-adding a line it holds is a no-op');
 
 reset role;
@@ -231,13 +264,13 @@ reset role;
 select is(public.pgtap_drafts_lines('15000000-0000-4000-8000-000000000001'), '{2,8}',
 	'the manual draft holds its line and the added one');
 select is((select row(due_date, notes)::text from public.invoices where id = '15000000-0000-4000-8000-000000000001'),
-	row('2026-12-01'::date, 'Edited')::text, 'the due date and notes are updated');
+	row('2026-12-01'::date, 'Edited')::text, 'adding a line leaves the stored due date and notes');
 
 set local role authenticated;
 
 select lives_ok($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000001',
-		array[]::uuid[], array['d5000000-0000-4000-8000-000000000008']::uuid[], null, null)
+		array[]::uuid[], array['d5000000-0000-4000-8000-000000000008']::uuid[], false, null, null)
 $$, 'an admin removes a line from a manual draft');
 
 reset role;
@@ -247,7 +280,19 @@ select is(public.pgtap_drafts_lines('15000000-0000-4000-8000-000000000001'), '{2
 select is((select excluded_from_automatic from public.appointments where id = 'd5000000-0000-4000-8000-000000000008'),
 	false, 'a visit removed from a manual draft is not Excluded');
 select is((select row(due_date, notes)::text from public.invoices where id = '15000000-0000-4000-8000-000000000001'),
-	row(null::date, null::text)::text, 'a null due date and notes clear them');
+	row('2026-12-01'::date, 'Edited')::text, 'removing a line leaves the stored due date and notes');
+
+set local role authenticated;
+
+select lives_ok($$
+	select public.invoice_update_draft('15000000-0000-4000-8000-000000000001',
+		null, null, true, null, null)
+$$, 'an admin saves a draft with no due date and no notes');
+
+reset role;
+
+select is((select row(due_date, notes)::text from public.invoices where id = '15000000-0000-4000-8000-000000000001'),
+	row(null::date, null::text)::text, 'Save with a null due date and notes clears them');
 
 -- The admin loaded the Automatic draft holding d9; then d3 completed and joined it.
 update public.appointments set status = 'completed' where id = 'd5000000-0000-4000-8000-000000000003';
@@ -260,7 +305,7 @@ set local role authenticated;
 select lives_ok($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000002',
 		array[]::uuid[], array['d5000000-0000-4000-8000-000000000009', 'd5000000-0000-4000-8000-000000000002']::uuid[],
-		null, null)
+		false, null, null)
 $$, 'an admin removes the line they saw from the Automatic draft');
 
 reset role;
@@ -280,12 +325,12 @@ set local role authenticated;
 
 select lives_ok($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000002',
-		null, array['d5000000-0000-4000-8000-000000000003']::uuid[], null, null)
+		null, array['d5000000-0000-4000-8000-000000000003']::uuid[], false, null, null)
 $$, 'removing the last line of the Automatic draft succeeds');
 
 select lives_ok($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000001',
-		array[]::uuid[], array['d5000000-0000-4000-8000-000000000002']::uuid[], null, null)
+		array[]::uuid[], array['d5000000-0000-4000-8000-000000000002']::uuid[], false, null, null)
 $$, 'removing the last line of the manual draft succeeds');
 
 reset role;
@@ -296,6 +341,40 @@ select is_empty($$
 $$, 'a draft left with no lines is deleted');
 select is((select excluded_from_automatic from public.appointments where id = 'd5000000-0000-4000-8000-000000000003'),
 	true, 'the last line removed from an Automatic draft is Excluded too');
+
+
+-- Only live lines keep a draft ---------------------------------------------------------------
+
+set local role authenticated;
+
+select lives_ok($$
+	select public.invoice_update_draft('15000000-0000-4000-8000-000000000007',
+		null, array['d5000000-0000-4000-8000-00000000000a']::uuid[], false, null, null)
+$$, 'removing the only live line of a draft that also holds a cancelled and a released line succeeds');
+
+select lives_ok($$
+	select public.invoice_update_draft('15000000-0000-4000-8000-000000000008',
+		null, array['d5000000-0000-4000-8000-00000000000c']::uuid[], false, null, null)
+$$, 'removing one of two live lines succeeds');
+
+reset role;
+
+select is_empty($$
+	select 1 from public.invoices where id = '15000000-0000-4000-8000-000000000007'
+$$, 'a draft left with only cancelled and released lines is deleted');
+select is(public.pgtap_drafts_lines('15000000-0000-4000-8000-000000000008'), '{5,d}',
+	'a draft that still has a live line is kept, with its cancelled line');
+
+-- Issued, paid and void invoices with no live line: the delete-if-empty rule must pass them by.
+select private.invoice_delete_if_empty(id)
+from public.invoices
+where id in ('15000000-0000-4000-8000-000000000003', '15000000-0000-4000-8000-000000000004',
+	'15000000-0000-4000-8000-000000000005', '15000000-0000-4000-8000-000000000009');
+
+select is((select count(*)::integer from public.invoices
+	where id in ('15000000-0000-4000-8000-000000000003', '15000000-0000-4000-8000-000000000004',
+		'15000000-0000-4000-8000-000000000005', '15000000-0000-4000-8000-000000000009')),
+	4, 'an issued, paid or void invoice with no live line is never deleted');
 
 
 -- Every code these functions and the invoicing trigger raise is a known invoice_error code ------

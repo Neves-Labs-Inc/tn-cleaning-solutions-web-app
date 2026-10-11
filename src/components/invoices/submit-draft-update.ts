@@ -6,8 +6,9 @@ type DraftUpdate = {
   invoiceId: string
   addIds?: string[]
   removeIds?: string[]
-  // updateDraft overwrites both, so a line change sends the saved values and Save sends the form's.
-  details: DraftDetails
+  // Only Save sends details. A line change leaves the stored due date and notes as they are, so a
+  // stale page can't overwrite them.
+  details?: DraftDetails
 }
 
 // One way to post updateDraft's form, for line removal, Add visits and Save.
@@ -25,7 +26,10 @@ export function submitDraftUpdate({
   for (const id of removeIds) {
     formData.append('remove_appointment_ids', id)
   }
-  formData.set('due_date', details.dueDate)
-  formData.set('notes', details.notes)
+  if (details) {
+    formData.set('write_details', 'true')
+    formData.set('due_date', details.dueDate)
+    formData.set('notes', details.notes)
+  }
   return updateDraft(null, formData)
 }

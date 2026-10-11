@@ -839,6 +839,7 @@ export type Database = {
           p_invoice_id: string
           p_add_appointment_ids: string[]
           p_remove_appointment_ids: string[]
+          p_write_details: boolean
           p_due_date: string | null
           p_notes: string | null
         }

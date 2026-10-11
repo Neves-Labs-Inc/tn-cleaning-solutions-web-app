@@ -17,7 +17,7 @@ import { formatCents } from '@/lib/pricing/money'
 import { cn } from '@/lib/utils'
 
 import AddVisitsPicker from './add-visits-picker'
-import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail, type DraftDetails } from './invoice-detail-context'
+import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail } from './invoice-detail-context'
 import { submitDraftUpdate } from './submit-draft-update'
 import { formatVisitDate, SetPriceLink, VisitLineSummary } from './visit-line-summary'
 
@@ -32,7 +32,6 @@ type InvoiceVisitsCardProps = {
   isAutomatic: boolean
   unpricedCount: number
   paidDate: string | null
-  savedDetails: DraftDetails
   claimable: ClaimableVisit[]
   businessDate: string
 }
@@ -141,7 +140,6 @@ export default function InvoiceVisitsCard({
   isAutomatic,
   unpricedCount,
   paidDate,
-  savedDetails,
   claimable,
   businessDate,
 }: InvoiceVisitsCardProps) {
@@ -164,7 +162,7 @@ export default function InvoiceVisitsCard({
     setPendingId(line.visit.id)
 
     try {
-      const result = await submitDraftUpdate({ invoiceId, removeIds: [line.visit.id], details: savedDetails })
+      const result = await submitDraftUpdate({ invoiceId, removeIds: [line.visit.id] })
       if (result.success) {
         toast.success(result.data.isDeleted ? 'Draft deleted' : 'Appointment removed')
         leaveIfDeleted(result.data.isDeleted)
@@ -198,7 +196,7 @@ export default function InvoiceVisitsCard({
         errorTitle: REMOVE_ERROR_TITLE,
         success: (data: { isDeleted: boolean }) => (data.isDeleted ? 'Draft deleted' : 'Appointment removed'),
       },
-      () => submitDraftUpdate({ invoiceId, removeIds: [lastLine.visit.id], details: savedDetails })
+      () => submitDraftUpdate({ invoiceId, removeIds: [lastLine.visit.id] })
     )
     setLastLine(null)
     leaveIfDeleted(removed?.isDeleted ?? false)
@@ -245,7 +243,6 @@ export default function InvoiceVisitsCard({
           clientName={clientName}
           visits={claimable}
           businessDate={businessDate}
-          savedDetails={savedDetails}
         />
       ) : null}
 
