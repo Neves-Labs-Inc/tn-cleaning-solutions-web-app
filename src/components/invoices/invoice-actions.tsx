@@ -111,7 +111,7 @@ function invoiceFormData(invoiceId: string): FormData {
 }
 
 function unpricedReason(count: number): string {
-  return `Set a price on ${count} Unpriced visit${count === 1 ? '' : 's'} to issue.`
+  return `Set a price on ${count} Unpriced appointment${count === 1 ? '' : 's'} to issue.`
 }
 
 function BlockedReason({ id, count, className }: { id: string; count: number; className?: string }) {
@@ -376,8 +376,8 @@ export default function InvoiceActions({
           title={`Void ${label}?`}
           description={
             payment
-              ? "Its payment is cleared and its visits can be billed again. The number is kept and never reused. This can't be undone."
-              : "Its visits can be billed again. The number is kept and never reused. This can't be undone."
+              ? "Its payment is cleared and its appointments can be billed again. The number is kept and never reused. This can't be undone."
+              : "Its appointments can be billed again. The number is kept and never reused. This can't be undone."
           }
           confirmLabel="Void invoice"
           pendingLabel="Voiding…"

@@ -120,7 +120,7 @@ export function JobForm({ job }: JobFormProps) {
               placeholder="45.00"
             />
             <p id="rate-help" className={helperText}>
-              Charged per scheduled hour. A 2h 30m visit at $45.00/h bills $112.50.
+              Charged per scheduled hour. A 2h 30m appointment at $45.00/h bills $112.50.
             </p>
             {'fieldErrors' in state && state.fieldErrors?.hourly_rate_cents ? (
               <p id="rate-error" className="text-xs text-red-600">

@@ -38,7 +38,7 @@ type InvoiceVisitsCardProps = {
 }
 
 const INVOICES_PATH = '/solutions/invoices'
-const REMOVE_ERROR_TITLE = "Couldn't remove that visit"
+const REMOVE_ERROR_TITLE = "Couldn't remove that appointment"
 
 // A draft shows every pill that applies (Unpriced and Upcoming together); an issued line shows its state.
 function lineStates(line: InvoiceDetailLine, status: InvoiceStatus): LineState[] {
@@ -89,7 +89,7 @@ function LineRow({ line, status, isEditable, isPending, isBusy, onRemove }: Line
           type="button"
           variant="ghost"
           size="icon"
-          aria-label={`Remove visit on ${formatVisitDate(visit.scheduled_date)}`}
+          aria-label={`Remove appointment on ${formatVisitDate(visit.scheduled_date)}`}
           disabled={isBusy}
           className="-mr-2 shrink-0 cursor-pointer transition-colors duration-fast active:bg-muted md:hover:bg-muted md:hover:text-destructive"
           onClick={(event) => onRemove(line, event.currentTarget)}
@@ -106,7 +106,7 @@ function TotalRow({ status, totalCents, paidDate }: { status: InvoiceStatus; tot
   const isVoid = status === 'void'
   let caption: string | null = null
   if (isDraft) {
-    caption = 'Prices follow each visit until you issue.'
+    caption = 'Prices follow each appointment until you issue.'
   } else if (isVoid) {
     caption = 'Void · not owed'
   } else if (status === 'paid' && paidDate) {
@@ -166,7 +166,7 @@ export default function InvoiceVisitsCard({
     try {
       const result = await submitDraftUpdate({ invoiceId, removeIds: [line.visit.id], details: savedDetails })
       if (result.success) {
-        toast.success(result.data.isDeleted ? 'Draft deleted' : 'Visit removed')
+        toast.success(result.data.isDeleted ? 'Draft deleted' : 'Appointment removed')
         leaveIfDeleted(result.data.isDeleted)
       } else {
         setError(result.error)
@@ -196,7 +196,7 @@ export default function InvoiceVisitsCard({
     const removed = await runPageAction(
       {
         errorTitle: REMOVE_ERROR_TITLE,
-        success: (data: { isDeleted: boolean }) => (data.isDeleted ? 'Draft deleted' : 'Visit removed'),
+        success: (data: { isDeleted: boolean }) => (data.isDeleted ? 'Draft deleted' : 'Appointment removed'),
       },
       () => submitDraftUpdate({ invoiceId, removeIds: [lastLine.visit.id], details: savedDetails })
     )
@@ -207,13 +207,13 @@ export default function InvoiceVisitsCard({
   return (
     <Card className="gap-4 p-4 text-sm sm:p-5">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-lg font-semibold tracking-tight">Visits</h2>
+        <h2 className="text-lg font-semibold tracking-tight">Appointments</h2>
         <p className="text-sm text-muted-foreground tabular-nums">{lines.length}</p>
       </div>
 
       {isEditable && isAutomatic ? (
         <p className="text-xs text-muted-foreground">
-          Visits you remove won&apos;t rejoin an Automatic draft. You can add them back here or bill them on a manual
+          Appointments you remove won&apos;t rejoin an Automatic draft. You can add them back here or bill them on a manual
           invoice.
         </p>
       ) : null}
@@ -221,7 +221,7 @@ export default function InvoiceVisitsCard({
       {isEditable && unpricedCount > 0 ? (
         <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          Set a price on {unpricedCount} Unpriced visit{unpricedCount === 1 ? '' : 's'} to issue.
+          Set a price on {unpricedCount} Unpriced appointment{unpricedCount === 1 ? '' : 's'} to issue.
         </p>
       ) : null}
 
@@ -265,7 +265,7 @@ export default function InvoiceVisitsCard({
           if (!isOpen) setLastLine(null)
         }}
         title="Delete this draft?"
-        description={`This is its only visit. Removing it deletes the draft.${isAutomatic ? " The visit won't rejoin an Automatic draft." : ''}`}
+        description={`This is its only appointment. Removing it deletes the draft.${isAutomatic ? " The appointment won't rejoin an Automatic draft." : ''}`}
         confirmLabel="Delete draft"
         pendingLabel="Deleting…"
         keepLabel="Keep draft"

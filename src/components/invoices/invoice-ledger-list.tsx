@@ -55,7 +55,7 @@ function EmptyList({ hasFilter, onClear }: { hasFilter: boolean; onClear: () => 
         <EmptyDescription>
           {hasFilter
             ? 'Try a different status, client, or search.'
-            : 'Completed visits for clients with Automatic invoicing start a draft here.'}
+            : 'Completed appointments for clients with Automatic invoicing start a draft here.'}
         </EmptyDescription>
       </EmptyHeader>
       {hasFilter ? (

@@ -63,7 +63,7 @@ export default function AutomaticInvoicingSwitch({ clientId, clientName, isOn }:
           <Switch checked={optimisticIsOn} disabled={isSaving} onCheckedChange={handleCheckedChange} />
         </Label>
         <p className="text-sm text-muted-foreground">
-          Completed visits join an Automatic draft. Turning this off keeps the open draft; new completions won&apos;t
+          Completed appointments join an Automatic draft. Turning this off keeps the open draft; new completions won&apos;t
           join it.
         </p>
       </div>

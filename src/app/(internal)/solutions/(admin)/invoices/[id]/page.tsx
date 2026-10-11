@@ -186,7 +186,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
             <AlertTitle>Archived · read-only</AlertTitle>
             <AlertDescription>
               Unarchive it to make changes.
-              {isDraft ? " Its visits were released; unarchiving claims them again if no other invoice has." : ''}
+              {isDraft ? " Its appointments were released; unarchiving claims them again if no other invoice has." : ''}
             </AlertDescription>
           </Alert>
         ) : null}

@@ -115,7 +115,7 @@ describe("validateClockDraft", () => {
 
   it("needs a clock-out on an add from the moment the grace hour ends", () => {
     assert.deepEqual(validateClockDraft(draft("09:00", ""), "add", unclocked, new Date(GRACE_END)), {
-      clockOut: "Enter a clock-out. This visit ended more than an hour ago.",
+      clockOut: "Enter a clock-out. This appointment ended more than an hour ago.",
     });
   });
 

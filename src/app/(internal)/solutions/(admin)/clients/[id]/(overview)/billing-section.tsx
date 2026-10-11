@@ -106,7 +106,7 @@ function UnbilledVisits({ receivables }: { receivables: Receivables }) {
 	return (
 		<div className="space-y-3">
 			<h3 className="text-base font-semibold">
-				Unbilled visits{' '}
+				Unbilled appointments{' '}
 				<span className="text-sm font-normal text-muted-foreground tabular-nums">
 					· {summary.count} · {formatCents(summary.pricedCents)}
 				</span>
@@ -123,8 +123,8 @@ function UnbilledVisits({ receivables }: { receivables: Receivables }) {
 							<EmptyMedia variant="icon">
 								<CircleCheck aria-hidden="true" />
 							</EmptyMedia>
-							<EmptyTitle>No unbilled visits</EmptyTitle>
-							<EmptyDescription>Every completed visit is on an invoice.</EmptyDescription>
+							<EmptyTitle>No unbilled appointments</EmptyTitle>
+							<EmptyDescription>Every completed appointment is on an invoice.</EmptyDescription>
 						</EmptyHeader>
 					</Empty>
 				)}

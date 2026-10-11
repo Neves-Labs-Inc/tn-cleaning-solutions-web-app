@@ -246,19 +246,19 @@ export function UnbilledSection({ groups, shownCount, totalCount }: UnbilledSect
   return (
     <Section
       id="unbilled"
-      title="Unbilled visits"
-      description="Completed visits on no invoice. Bill opens a new invoice for that client."
+      title="Unbilled appointments"
+      description="Completed appointments on no invoice. Bill opens a new invoice for that client."
     >
       {isTruncated ? (
         <p className="text-sm text-muted-foreground">
-          Showing the first {shownCount} of {totalCount} unbilled visits, oldest first.
+          Showing the first {shownCount} of {totalCount} unbilled appointments, oldest first.
         </p>
       ) : null}
       {groups.length === 0 ? (
         <EmptyBlock
           icon={<CalendarCheck aria-hidden="true" />}
-          title="Every visit is billed"
-          description="Completed visits that aren't on an invoice show up here."
+          title="Every appointment is billed"
+          description="Completed appointments that aren't on an invoice show up here."
         />
       ) : (
         <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
@@ -275,7 +275,7 @@ export function UnbilledSection({ groups, shownCount, totalCount }: UnbilledSect
                       {group.clientName}
                     </Link>
                     <p className="text-sm text-muted-foreground">
-                      {pluralize(summary.count, 'visit')} · {formatCents(summary.pricedCents)}
+                      {pluralize(summary.count, 'appointment')} · {formatCents(summary.pricedCents)}
                       {summary.unpricedCount > 0 ? ` · ${summary.unpricedCount} unpriced` : ''}
                     </p>
                   </div>

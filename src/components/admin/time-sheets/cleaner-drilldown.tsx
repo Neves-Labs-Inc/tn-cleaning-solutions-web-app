@@ -290,7 +290,7 @@ export default function CleanerDrilldown({
               </caption>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="px-4">Visit</TableHead>
+                  <TableHead className="px-4">Appointment</TableHead>
                   <TableHead>Scheduled</TableHead>
                   <TableHead>In</TableHead>
                   <TableHead>Out</TableHead>

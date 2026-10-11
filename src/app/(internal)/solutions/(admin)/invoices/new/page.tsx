@@ -40,7 +40,7 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePagePro
         </Button>
         <PageHeader
           title="New invoice"
-          description="Pick a client, then the visits to bill. Visits up to today start checked."
+          description="Pick a client, then the appointments to bill. Appointments up to today start checked."
         />
       </div>
 
@@ -51,7 +51,7 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePagePro
               <ReceiptText aria-hidden="true" />
             </EmptyMedia>
             <EmptyTitle>Nothing to bill</EmptyTitle>
-            <EmptyDescription>Every visit is already on an invoice or cancelled.</EmptyDescription>
+            <EmptyDescription>Every appointment is already on an invoice or cancelled.</EmptyDescription>
           </EmptyHeader>
           <Button variant="outline" nativeButton={false} render={<Link href="/solutions/invoices" />}>
             Back to invoices

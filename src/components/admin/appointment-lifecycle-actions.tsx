@@ -174,7 +174,7 @@ export default function AppointmentLifecycleActions({
         open={isCancelOpen}
         onOpenChange={setIsCancelOpen}
         title="Cancel this appointment?"
-        description={`${status === 'completed' ? 'This visit is already completed. ' : ''}It's marked Cancelled and Cleaners can't clock in. Clock times are kept. You can restore it later.`}
+        description={`${status === 'completed' ? 'This appointment is already completed. ' : ''}It's marked Cancelled and Cleaners can't clock in. Clock times are kept. You can restore it later.`}
         confirmLabel="Cancel appointment"
         pendingLabel="Cancelling…"
         keepLabel="Keep appointment"

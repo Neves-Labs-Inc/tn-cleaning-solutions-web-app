@@ -25,10 +25,10 @@ type AddVisitsPickerProps = {
   savedDetails: DraftDetails
 }
 
-const ERROR_TITLE = "Couldn't add those visits"
+const ERROR_TITLE = "Couldn't add those appointments"
 
 function visitCount(count: number): string {
-  return `${count} visit${count === 1 ? '' : 's'}`
+  return `${count} appointment${count === 1 ? '' : 's'}`
 }
 
 export default function AddVisitsPicker({
@@ -79,7 +79,7 @@ export default function AddVisitsPicker({
       // A visit claimed elsewhere drops out of the list once the page is re-read.
       router.refresh()
     } catch (thrown) {
-      console.error('Add visits failed:', thrown)
+      console.error('Add appointments failed:', thrown)
       showError(CONNECTION_ERROR_MESSAGE)
     }
   }
@@ -94,7 +94,7 @@ export default function AddVisitsPicker({
         onClick={handleOpen}
       >
         <Plus aria-hidden="true" />
-        Add visits
+        Add appointments
       </Button>
 
       <ResponsiveDialog
@@ -102,8 +102,8 @@ export default function AddVisitsPicker({
         onOpenChange={setIsOpen}
         isPending={isPending}
         returnFocusRef={triggerRef}
-        title="Add visits"
-        description={`${clientName}'s visits that aren't on another invoice. Upcoming visits are billed ahead.`}
+        title="Add appointments"
+        description={`${clientName}'s appointments that aren't on another invoice. Upcoming appointments are billed ahead.`}
       >
         {visits.length === 0 ? (
           <Empty className="border">
@@ -111,8 +111,8 @@ export default function AddVisitsPicker({
               <EmptyMedia variant="icon">
                 <CalendarCheck aria-hidden="true" />
               </EmptyMedia>
-              <EmptyTitle>No visits to add</EmptyTitle>
-              <EmptyDescription>Every visit for {clientName} is already on an invoice or cancelled.</EmptyDescription>
+              <EmptyTitle>No appointments to add</EmptyTitle>
+              <EmptyDescription>Every appointment for {clientName} is already on an invoice or cancelled.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
@@ -135,7 +135,7 @@ export default function AddVisitsPicker({
               ) : null}
               <SheetButtons onCancel={() => setIsOpen(false)} onPendingChange={setIsPending}>
                 <SubmitButton
-                  label={chosenIds.length === 0 ? 'Add visits' : `Add ${visitCount(chosenIds.length)}`}
+                  label={chosenIds.length === 0 ? 'Add appointments' : `Add ${visitCount(chosenIds.length)}`}
                   pendingLabel="Adding…"
                   disabled={chosenIds.length === 0}
                   className={SHEET_BUTTON_CLASS}

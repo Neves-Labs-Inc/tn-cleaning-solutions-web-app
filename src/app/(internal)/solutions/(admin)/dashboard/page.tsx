@@ -124,7 +124,7 @@ export default async function DashboardPage() {
                         href={RECEIVABLES_HREF}
                         label="Unbilled"
                         value={String(receivables.unbilledCount)}
-                        caption={receivables.unbilledCount > 0 ? 'Visits not invoiced' : 'All visits billed'}
+                        caption={receivables.unbilledCount > 0 ? 'Appointments not invoiced' : 'All appointments billed'}
                         icon={<CalendarX2 className="size-5" aria-hidden="true" />}
                     />
                     <StatTile
