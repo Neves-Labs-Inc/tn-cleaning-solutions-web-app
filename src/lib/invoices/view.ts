@@ -51,10 +51,9 @@ export type UnbilledVisit = {
   client_name: string
   scheduled_date: string
   live_price_cents: number | null
-  is_excluded: boolean
 }
 
-export type UnbilledTag = 'excluded' | 'unpriced' | null
+export type UnbilledTag = 'unpriced' | null
 
 // Generic so a caller's richer visit rows (time, job, location) survive grouping.
 export type UnbilledGroup<T extends UnbilledVisit = UnbilledVisit> = {
@@ -188,7 +187,6 @@ export function unbilledSummary(visits: Array<{ live_price_cents: number | null 
 }
 
 function tagFor(visit: UnbilledVisit): UnbilledTag {
-  if (visit.is_excluded) return 'excluded'
   return visit.live_price_cents === null ? 'unpriced' : null
 }
 

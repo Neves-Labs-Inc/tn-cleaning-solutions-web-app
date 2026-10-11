@@ -93,7 +93,7 @@ type VisitRow = PriceableAppointment & {
   client_locations: { label: string } | null
 }
 
-type UnbilledRow = VisitRow & { excluded_from_automatic: boolean; clients: { name: string } | null }
+type UnbilledRow = VisitRow & { clients: { name: string } | null }
 
 type InvoiceRow = Omit<InvoiceListRow, 'has_unpriced'>
 
@@ -172,7 +172,7 @@ export async function listInvoices(db: Db): Promise<InvoiceListRow[]> {
 }
 
 // Completed after launch and still completed (completed_at isn't cleared when a visit is reopened),
-// not archived, no Live claim. Excluded and Unpriced visits are included and tagged.
+// not archived, no Live claim. Unpriced visits are included and tagged.
 function unbilledQuery(db: Db, columns: string, options: { clientId: string | null; isCount: boolean }) {
   const query = db
     .from('appointments')
@@ -187,7 +187,7 @@ function unbilledQuery(db: Db, columns: string, options: { clientId: string | nu
 }
 
 async function loadUnbilled(db: Db, clientId: string | null): Promise<UnbilledVisitRow[]> {
-  const { data, error } = await unbilledQuery(db, `${VISIT_COLUMNS}, excluded_from_automatic, clients ( name )`, {
+  const { data, error } = await unbilledQuery(db, `${VISIT_COLUMNS}, clients ( name )`, {
     clientId,
     isCount: false,
   }).order('scheduled_date', { ascending: true })
@@ -206,7 +206,6 @@ async function loadUnbilled(db: Db, clientId: string | null): Promise<UnbilledVi
       scheduled_start_time: row.scheduled_start_time,
       scheduled_end_time: row.scheduled_end_time,
       live_price_cents: live.source === 'unpriced' ? null : live.amount_cents,
-      is_excluded: row.excluded_from_automatic,
       job_name: row.jobs?.name ?? 'Unknown job',
       location_label: row.client_locations?.label ?? null,
     }

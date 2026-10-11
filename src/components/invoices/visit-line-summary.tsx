@@ -55,8 +55,6 @@ type VisitLineSummaryProps = {
   // A Cancelled line: the text is struck and `billedAmountCents` shows struck beside the $0.00 it now charges.
   struck?: boolean
   billedAmountCents?: number | null
-  // The Receivables tag for a visit the automatic run skips.
-  isExcluded?: boolean
   // 'inline' puts the Set price link where the amount would be; 'none' leaves it to the caller (a checkbox row
   // keeps it outside its label via SetPriceLink).
   setPriceLink?: 'inline' | 'none'
@@ -78,7 +76,6 @@ export function VisitLineSummary({
   appointmentId,
   struck = false,
   billedAmountCents = null,
-  isExcluded = false,
   setPriceLink = 'inline',
   priceBreakdown = null,
   className,
@@ -122,14 +119,13 @@ export function VisitLineSummary({
         <p className="mt-0.5 text-right text-xs break-words text-muted-foreground tabular-nums">{priceBreakdown}</p>
       ) : null}
 
-      {badges.length > 0 || isExcluded ? (
+      {badges.length > 0 ? (
         <div className="mt-1 flex flex-wrap gap-1">
           {badges.map(({ state, badge }) => (
             <StatusBadge key={state} tone={badge.tone} icon={badge.icon}>
               {badge.label}
             </StatusBadge>
           ))}
-          {isExcluded ? <StatusBadge tone="neutral">Excluded</StatusBadge> : null}
         </div>
       ) : null}
     </div>

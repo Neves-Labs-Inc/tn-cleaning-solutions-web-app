@@ -20,9 +20,10 @@ insert into auth.users (id, email) values
 	('a5000000-0000-4000-8000-000000000001', 'pgtap.drafts.admin@example.test'),
 	('a5000000-0000-4000-8000-000000000002', 'pgtap.drafts.employee@example.test');
 
-insert into public.clients (id, name) values
-	('c5000000-0000-4000-8000-000000000001', 'pgTAP Drafts Client One'),
-	('c5000000-0000-4000-8000-000000000002', 'pgTAP Drafts Client Two');
+-- Automatic invoicing is off by default (20261011150000); the Automatic draft scenarios need it on.
+insert into public.clients (id, name, automatic_invoicing) values
+	('c5000000-0000-4000-8000-000000000001', 'pgTAP Drafts Client One', true),
+	('c5000000-0000-4000-8000-000000000002', 'pgTAP Drafts Client Two', true);
 
 insert into public.jobs (id, name, hourly_rate_cents) values
 	('b5000000-0000-4000-8000-000000000001', 'pgTAP Drafts Job', 4500);

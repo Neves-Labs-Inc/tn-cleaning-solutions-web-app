@@ -10,7 +10,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(63);
+select plan(62);
 
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
@@ -55,8 +55,6 @@ $$;
 
 -- Shape ----------------------------------------------------------------------------------------
 
-select col_default_is('public', 'clients', 'automatic_invoicing', 'true',
-	'clients.automatic_invoicing defaults to on');
 select col_default_is('public', 'appointments', 'excluded_from_automatic', 'false',
 	'appointments.excluded_from_automatic defaults to off');
 select col_is_null('public', 'appointments', 'completed_at', 'appointments.completed_at is nullable');
