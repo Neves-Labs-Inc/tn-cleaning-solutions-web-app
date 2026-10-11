@@ -12,6 +12,8 @@ type StatTileProps = {
   href?: string;
   // Sizes the value to the tile's width, for dense grids where money values could overflow.
   fitValue?: boolean;
+  // The tile whose view is showing: a primary ring, and aria-current on its Link.
+  isActive?: boolean;
   className?: string;
 };
 
@@ -24,13 +26,16 @@ export default function StatTile({
   icon,
   href,
   fitValue = false,
+  isActive = false,
   className,
 }: StatTileProps): React.ReactNode {
   const rootClassName = cn(
     TILE_CLASSES,
     fitValue && "@container",
     href &&
-      "cursor-pointer outline-none transition-[background-color,box-shadow] duration-fast ease-out-quart active:bg-muted md:hover:ring-foreground/20 focus-visible:ring-2 focus-visible:ring-ring",
+      "cursor-pointer outline-none transition-[background-color,box-shadow] duration-fast ease-out-quart active:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
+    href && !isActive && "md:hover:ring-foreground/20",
+    isActive && "ring-2 ring-primary",
     className,
   );
   const content = (
@@ -59,7 +64,11 @@ export default function StatTile({
 
   if (href) {
     return (
-      <Link href={href} className={rootClassName}>
+      <Link
+        href={href}
+        aria-current={isActive ? "true" : undefined}
+        className={rootClassName}
+      >
         {content}
       </Link>
     );

@@ -1,165 +1,161 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo } from 'react'
-import { addMonths, format, parseISO } from 'date-fns'
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, Users } from 'lucide-react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useId } from 'react'
+import { format, parseISO } from 'date-fns'
 
-import type { AppointmentSummary } from '@/components/admin/appointments-types'
-import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import PaymentStatePill from '@/components/ui/payment-state-pill'
+import StatusBadge, { appointmentStatusBadge, lineStateBadge } from '@/components/ui/status-badge'
+import { isLockedRow, type ScheduleAppointment } from '@/lib/appointments/overview'
 import { formatCents, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { cn } from '@/lib/utils'
 
+// Needs billing's row selection: rows of one client at a time.
+export type ListSelection = {
+  selectedIds: string[]
+  // The client of the checked rows; every other client's row is disabled. null when none is checked.
+  lockedClientId: string | null
+  onToggle: (id: string) => void
+}
+
 type AppointmentsListProps = {
-  appointments: AppointmentSummary[]
-  month: number
-  year: number
+  // Already in date and start-time order.
+  appointments: ScheduleAppointment[]
+  businessDate: string
+  // Needs billing only: a checkbox per row, the year in date bands and the Unpriced tag.
+  selection?: ListSelection
 }
 
-function statusClasses(status: AppointmentSummary['status']) {
-  if (status === 'in_progress') {
-    return 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-  }
+const ANIMATED_ROWS = 8
+const ROW_STAGGER_MS = 40
+const UNPRICED_BADGE = lineStateBadge('unpriced')
 
-  if (status === 'completed') {
-    return 'border border-neutral-200 bg-neutral-100 text-neutral-700'
-  }
-
-  if (status === 'cancelled') {
-    return 'border border-red-200 bg-red-50 text-red-600'
-  }
-
-  return 'border border-blue-200 bg-blue-50 text-blue-700'
+function timeRange(appointment: ScheduleAppointment): string {
+  return `${appointment.startTime.slice(0, 5)} – ${appointment.endTime.slice(0, 5)}`
 }
 
-export function AppointmentsList({ appointments, month, year }: AppointmentsListProps) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
+type DateBandProps = {
+  date: string
+  isToday: boolean
+  hasYear: boolean
+}
 
-  const monthDate = new Date(year, month - 1, 1)
+function AppointmentDateBand({ date, isToday, hasYear }: DateBandProps): React.ReactNode {
+  return (
+    <h3 className="sticky top-16 z-10 flex items-center justify-between gap-2 border-b-2 border-border bg-muted px-4 py-2 text-sm font-semibold text-foreground lg:top-0">
+      <span className="min-w-0 truncate">{format(parseISO(date), hasYear ? 'EEE, MMM d, yyyy' : 'EEEE, MMMM d')}</span>
+      {isToday ? <StatusBadge tone="success">Today</StatusBadge> : null}
+    </h3>
+  )
+}
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, AppointmentSummary[]>()
+function Price({ cents, className }: { cents: number | null; className?: string }): React.ReactNode {
+  return (
+    <span className={cn('text-sm font-semibold tabular-nums', className)}>
+      {cents === null ? (
+        <>
+          <span aria-hidden="true">{UNPRICED_LABEL}</span>
+          <span className="sr-only">Unpriced</span>
+        </>
+      ) : (
+        formatCents(cents)
+      )}
+    </span>
+  )
+}
 
-    for (const appointment of appointments) {
-      const list = map.get(appointment.scheduled_date) ?? []
-      list.push(appointment)
-      map.set(appointment.scheduled_date, list)
-    }
+type RowProps = {
+  appointment: ScheduleAppointment
+  hasUnpricedTag: boolean
+}
 
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-  }, [appointments])
-
-  const navigateMonth = (offset: number) => {
-    const target = addMonths(monthDate, offset)
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('month', String(target.getMonth() + 1))
-    params.set('year', String(target.getFullYear()))
-    router.push(`${pathname}?${params.toString()}`)
-  }
+function AppointmentRowLink({ appointment, hasUnpricedTag }: RowProps): React.ReactNode {
+  const status = appointmentStatusBadge(appointment.status)
+  const isUnpriced = appointment.priceCents === null
 
   return (
-    <section className="space-y-4 rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm shadow-emerald-950/5">
-      <div className="flex items-center justify-between">
-        <Button
-          type="button"
-          variant="outline"
-          className="h-9 rounded-full"
-          onClick={() => navigateMonth(-1)}
-        >
-          <ChevronLeft className="size-4" aria-hidden="true" />
-          Prev
-        </Button>
-        <h2 className="text-sm font-semibold text-neutral-900">{format(monthDate, 'MMMM yyyy')}</h2>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-9 rounded-full"
-          onClick={() => navigateMonth(1)}
-        >
-          Next
-          <ChevronRight className="size-4" aria-hidden="true" />
-        </Button>
-      </div>
-
-      {grouped.length > 0 ? (
-        <div className="space-y-4">
-          {grouped.map(([dateKey, items]) => (
-            <div key={dateKey} className="space-y-2.5">
-              <div className="flex items-center gap-2 border-b border-neutral-200 pb-2">
-                <CalendarDays className="size-4 text-emerald-600" aria-hidden="true" />
-                <h3 className="text-sm font-semibold text-neutral-900">
-                  {format(parseISO(dateKey), 'EEEE, MMMM d')}
-                </h3>
-              </div>
-
-              <div className="space-y-2">
-                {items.map((appointment) => (
-                  <Link
-                    key={appointment.id}
-                    href={`/solutions/appointments/${appointment.id}`}
-                    className="block rounded-xl border border-neutral-200 bg-white px-3.5 py-3 shadow-sm shadow-emerald-950/5 transition-colors hover:border-emerald-200 hover:bg-emerald-50/30"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-neutral-900">{appointment.job.name}</p>
-                        <p className="text-sm text-neutral-600">{appointment.client.name}</p>
-                        <p className="mt-1 text-xs font-medium text-neutral-500">
-                          {appointment.scheduled_start_time.slice(0, 5)} - {appointment.scheduled_end_time.slice(0, 5)}
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1.5">
-                        <span
-                          className={cn(
-                            'rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-wide',
-                            statusClasses(appointment.status)
-                          )}
-                        >
-                          {appointment.status.replace('_', ' ')}
-                        </span>
-                        <p className="text-sm font-semibold text-neutral-900">
-                          {appointment.price_display_cents === null
-                            ? UNPRICED_LABEL
-                            : formatCents(appointment.price_display_cents)}
-                        </p>
-                        {appointment.price_is_billed ? (
-                          <span className="rounded-full border border-neutral-200 bg-neutral-100 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-700">
-                            Invoiced
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    {appointment.assignedEmployees.length > 0 ? (
-                      <div className="mt-2.5 flex items-center gap-2 text-xs text-neutral-600">
-                        <Users className="size-3.5 text-emerald-600" aria-hidden="true" />
-                        <span className="truncate">
-                          {appointment.assignedEmployees.map((employee) => employee.full_name).join(', ')}
-                        </span>
-                      </div>
-                    ) : null}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
+    <Link
+      href={`/solutions/appointments/${appointment.id}`}
+      className="flex min-h-16 min-w-0 flex-1 flex-col gap-1.5 px-4 py-3 outline-none transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:bg-muted md:flex-row md:items-center md:justify-between md:gap-3 md:hover:bg-muted/60"
+    >
+      <div className="min-w-0 space-y-1">
+        <div className="flex items-start justify-between gap-3">
+          <p className="min-w-0 text-sm font-medium break-words">
+            {appointment.clientName} <span className="font-normal text-muted-foreground">· {appointment.jobName}</span>
+          </p>
+          <Price cents={appointment.priceCents} className="shrink-0 md:hidden" />
         </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50/40 px-4 py-8 text-center">
-          <p className="text-sm text-neutral-600">No appointments in this month.</p>
-        </div>
-      )}
-
-      <div className="fixed right-5 bottom-5 z-10 md:hidden">
-        <Link href="/solutions/appointments/new">
-          <Button className="h-12 rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white shadow-lg shadow-emerald-950/20 hover:bg-emerald-700">
-            <Plus className="size-4" aria-hidden="true" />
-            New
-          </Button>
-        </Link>
+        <p className="font-mono text-xs text-muted-foreground tabular-nums">{timeRange(appointment)}</p>
       </div>
-    </section>
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5 md:shrink-0 md:flex-nowrap">
+        <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+        <PaymentStatePill state={appointment.paymentState} />
+        {hasUnpricedTag && isUnpriced && UNPRICED_BADGE ? (
+          <StatusBadge tone={UNPRICED_BADGE.tone}>{UNPRICED_BADGE.label}</StatusBadge>
+        ) : null}
+        <Price cents={appointment.priceCents} className="hidden w-24 text-right md:block" />
+      </div>
+    </Link>
+  )
+}
+
+// The appointments list, grouped into date bands that stick under the top bar.
+export default function AppointmentsList({
+  appointments,
+  businessDate,
+  selection,
+}: AppointmentsListProps): React.ReactNode {
+  const lockedHintId = useId()
+  const isNeedsBilling = selection !== undefined
+  const byDate = [...Map.groupBy(appointments, (appointment) => appointment.scheduledDate)]
+  // Each row's position in the whole list, for the entrance stagger.
+  const rowIndex = new Map(appointments.map((appointment, index) => [appointment.id, index]))
+
+  return (
+    <div>
+      {isNeedsBilling ? (
+        <span id={lockedHintId} className="sr-only">
+          Only one client can be selected at a time.
+        </span>
+      ) : null}
+      {byDate.map(([date, items]) => (
+        <section key={date}>
+          <AppointmentDateBand date={date} isToday={date === businessDate} hasYear={isNeedsBilling} />
+          <ul className="divide-y">
+            {items.map((appointment) => {
+              const index = rowIndex.get(appointment.id) ?? 0
+              const isAnimated = index < ANIMATED_ROWS
+              const isLocked = selection !== undefined && isLockedRow(appointment.clientId, selection.lockedClientId)
+
+              return (
+                <li
+                  key={appointment.id}
+                  className={cn(
+                    'flex items-stretch',
+                    isAnimated && 'animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-backwards duration-base',
+                    isLocked && 'opacity-60'
+                  )}
+                  style={isAnimated ? { animationDelay: `${index * ROW_STAGGER_MS}ms` } : undefined}
+                >
+                  {selection ? (
+                    <label className="flex min-h-11 min-w-11 shrink-0 items-center justify-center pl-2">
+                      <Checkbox
+                        aria-label={`Select ${appointment.jobName} for ${appointment.clientName} on ${format(parseISO(appointment.scheduledDate), 'MMMM d, yyyy')}`}
+                        aria-describedby={isLocked ? lockedHintId : undefined}
+                        checked={selection.selectedIds.includes(appointment.id)}
+                        disabled={isLocked}
+                        onCheckedChange={() => selection.onToggle(appointment.id)}
+                      />
+                    </label>
+                  ) : null}
+                  <AppointmentRowLink appointment={appointment} hasUnpricedTag={isNeedsBilling} />
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      ))}
+    </div>
   )
 }

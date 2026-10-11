@@ -22,6 +22,8 @@ type MarkPaidDialogProps = {
   methods: PaymentMethod[];
   businessDate: string;
   onClose: () => void;
+  // After a successful payment, before onClose: lets a caller tell success from cancel.
+  onSuccess?: () => void;
 };
 
 function pluralize(count: number, noun: string): string {
@@ -35,6 +37,7 @@ export default function MarkPaidDialog({
   methods,
   businessDate,
   onClose,
+  onSuccess,
 }: MarkPaidDialogProps): React.ReactNode {
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
@@ -56,6 +59,7 @@ export default function MarkPaidDialog({
 
   function handleSuccess(): void {
     hasRefusalRef.current = false;
+    onSuccess?.();
     onClose();
     router.refresh();
   }

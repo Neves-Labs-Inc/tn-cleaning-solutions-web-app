@@ -30,7 +30,7 @@ export const MAX_ROWS = 1000
 export const MAX_IN_VALUES = 250
 
 // Hand-rolled stand-in for the reads the ledger and price module make (`from().select()` with
-// `.in() .eq() .neq() .is() .not()` filters, `.order() .range()` paging, `.maybeSingle()`, awaited for `{ data, error }`) and for `.rpc()`, whose answer the
+// `.in() .eq() .neq() .gte() .lte() .is() .not()` filters, `.order() .range()` paging, `.maybeSingle()`, awaited for `{ data, error }`) and for `.rpc()`, whose answer the
 // test scripts. Filters are applied, so archived and cancelled rows drop out the way they do in Postgres.
 // Embeds are seeded on the row under their alias. A dotted filter (`live.is_archived`) on an array
 // embed filters that embed, and `.is('live', null)` then keeps rows whose embed came back empty; on
@@ -91,6 +91,9 @@ export function createFakeSupabase(
       },
       eq: (column: string, value: unknown) => addFilter(column, (actual) => actual === value),
       neq: (column: string, value: unknown) => addFilter(column, (actual) => actual !== value),
+      // Compared as strings: enough for the yyyy-MM-dd ranges the reads use.
+      gte: (column: string, value: string) => addFilter(column, (actual) => String(actual) >= value),
+      lte: (column: string, value: string) => addFilter(column, (actual) => String(actual) <= value),
       // Like SQL `IS`, NULL and undefined both match null; an empty embed is null too.
       is: (column: string) => addFilter(column, isNullish),
       not: (column: string, _operator: 'is', value: boolean | null) =>
