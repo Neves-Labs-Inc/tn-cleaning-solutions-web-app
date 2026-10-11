@@ -60,6 +60,8 @@ type VisitLineSummaryProps = {
   // 'inline' puts the Set price link where the amount would be; 'none' leaves it to the caller (a checkbox row
   // keeps it outside its label via SetPriceLink).
   setPriceLink?: 'inline' | 'none'
+  // The price math under the amount (draft detail lines); null or absent renders nothing.
+  priceBreakdown?: string | null
   className?: string
 }
 
@@ -78,6 +80,7 @@ export function VisitLineSummary({
   billedAmountCents = null,
   isExcluded = false,
   setPriceLink = 'inline',
+  priceBreakdown = null,
   className,
 }: VisitLineSummaryProps) {
   const badges = states.flatMap((state) => {
@@ -114,6 +117,10 @@ export function VisitLineSummary({
           </p>
         )}
       </div>
+
+      {priceBreakdown ? (
+        <p className="mt-0.5 text-right text-xs break-words text-muted-foreground tabular-nums">{priceBreakdown}</p>
+      ) : null}
 
       {badges.length > 0 || isExcluded ? (
         <div className="mt-1 flex flex-wrap gap-1">
