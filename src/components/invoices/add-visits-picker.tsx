@@ -52,7 +52,15 @@ export default function AddVisitsPicker({
     // Nothing starts checked.
     setSelected(new Set())
     setError(null)
+    showPageError(null)
     setIsOpen(true)
+  }
+
+  // Dismissing clears the page slot too; the sheet's own error stays until the next open so its
+  // content doesn't jump while it animates out.
+  function handleOpenChange(nextOpen: boolean) {
+    showPageError(null)
+    setIsOpen(nextOpen)
   }
 
   // Shown in the sheet, and in the page slot too: a refusal re-renders the page, and a draft issued
@@ -97,7 +105,7 @@ export default function AddVisitsPicker({
 
       <ResponsiveDialog
         open={isOpen}
-        onOpenChange={setIsOpen}
+        onOpenChange={handleOpenChange}
         isPending={isPending}
         returnFocusRef={triggerRef}
         title="Add appointments"
@@ -131,7 +139,7 @@ export default function AddVisitsPicker({
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               ) : null}
-              <SheetButtons onCancel={() => setIsOpen(false)} onPendingChange={setIsPending}>
+              <SheetButtons onCancel={() => handleOpenChange(false)} onPendingChange={setIsPending}>
                 <SubmitButton
                   label={chosenIds.length === 0 ? 'Add appointments' : `Add ${visitCount(chosenIds.length)}`}
                   pendingLabel="Adding…"

@@ -39,7 +39,6 @@ export type VisitDetails = {
   scheduled_end_time: string
   job_name: string
   location_label: string | null
-  location_address: string | null
   live: LivePrice
 }
 
@@ -91,7 +90,7 @@ export type Receivables = {
 type VisitRow = PriceableAppointment & {
   status: AppointmentStatus
   jobs: { name: string } | null
-  client_locations: { label: string; address: string } | null
+  client_locations: { label: string } | null
 }
 
 type UnbilledRow = VisitRow & { excluded_from_automatic: boolean; clients: { name: string } | null }
@@ -112,7 +111,7 @@ const VISIT_COLUMNS = `
   ${APPOINTMENT_PRICE_COLUMNS},
   status,
   jobs ( name ),
-  client_locations ( label, address )
+  client_locations ( label )
 `
 
 // "No Live claim" as a PostgREST anti-join: embed only the visit's Live claims, then keep the rows
@@ -140,7 +139,6 @@ async function priceVisits(db: Db, rows: VisitRow[]): Promise<VisitDetails[]> {
     scheduled_end_time: row.scheduled_end_time,
     job_name: row.jobs?.name ?? 'Unknown job',
     location_label: row.client_locations?.label ?? null,
-    location_address: row.client_locations?.address ?? null,
     live: prices.get(row.id)?.live ?? UNPRICED,
   }))
 }
@@ -213,6 +211,17 @@ async function loadUnbilled(db: Db, clientId: string | null): Promise<UnbilledVi
       location_label: row.client_locations?.label ?? null,
     }
   })
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// A cheap existence check for the route layout, which must decide 404 before the page streams.
+export async function invoiceExists(db: Db, invoiceId: string): Promise<boolean> {
+  if (!UUID.test(invoiceId)) return false
+
+  const { data, error } = await db.from('invoices').select('id').eq('id', invoiceId).maybeSingle()
+  if (error) throw error
+  return data !== null
 }
 
 export async function getInvoiceDetail(db: Db, invoiceId: string): Promise<InvoiceDetail | null> {

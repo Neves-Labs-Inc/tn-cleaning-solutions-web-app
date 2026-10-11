@@ -158,9 +158,11 @@ export async function updateDraft(
   if ('refusal' in admin) return admin.refusal
 
   const result = await admin.ledger.updateDraft(invoiceId, { addAppointmentIds, removeAppointmentIds, details })
-  // A deleted draft's page would re-render as not-found before the client leaves it.
+  // Any revalidation re-renders the open page with the action's response, and a deleted draft's page
+  // is not-found: it would flash before the client reaches the ledger. The ledger and the other
+  // pages are dynamic, so they read fresh when navigated to.
   const isDeleted = result.ok && result.data.isDeleted
-  revalidateInvoicing(isDeleted ? undefined : invoiceId)
+  if (!isDeleted) revalidateInvoicing(invoiceId)
   return toActionResult(result)
 }
 

@@ -144,7 +144,7 @@ export default function InvoiceVisitsCard({
   businessDate,
 }: InvoiceVisitsCardProps) {
   const router = useRouter()
-  const { runPageAction } = useInvoiceDetail()
+  const { runPageAction, showPageError } = useInvoiceDetail()
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastLine, setLastLine] = useState<InvoiceDetailLine | null>(null)
@@ -182,6 +182,7 @@ export default function InvoiceVisitsCard({
     const liveLines = lines.filter((other) => other.state !== 'cancelled')
     if (liveLines.length === 1 && liveLines[0] === line) {
       lastLineTriggerRef.current = trigger
+      showPageError(null)
       setLastLine(line)
     } else {
       void removeLine(line)
@@ -198,8 +199,10 @@ export default function InvoiceVisitsCard({
       },
       () => submitDraftUpdate({ invoiceId, removeIds: [lastLine.visit.id] })
     )
-    setLastLine(null)
-    leaveIfDeleted(removed?.isDeleted ?? false)
+    const isDeleted = removed?.isDeleted ?? false
+    // A deleted draft's confirm stays up until the ledger replaces the page.
+    if (!isDeleted) setLastLine(null)
+    leaveIfDeleted(isDeleted)
   }
 
   return (
@@ -259,7 +262,9 @@ export default function InvoiceVisitsCard({
       <ConfirmDialog
         open={lastLine !== null}
         onOpenChange={(isOpen) => {
-          if (!isOpen) setLastLine(null)
+          if (isOpen) return
+          showPageError(null)
+          setLastLine(null)
         }}
         title="Delete this draft?"
         description={`This is its only appointment. Removing it deletes the draft.${isAutomatic ? " The appointment won't rejoin an Automatic draft." : ''}`}

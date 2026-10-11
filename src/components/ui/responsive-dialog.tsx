@@ -74,6 +74,9 @@ export default function ResponsiveDialog({
     }
   }
 
+  // Radix warns about a missing description; opting out explicitly is the supported way to have none.
+  const describedByProps = description ? {} : { "aria-describedby": undefined };
+
   if (isMobile) {
     return (
       // vaul defaults autoFocus to false, which leaves focus behind the sheet and loses it on close.
@@ -84,7 +87,7 @@ export default function ResponsiveDialog({
         direction="bottom"
         autoFocus
       >
-        <DrawerContent onCloseAutoFocus={handleCloseAutoFocus}>
+        <DrawerContent onCloseAutoFocus={handleCloseAutoFocus} {...describedByProps}>
           <DrawerHeader className="group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
             <DrawerTitle>{title}</DrawerTitle>
             {description ? <DrawerDescription>{description}</DrawerDescription> : null}
@@ -100,6 +103,7 @@ export default function ResponsiveDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
+        {...describedByProps}
         finalFocus={shouldRestoreFocus ? (returnFocusRef ?? true) : false}
         className="flex max-h-[85vh] flex-col text-sm data-open:duration-base data-open:ease-out-quart data-closed:duration-[140ms] data-closed:ease-in-quart sm:max-w-md"
       >
