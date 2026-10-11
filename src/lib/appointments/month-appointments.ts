@@ -67,6 +67,7 @@ export async function listMonthAppointments(
       id: row.id,
       clientId: row.client_id,
       clientName: row.clients?.name ?? 'Unknown client',
+      jobId: row.job_id,
       jobName: row.jobs?.name ?? 'Unknown job',
       scheduledDate: row.scheduled_date,
       startTime: row.scheduled_start_time,

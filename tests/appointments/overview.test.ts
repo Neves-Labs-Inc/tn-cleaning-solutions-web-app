@@ -20,7 +20,15 @@ import type { NeedsBillingAppointment } from '../../src/lib/invoices/payment-sta
 
 const BUSINESS_DATE = '2026-10-11'
 
-const OCTOBER: AppointmentsQuery = { view: 'schedule', month: 10, year: 2026, showCancelled: false }
+const OCTOBER: AppointmentsQuery = {
+  view: 'schedule',
+  month: 10,
+  year: 2026,
+  showCancelled: false,
+  clientId: '',
+  jobId: '',
+  status: 'all',
+}
 
 describe('parseAppointmentsQuery', () => {
   it('opens on the schedule for the Business date month when no params are given', () => {
@@ -30,7 +38,7 @@ describe('parseAppointmentsQuery', () => {
   it('reads every view, the month, the year and Show cancelled', () => {
     assert.deepEqual(
       parseAppointmentsQuery({ view: 'paid', month: '3', year: '2025', showCancelled: 'true' }, BUSINESS_DATE),
-      { view: 'paid', month: 3, year: 2025, showCancelled: true }
+      { ...OCTOBER, view: 'paid', month: 3, year: 2025, showCancelled: true }
     )
     assert.equal(parseAppointmentsQuery({ view: 'needs-billing' }, BUSINESS_DATE).view, 'needs-billing')
     assert.equal(parseAppointmentsQuery({ view: 'billed' }, BUSINESS_DATE).view, 'billed')
@@ -52,7 +60,7 @@ describe('appointmentsHref', () => {
 
   it('keeps the view, month, year and Show cancelled', () => {
     assert.equal(
-      appointmentsHref({ view: 'needs-billing', month: 3, year: 2025, showCancelled: true }),
+      appointmentsHref({ ...OCTOBER, view: 'needs-billing', month: 3, year: 2025, showCancelled: true }),
       '/solutions/appointments?view=needs-billing&month=3&year=2025&showCancelled=true'
     )
   })
@@ -82,6 +90,7 @@ function needsBilling(id: string, livePriceCents: number | null): NeedsBillingAp
     scheduledDate: '2025-09-15',
     startTime: '09:00:00',
     endTime: '12:00:00',
+    jobId: 'standard',
     jobName: 'Standard clean',
     livePriceCents,
   }
@@ -95,6 +104,7 @@ function scheduled(
     id,
     clientId: 'smith',
     clientName: 'Maria Silva',
+    jobId: 'standard',
     jobName: 'Standard clean',
     scheduledDate: '2026-10-07',
     startTime: '09:00:00',

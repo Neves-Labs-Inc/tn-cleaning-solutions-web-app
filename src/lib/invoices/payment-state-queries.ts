@@ -23,6 +23,7 @@ export type NeedsBillingAppointment = {
   scheduledDate: string;
   startTime: string;
   endTime: string;
+  jobId: string;
   jobName: string;
   livePriceCents: number | null;
 };
@@ -118,6 +119,7 @@ export async function listNeedsBilling(
       scheduledDate: row.scheduled_date,
       startTime: row.scheduled_start_time,
       endTime: row.scheduled_end_time,
+      jobId: row.job_id,
       jobName: row.jobs?.name ?? "Unknown job",
       livePriceCents: live && live.source !== "unpriced" ? live.amount_cents : null,
     };

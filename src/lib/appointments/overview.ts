@@ -1,6 +1,13 @@
 import type { NeedsBillingAppointment } from '../invoices/payment-state-queries.ts'
 import type { PaymentClaim, PaymentState } from '../invoices/payment-state.ts'
 import { getGraceEnd } from '../time-sheets/session-view.ts'
+import {
+  appointmentsFilterEntries,
+  matchesFilters,
+  parseAppointmentsFilter,
+  type AppointmentsFilter,
+  type AppointmentsFilterParams,
+} from './filters.ts'
 import type { AppointmentStatus } from './lifecycle.ts'
 
 // The appointments screen: its URL state, overview tiles and views. Pure, so node:test, the server
@@ -11,6 +18,7 @@ export type ScheduleAppointment = {
   id: string
   clientId: string
   clientName: string
+  jobId: string
   jobName: string
   scheduledDate: string
   startTime: string
@@ -46,7 +54,7 @@ export type Overview = { needsBilling: TileTotal; billed: TileTotal; paid: TileT
 
 export type AppointmentsView = 'schedule' | 'needs-billing' | 'billed' | 'paid'
 
-export type AppointmentsQuery = {
+export type AppointmentsQuery = AppointmentsFilter & {
   view: AppointmentsView
   month: number
   year: number
@@ -55,7 +63,7 @@ export type AppointmentsQuery = {
 
 type SearchParam = string | string[] | undefined
 
-type AppointmentsSearchParams = {
+type AppointmentsSearchParams = AppointmentsFilterParams & {
   view?: SearchParam
   month?: SearchParam
   year?: SearchParam
@@ -93,6 +101,7 @@ export function parseAppointmentsQuery(
     month: parseIntegerIn(single(params.month), 1, MONTHS_IN_YEAR, businessMonth),
     year: parseIntegerIn(single(params.year), MIN_YEAR, MAX_YEAR, businessYear),
     showCancelled: single(params.showCancelled) === 'true',
+    ...parseAppointmentsFilter(params),
   }
 }
 
@@ -102,6 +111,7 @@ export function appointmentsHref(query: AppointmentsQuery): string {
   params.set('month', String(query.month))
   params.set('year', String(query.year))
   if (query.showCancelled) params.set('showCancelled', 'true')
+  for (const [name, value] of appointmentsFilterEntries(query)) params.set(name, value)
   return `${APPOINTMENTS_PATH}?${params.toString()}`
 }
 
@@ -150,8 +160,8 @@ export function tileCaption(count: number, scope: TileScope, unpricedCount: numb
   return `${count} ${noun} · ${scope}${unpriced}`
 }
 
-// The month's appointments a schedule view shows. Needs billing lists every month instead, so it
-// shows none of these.
+// The month's appointments a schedule view shows, narrowed by the filters. Needs billing lists every
+// month instead, so it shows none of these.
 export function appointmentsInView(
   monthAppointments: ScheduleAppointment[],
   query: AppointmentsQuery
@@ -159,10 +169,11 @@ export function appointmentsInView(
   const { view, showCancelled } = query
   if (view === 'needs-billing') return []
 
-  return monthAppointments.filter((appointment) => {
-    const isShown = showCancelled || appointment.status !== 'cancelled'
-    return isShown && (view === 'schedule' || appointment.paymentState === view)
-  })
+  return monthAppointments.filter(
+    (appointment) =>
+      matchesFilters(appointment, query, showCancelled) &&
+      (view === 'schedule' || appointment.paymentState === view)
+  )
 }
 
 // A tile click whose navigation may still be in flight, and the URL showing when this was last synced.

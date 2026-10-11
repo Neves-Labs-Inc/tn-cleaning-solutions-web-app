@@ -31,6 +31,7 @@ function toListRow(appointment: NeedsBillingAppointment): ScheduleAppointment {
     id: appointment.id,
     clientId: appointment.clientId,
     clientName: appointment.clientName,
+    jobId: appointment.jobId,
     jobName: appointment.jobName,
     scheduledDate: appointment.scheduledDate,
     startTime: appointment.startTime,
