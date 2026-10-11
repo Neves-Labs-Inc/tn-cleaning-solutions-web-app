@@ -6,6 +6,7 @@ import {
   planCrewChange,
   planFutureVisitCleanup,
   type ExistingAssignment,
+  type FutureVisit,
 } from "../../src/lib/appointments/crew.ts";
 
 function assignment(
@@ -257,10 +258,22 @@ describe("planFutureVisitCleanup", () => {
     acknowledgementCount: 0,
   };
 
-  it("deletes scheduled visits nobody clocked or edited", () => {
+  function laterAppointment(
+    overrides: Partial<FutureVisit> & Pick<FutureVisit, "id" | "scheduled_date">,
+  ): FutureVisit {
+    return {
+      status: "scheduled",
+      manually_completed: false,
+      hasLiveClaim: false,
+      assignments: [],
+      ...overrides,
+    };
+  }
+
+  it("deletes scheduled appointments nobody clocked, edited or billed", () => {
     const plan = planFutureVisitCleanup([
-      { id: "visit-1", scheduled_date: "2026-10-20", assignments: [untouched] },
-      { id: "visit-2", scheduled_date: "2026-10-27", assignments: [] },
+      laterAppointment({ id: "visit-1", scheduled_date: "2026-10-20", assignments: [untouched] }),
+      laterAppointment({ id: "visit-2", scheduled_date: "2026-10-27" }),
     ]);
 
     assert.deepEqual(plan, {
@@ -269,14 +282,10 @@ describe("planFutureVisitCleanup", () => {
     });
   });
 
-  it("keeps a visit with a clock correction and preserves its date", () => {
+  it("keeps a completed appointment and preserves its date", () => {
     const plan = planFutureVisitCleanup([
-      {
-        id: "visit-1",
-        scheduled_date: "2026-10-20",
-        assignments: [untouched, { ...untouched, correctionCount: 2 }],
-      },
-      { id: "visit-2", scheduled_date: "2026-10-27", assignments: [untouched] },
+      laterAppointment({ id: "visit-1", scheduled_date: "2026-10-20", status: "completed" }),
+      laterAppointment({ id: "visit-2", scheduled_date: "2026-10-27" }),
     ]);
 
     assert.deepEqual(plan, {
@@ -285,33 +294,92 @@ describe("planFutureVisitCleanup", () => {
     });
   });
 
-  it("keeps a visit whose archived assignment still holds clocks", () => {
+  it("keeps a cancelled appointment and preserves its date", () => {
     const plan = planFutureVisitCleanup([
-      {
+      laterAppointment({ id: "visit-1", scheduled_date: "2026-10-20", status: "cancelled" }),
+    ]);
+
+    assert.deepEqual(plan, { deleteIds: [], preservedDates: ["2026-10-20"] });
+  });
+
+  it("keeps an in-progress appointment so its date gets no twin", () => {
+    const plan = planFutureVisitCleanup([
+      laterAppointment({ id: "visit-1", scheduled_date: "2026-10-20", status: "in_progress" }),
+    ]);
+
+    assert.deepEqual(plan, { deleteIds: [], preservedDates: ["2026-10-20"] });
+  });
+
+  it("keeps a manually completed appointment", () => {
+    const plan = planFutureVisitCleanup([
+      laterAppointment({
         id: "visit-1",
         scheduled_date: "2026-10-20",
-        assignments: [{ ...untouched, clocked_in_at: "2026-10-20T13:00:00Z" }],
-      },
+        status: "completed",
+        manually_completed: true,
+      }),
+    ]);
+
+    assert.deepEqual(plan, { deleteIds: [], preservedDates: ["2026-10-20"] });
+  });
+
+  it("keeps a scheduled appointment flagged manually completed", () => {
+    const plan = planFutureVisitCleanup([
+      laterAppointment({ id: "visit-1", scheduled_date: "2026-10-20", manually_completed: true }),
+    ]);
+
+    assert.deepEqual(plan, { deleteIds: [], preservedDates: ["2026-10-20"] });
+  });
+
+  it("keeps a scheduled appointment on a Live claim", () => {
+    const plan = planFutureVisitCleanup([
+      laterAppointment({ id: "visit-1", scheduled_date: "2026-10-20", hasLiveClaim: true }),
+      laterAppointment({ id: "visit-2", scheduled_date: "2026-10-27" }),
     ]);
 
     assert.deepEqual(plan, {
-      deleteIds: [],
+      deleteIds: ["visit-2"],
       preservedDates: ["2026-10-20"],
     });
   });
 
-  it("keeps a visit with an odd-duration acknowledgement", () => {
+  it("keeps an appointment with a clock correction and preserves its date", () => {
     const plan = planFutureVisitCleanup([
-      {
+      laterAppointment({
         id: "visit-1",
         scheduled_date: "2026-10-20",
-        assignments: [{ ...untouched, acknowledgementCount: 1 }],
-      },
+        assignments: [untouched, { ...untouched, correctionCount: 2 }],
+      }),
+      laterAppointment({ id: "visit-2", scheduled_date: "2026-10-27", assignments: [untouched] }),
     ]);
 
     assert.deepEqual(plan, {
-      deleteIds: [],
+      deleteIds: ["visit-2"],
       preservedDates: ["2026-10-20"],
     });
+  });
+
+  it("keeps an appointment whose archived assignment still holds clocks", () => {
+    const plan = planFutureVisitCleanup([
+      laterAppointment({
+        id: "visit-1",
+        scheduled_date: "2026-10-20",
+        assignments: [{ ...untouched, clocked_in_at: "2026-10-20T13:00:00Z" }],
+      }),
+    ]);
+
+    assert.deepEqual(plan, { deleteIds: [], preservedDates: ["2026-10-20"] });
+  });
+
+  it("keeps an appointment with an odd-duration acknowledgement", () => {
+    const plan = planFutureVisitCleanup([
+      laterAppointment({
+        id: "visit-1",
+        scheduled_date: "2026-10-20",
+        assignments: [{ ...untouched, acknowledgementCount: 1 }],
+      }),
+    ]);
+
+    assert.deepEqual(plan, { deleteIds: [], preservedDates: ["2026-10-20"] });
   });
 });

@@ -72,34 +72,43 @@ export function hasSessionHistory(facts: SessionHistoryFacts): boolean {
   );
 }
 
-// A later scheduled visit in a series, as a "this and future" edit sees it.
+// A later appointment in a series, as a "this and following" edit sees it.
 // assignments covers every row, archived or not.
 export type FutureVisit = {
   id: string;
   scheduled_date: string;
+  status: AppointmentStatus;
+  manually_completed: boolean;
+  hasLiveClaim: boolean;
   assignments: SessionHistoryFacts[];
 };
 
 export type FutureVisitCleanupPlan = {
   deleteIds: string[];
-  // Dates that keep their existing visit, so they mustn't be regenerated.
+  // Dates that keep their existing appointment, so they mustn't be regenerated.
   preservedDates: string[];
 };
 
-// No hours record is ever deleted: a visit where any assignment (archived or
-// not) has history stays put, like a completed or cancelled one.
+// A Series edit never deletes a Protected appointment (CONTEXT.md): deleting one on a Live claim
+// would cascade its line off the invoice, and no hours record is ever deleted.
+function isProtected(visit: FutureVisit): boolean {
+  return (
+    visit.status !== "scheduled" ||
+    visit.manually_completed ||
+    visit.hasLiveClaim ||
+    visit.assignments.some(hasSessionHistory)
+  );
+}
+
 export function planFutureVisitCleanup(
   visits: FutureVisit[],
 ): FutureVisitCleanupPlan {
-  const isPreserved = (visit: FutureVisit): boolean =>
-    visit.assignments.some(hasSessionHistory);
-
   return {
     deleteIds: visits
-      .filter((visit) => !isPreserved(visit))
+      .filter((visit) => !isProtected(visit))
       .map((visit) => visit.id),
     preservedDates: visits
-      .filter(isPreserved)
+      .filter(isProtected)
       .map((visit) => visit.scheduled_date),
   };
 }

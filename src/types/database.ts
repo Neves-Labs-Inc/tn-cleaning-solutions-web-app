@@ -808,6 +808,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      delete_unprotected_series_appointments: {
+        Args: { appointment_ids: string[] }
+        Returns: string[]
+      }
       invoice_archive: {
         Args: { p_invoice_id: string }
         Returns: undefined

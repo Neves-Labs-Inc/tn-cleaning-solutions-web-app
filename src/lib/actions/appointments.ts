@@ -14,6 +14,7 @@ import {
   completedDateError,
   type AppointmentStatus,
 } from '@/lib/appointments/lifecycle'
+import { LIVE_CLAIM_EMBED } from '@/lib/invoices/unbilled-query'
 import { parseDollarsToCents } from '@/lib/pricing/money'
 import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -920,37 +921,30 @@ export async function updateAppointment(
           return { success: false, error: toAppointmentErrorMessage(recurrenceUpdateError, 'updateAppointment') }
         }
 
-        const { data: preservedAppointments, error: preservedAppointmentsError } = await adminClient
-          .from('appointments')
-          .select('scheduled_date')
-          .eq('recurrence_series_id', recurrenceSeriesId)
-          .gt('scheduled_date', appointment.scheduled_date)
-          .in('status', ['completed', 'cancelled'])
-          .eq('is_archived', false)
-
-        if (preservedAppointmentsError) {
-          return { success: false, error: toAppointmentErrorMessage(preservedAppointmentsError, 'updateAppointment') }
-        }
-
-        // Every assignment, archived or not, so a removed Cleaner's hours keep their visit alive.
-        const { data: futurePendingAppointments, error: futurePendingAppointmentsError } = await adminClient
+        // Every later appointment, Protected or not, with its Live claim and every assignment
+        // (archived or not, so a removed Cleaner's hours keep their appointment alive).
+        const { data: laterAppointments, error: laterAppointmentsError } = await adminClient
           .from('appointments')
           .select(
-            'id, scheduled_date, appointment_employees(clocked_in_at, clocked_out_at, clock_corrections(count), odd_duration_acknowledgements(count))'
+            `id, scheduled_date, status, manually_completed, appointment_employees(clocked_in_at, clocked_out_at, clock_corrections(count), odd_duration_acknowledgements(count)), ${LIVE_CLAIM_EMBED}`
           )
+          .eq('live.is_archived', false)
+          .is('live.cancelled_at', null)
           .eq('recurrence_series_id', recurrenceSeriesId)
           .gt('scheduled_date', appointment.scheduled_date)
-          .eq('status', 'scheduled')
           .eq('is_archived', false)
 
-        if (futurePendingAppointmentsError) {
-          return { success: false, error: toAppointmentErrorMessage(futurePendingAppointmentsError, 'updateAppointment') }
+        if (laterAppointmentsError) {
+          return { success: false, error: toAppointmentErrorMessage(laterAppointmentsError, 'updateAppointment') }
         }
 
         const cleanupPlan = planFutureVisitCleanup(
-          (futurePendingAppointments ?? []).map((row) => ({
+          (laterAppointments ?? []).map((row) => ({
             id: row.id,
             scheduled_date: row.scheduled_date,
+            status: row.status,
+            manually_completed: row.manually_completed,
+            hasLiveClaim: row.live.length > 0,
             assignments: row.appointment_employees.map((assignment) => ({
               clocked_in_at: assignment.clocked_in_at,
               clocked_out_at: assignment.clocked_out_at,
@@ -960,24 +954,28 @@ export async function updateAppointment(
           }))
         )
 
-        // Delete before regenerating: if the delete is refused (a RESTRICT audit FK, or a race),
-        // nothing has been inserted yet, so no date ends up with two visits.
+        // Delete before regenerating: if the delete is refused (a RESTRICT audit FK), nothing has
+        // been inserted yet. The function re-checks under lock, so an appointment clocked into or
+        // claimed since the read survives, and its date is kept instead of getting a twin.
+        let deletedIds = new Set<string>()
         if (cleanupPlan.deleteIds.length > 0) {
-          const { error: deleteFuturePendingError } = await adminClient
-            .from('appointments')
-            .delete()
-            .in('id', cleanupPlan.deleteIds)
-            // A clock-in since the read moves the visit out of scheduled, so it isn't deleted.
-            .eq('status', 'scheduled')
+          const { data: deletedRows, error: deleteLaterError } = await adminClient.rpc(
+            'delete_unprotected_series_appointments',
+            { appointment_ids: cleanupPlan.deleteIds }
+          )
 
-          if (deleteFuturePendingError) {
-            return { success: false, error: toAppointmentErrorMessage(deleteFuturePendingError, 'updateAppointment') }
+          if (deleteLaterError) {
+            return { success: false, error: toAppointmentErrorMessage(deleteLaterError, 'updateAppointment') }
           }
+          deletedIds = new Set(deletedRows ?? [])
         }
 
+        const plannedDeleteIds = new Set(cleanupPlan.deleteIds)
         const preservedDates = new Set([
-          ...(preservedAppointments ?? []).map((row) => row.scheduled_date),
           ...cleanupPlan.preservedDates,
+          ...(laterAppointments ?? [])
+            .filter((row) => plannedDeleteIds.has(row.id) && !deletedIds.has(row.id))
+            .map((row) => row.scheduled_date),
         ])
 
         const nextDate = formatDate(addDays(parseDate(appointment.scheduled_date), 1))
