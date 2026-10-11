@@ -11,20 +11,25 @@ import {
 function assignment(
   overrides: Partial<ExistingAssignment> & Pick<ExistingAssignment, "id" | "employee_id">,
 ): ExistingAssignment {
-  return { is_archived: false, hasHistory: false, ...overrides };
+  return { is_archived: false, hasHistory: false, hasClockIn: false, ...overrides };
 }
+
+const SCHEDULED = { status: "scheduled", manually_completed: false } as const;
+const COMPLETED = { status: "completed", manually_completed: false } as const;
 
 describe("planCrewChange", () => {
   it("archives a removed Cleaner whose session has history", () => {
     const plan = planCrewChange(
       [assignment({ id: "row-ana", employee_id: "ana", hasHistory: true })],
       [],
+      SCHEDULED,
     );
 
     assert.deepEqual(plan, {
       archiveIds: ["row-ana"],
       deleteIds: [],
       insertEmployeeIds: [],
+      shouldTurnOnManualCompletion: false,
     });
   });
 
@@ -32,12 +37,14 @@ describe("planCrewChange", () => {
     const plan = planCrewChange(
       [assignment({ id: "row-ana", employee_id: "ana" })],
       [],
+      SCHEDULED,
     );
 
     assert.deepEqual(plan, {
       archiveIds: [],
       deleteIds: ["row-ana"],
       insertEmployeeIds: [],
+      shouldTurnOnManualCompletion: false,
     });
   });
 
@@ -52,12 +59,14 @@ describe("planCrewChange", () => {
         }),
       ],
       ["ana"],
+      SCHEDULED,
     );
 
     assert.deepEqual(plan, {
       archiveIds: [],
       deleteIds: [],
       insertEmployeeIds: ["ana"],
+      shouldTurnOnManualCompletion: false,
     });
   });
 
@@ -68,12 +77,14 @@ describe("planCrewChange", () => {
         assignment({ id: "row-bea", employee_id: "bea" }),
       ],
       ["ana", "bea", "cleo"],
+      SCHEDULED,
     );
 
     assert.deepEqual(plan, {
       archiveIds: [],
       deleteIds: [],
       insertEmployeeIds: ["cleo"],
+      shouldTurnOnManualCompletion: false,
     });
   });
 
@@ -89,12 +100,14 @@ describe("planCrewChange", () => {
         assignment({ id: "row-bea-old", employee_id: "bea", is_archived: true }),
       ],
       [],
+      SCHEDULED,
     );
 
     assert.deepEqual(plan, {
       archiveIds: [],
       deleteIds: [],
       insertEmployeeIds: [],
+      shouldTurnOnManualCompletion: false,
     });
   });
 
@@ -102,12 +115,14 @@ describe("planCrewChange", () => {
     const plan = planCrewChange(
       [assignment({ id: "row-ana", employee_id: "ana", is_archived: null })],
       ["ana"],
+      SCHEDULED,
     );
 
     assert.deepEqual(plan, {
       archiveIds: [],
       deleteIds: [],
       insertEmployeeIds: [],
+      shouldTurnOnManualCompletion: false,
     });
   });
 
@@ -119,13 +134,80 @@ describe("planCrewChange", () => {
         assignment({ id: "row-cleo", employee_id: "cleo" }),
       ],
       ["cleo", "dina"],
+      SCHEDULED,
     );
 
     assert.deepEqual(plan, {
       archiveIds: ["row-ana"],
       deleteIds: ["row-bea"],
       insertEmployeeIds: ["dina"],
+      shouldTurnOnManualCompletion: false,
     });
+  });
+});
+
+describe("planCrewChange Manual completion", () => {
+  const clockedAna = assignment({
+    id: "row-ana",
+    employee_id: "ana",
+    hasHistory: true,
+    hasClockIn: true,
+  });
+  const clockedBea = assignment({
+    id: "row-bea",
+    employee_id: "bea",
+    hasHistory: true,
+    hasClockIn: true,
+  });
+
+  it("turns on when the last Cleaner with clocks leaves a completed appointment", () => {
+    const plan = planCrewChange([clockedAna], ["cleo"], COMPLETED);
+
+    assert.equal(plan.shouldTurnOnManualCompletion, true);
+  });
+
+  it("stays off while one Cleaner with clocks remains", () => {
+    const plan = planCrewChange([clockedAna, clockedBea], ["bea"], COMPLETED);
+
+    assert.equal(plan.shouldTurnOnManualCompletion, false);
+  });
+
+  it("stays off when the appointment is already a Manual completion", () => {
+    const plan = planCrewChange([clockedAna], [], {
+      status: "completed",
+      manually_completed: true,
+    });
+
+    assert.equal(plan.shouldTurnOnManualCompletion, false);
+  });
+
+  it("stays off when the appointment isn't completed", () => {
+    const plan = planCrewChange([clockedAna], [], {
+      status: "in_progress",
+      manually_completed: false,
+    });
+
+    assert.equal(plan.shouldTurnOnManualCompletion, false);
+  });
+
+  it("ignores an archived row's clocks when deciding", () => {
+    const plan = planCrewChange(
+      [{ ...clockedBea, is_archived: true }, clockedAna],
+      ["bea"],
+      COMPLETED,
+    );
+
+    assert.equal(plan.shouldTurnOnManualCompletion, true);
+  });
+
+  it("stays off when only a Cleaner who never clocked is removed", () => {
+    const plan = planCrewChange(
+      [clockedAna, assignment({ id: "row-bea", employee_id: "bea" })],
+      ["ana", "cleo"],
+      COMPLETED,
+    );
+
+    assert.equal(plan.shouldTurnOnManualCompletion, false);
   });
 });
 

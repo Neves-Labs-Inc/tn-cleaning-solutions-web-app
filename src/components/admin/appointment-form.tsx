@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { startTransition, useActionState, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, TriangleAlert } from 'lucide-react'
+import { AlertCircle, Info, TriangleAlert } from 'lucide-react'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -17,8 +17,13 @@ import {
   type AppointmentActionResult,
   updateAppointment,
 } from '@/lib/actions/appointments'
+import { formatMinutes } from '@/components/admin/time-sheets/format-minutes'
 import { formatRate } from '@/lib/pricing/money'
+import { planCrewChange } from '@/lib/appointments/crew'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
+
+// One live assignment's clocks, for the crew field's removal warnings.
+export type CrewClock = { employeeId: string; closedMinutes: number; hasClockIn: boolean }
 
 // A Live claim on an issued or paid invoice: its price is frozen, so the form warns the edit won't reach it.
 export type InvoiceClaim = { id: string; number: string; status: 'issued' | 'paid' }
@@ -49,6 +54,8 @@ type AppointmentFormProps = {
     price_override_cents: number | null
     notes: string
     status: AppointmentStatus
+    manually_completed: boolean
+    crewClocks: CrewClock[]
     assignedEmployeeIds: string[]
   }
   recurrenceSeries?: {
@@ -67,6 +74,8 @@ const initialState: AppointmentActionResult = {
 }
 
 const SCHEDULED_DATE_ERROR_ID = 'scheduled_date-error'
+// An archived employee drops out of the employee list but can still hold clocked time here.
+const REMOVED_EMPLOYEE_NAME = 'A removed employee'
 
 function SubmitButton({ isEditMode, pending }: { isEditMode: boolean; pending: boolean }) {
   return (
@@ -92,6 +101,31 @@ function FieldError({ id, message }: FieldErrorProps) {
       className="text-sm text-destructive animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart"
     >
       {message}
+    </p>
+  )
+}
+
+const CREW_WARNING_CLASSES =
+  'flex items-start gap-1.5 break-words text-sm animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart'
+
+function RemovedClockWarning({ name, minutes }: { name: string; minutes: number }) {
+  return (
+    <p className={`${CREW_WARNING_CLASSES} text-status-warning-foreground`}>
+      <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0">
+        {name} has {formatMinutes(minutes)} clocked; removing her takes them off her pay.
+      </span>
+    </p>
+  )
+}
+
+function ManualCompletionNote() {
+  return (
+    <p className={`${CREW_WARNING_CLASSES} text-status-info-foreground`}>
+      <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0">
+        No Cleaner with clocks is left. The appointment stays completed as a Manual completion.
+      </span>
     </p>
   )
 }
@@ -207,6 +241,42 @@ export function AppointmentForm({
 
     return hint
   }, [selectedJob, clientRateIsStale])
+
+  const employeeNames = useMemo(
+    () => new Map(employees.map((employee) => [employee.id, employee.full_name])),
+    [employees]
+  )
+
+  // Saved-crew order; a Cleaner added in this edit has no clocks, so she never warns.
+  const removedClockWarnings = useMemo(() => {
+    if (!appointment) return []
+
+    const closedMinutesByEmployee = new Map(
+      appointment.crewClocks.map((clock) => [clock.employeeId, clock.closedMinutes])
+    )
+    return appointment.assignedEmployeeIds
+      .filter((employeeId) => !selectedEmployeeIds.includes(employeeId))
+      .map((employeeId) => ({
+        employeeId,
+        name: employeeNames.get(employeeId) ?? REMOVED_EMPLOYEE_NAME,
+        minutes: closedMinutesByEmployee.get(employeeId) ?? 0,
+      }))
+      .filter((warning) => warning.minutes > 0)
+  }, [appointment, selectedEmployeeIds, employeeNames])
+
+  // The planner the save runs, so the note shows exactly when the save turns Manual completion on.
+  const isManualCompletionAhead = useMemo(() => {
+    if (!appointment) return false
+
+    const crewRows = appointment.crewClocks.map((clock) => ({
+      id: clock.employeeId,
+      employee_id: clock.employeeId,
+      is_archived: false,
+      hasHistory: clock.hasClockIn,
+      hasClockIn: clock.hasClockIn,
+    }))
+    return planCrewChange(crewRows, selectedEmployeeIds, appointment).shouldTurnOnManualCompletion
+  }, [appointment, selectedEmployeeIds])
 
   const handleClientChange = (nextClientId: string) => {
     setSelectedClientId(nextClientId)
@@ -388,6 +458,15 @@ export function AppointmentForm({
             searchPlaceholder="Search employees..."
             emptyMessage="No employee found."
           />
+          {appointment ? (
+            // Always mounted so screen readers announce each warning as it appears.
+            <div aria-live="polite" className="space-y-1.5 empty:hidden">
+              {removedClockWarnings.map((warning) => (
+                <RemovedClockWarning key={warning.employeeId} name={warning.name} minutes={warning.minutes} />
+              ))}
+              {isManualCompletionAhead ? <ManualCompletionNote /> : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-1.5">

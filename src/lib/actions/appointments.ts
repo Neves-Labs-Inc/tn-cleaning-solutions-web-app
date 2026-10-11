@@ -636,7 +636,7 @@ export async function updateAppointment(
 
     const { data: existingAppointment, error: existingAppointmentError } = await adminClient
       .from('appointments')
-      .select('id, client_id, recurrence_series_id, status')
+      .select('id, client_id, recurrence_series_id, status, manually_completed')
       .eq('id', id)
       .eq('is_archived', false)
       .maybeSingle()
@@ -823,10 +823,37 @@ export async function updateAppointment(
             correctionCount: row.clock_corrections[0]?.count ?? 0,
             acknowledgementCount: row.odd_duration_acknowledgements[0]?.count ?? 0,
           }),
+          hasClockIn: row.clocked_in_at !== null,
         })),
-        parsed.data.employee_ids
+        parsed.data.employee_ids,
+        existingAppointment
       )
       const newEmployeeIds = crewPlan.insertEmployeeIds
+
+      // Flagged before any row is archived or deleted, so the derived status never leaves completed
+      // and neither the invoicing trigger nor the completed_at stamp fires.
+      if (crewPlan.shouldTurnOnManualCompletion) {
+        const { data: manualCompletion, error: manualCompletionError } = await adminClient
+          .from('appointments')
+          .update({ manually_completed: true })
+          .eq('id', id)
+          .eq('is_archived', false)
+          .eq('status', 'completed')
+          .eq('manually_completed', false)
+          .select('id')
+          .maybeSingle()
+
+        if (manualCompletionError) {
+          return { success: false, error: toAppointmentErrorMessage(manualCompletionError, 'updateAppointment') }
+        }
+
+        if (!manualCompletion) {
+          return {
+            success: false,
+            error: 'The appointment changed while you were editing it. Refresh and try again.',
+          }
+        }
+      }
 
       // Hours records and their corrections must survive 6 years, so a removed Cleaner with any
       // history is archived; the crew trigger re-derives status on archive as it does on delete.

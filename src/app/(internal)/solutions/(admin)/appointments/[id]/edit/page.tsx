@@ -16,6 +16,7 @@ import {
 import { formatCents, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
 import { canEdit, type AppointmentStatus } from '@/lib/appointments/lifecycle'
+import { getClockedMinutes } from '@/lib/time-sheets/session-view'
 
 type EditAppointmentPageProps = {
   params: Promise<{ id: string }>
@@ -38,6 +39,7 @@ type AppointmentRow = PriceableAppointment & {
   recurrence_series_id: string | null
   notes: string
   status: AppointmentStatus
+  manually_completed: boolean
   is_archived: boolean
   appointment_employees: Array<{ employee_id: string }> | null
 }
@@ -52,13 +54,14 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
     { data: jobs, error: jobsError },
     { data: employees, error: employeesError },
     { data: liveClaim, error: liveClaimError },
+    { data: crewClockRows, error: crewClocksError },
   ] = await Promise.all([
     supabase
       .from('appointments')
       .select(
         `
           ${APPOINTMENT_PRICE_COLUMNS},
-          location_id, recurrence_series_id, notes, status, is_archived,
+          location_id, recurrence_series_id, notes, status, manually_completed, is_archived,
           appointment_employees(employee_id)
         `
       )
@@ -90,6 +93,12 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
       .eq('is_archived', false)
       .is('cancelled_at', null)
       .maybeSingle(),
+    // The crew field warns about removing clocked time and about an automatic Manual completion.
+    supabase
+      .from('appointment_employees')
+      .select('employee_id, clocked_in_at, clocked_out_at')
+      .eq('appointment_id', id)
+      .not('is_archived', 'is', true),
   ])
 
   if (appointmentError || !appointment || appointment.is_archived) {
@@ -128,7 +137,9 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
     priceErrorMessage = thrown instanceof Error ? thrown.message : 'The appointment price could not be loaded.'
   }
 
-  const loadErrorMessage = loadError?.message ?? priceErrorMessage
+  // The form must never show without the clocks its crew warnings are built from.
+  const loadErrorMessage =
+    loadError?.message ?? (crewClocksError ? CREW_CLOCKS_ERROR_MESSAGE : null) ?? priceErrorMessage
 
   // Only the appointment's own Job is priced, so only it can show this client's negotiated rate;
   // the form says the rate applies on save for any other Job.
@@ -152,6 +163,13 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
     price_override_cents: typedAppointment.price_override_cents,
     notes: typedAppointment.notes,
     status: typedAppointment.status,
+    manually_completed: typedAppointment.manually_completed,
+    crewClocks: (crewClockRows ?? []).map((row) => ({
+      employeeId: row.employee_id,
+      closedMinutes:
+        row.clocked_in_at && row.clocked_out_at ? getClockedMinutes(row.clocked_in_at, row.clocked_out_at) : 0,
+      hasClockIn: row.clocked_in_at !== null,
+    })),
     assignedEmployeeIds: (typedAppointment.appointment_employees ?? []).map((row) => row.employee_id),
   }
   const [scheduledYearValue, scheduledMonthValue] = typedAppointment.scheduled_date.split('-', 3)
@@ -227,6 +245,8 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
     </div>
   )
 }
+
+const CREW_CLOCKS_ERROR_MESSAGE = "Couldn't load this appointment's clocks. Refresh the page to try again."
 
 const WARNING_ALERT_CLASSES = 'border-status-warning-border bg-status-warning text-status-warning-foreground'
 
