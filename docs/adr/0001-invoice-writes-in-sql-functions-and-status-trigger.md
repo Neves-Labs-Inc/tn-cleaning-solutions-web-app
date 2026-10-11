@@ -11,5 +11,6 @@ Every invoice write transition (create, edit draft, issue, void, archive, record
 ## Consequences
 
 - Functions check `get_user_role()` themselves, because revoking `EXECUTE` crashes the Supabase PG 17.6 image (see `20260917120000_secure_appointment_employees_view.sql`).
+- `anon` keeps `EXECUTE` on the `SECURITY DEFINER` invoice functions, a deliberate deferral: revoking it crashes that same image. Every function refuses non-admins (`not_admin`), so an anonymous caller can reach the function but not its writes. Revisit, and revoke, once the image allows it.
 - Lock order is appointment row, then invoice row, matching `employee_clock`.
 - Invoice totals are derived from lines in `invoices_with_status`, never stored.

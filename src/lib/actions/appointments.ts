@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 import { hasSessionHistory, planCrewChange, planFutureVisitCleanup } from '@/lib/appointments/crew'
+import { toAppointmentErrorMessage } from '@/lib/appointments/errors'
 import {
   canCancel,
   canMarkComplete,
@@ -170,7 +171,7 @@ async function requireAdminRole(): Promise<{ success: true } | { success: false;
   } = await supabase.auth.getUser()
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: toAppointmentErrorMessage(error, 'requireAdminRole') }
   }
 
   if (!user) {
@@ -481,7 +482,7 @@ export async function createAppointment(
         .single()
 
       if (recurrenceError) {
-        return { success: false, error: recurrenceError.message }
+        return { success: false, error: toAppointmentErrorMessage(recurrenceError, 'createAppointment') }
       }
 
       const recurrenceDates = generateRecurrenceDates(
@@ -514,7 +515,7 @@ export async function createAppointment(
         .select('id')
 
       if (appointmentsError) {
-        return { success: false, error: appointmentsError.message }
+        return { success: false, error: toAppointmentErrorMessage(appointmentsError, 'createAppointment') }
       }
 
       createdAppointmentIds = (appointments ?? []).map((row) => row.id)
@@ -539,7 +540,7 @@ export async function createAppointment(
         .single()
 
       if (appointmentError) {
-        return { success: false, error: appointmentError.message }
+        return { success: false, error: toAppointmentErrorMessage(appointmentError, 'createAppointment') }
       }
 
       createdAppointmentIds = [appointment.id]
@@ -563,7 +564,7 @@ export async function createAppointment(
         .insert(assignmentInserts)
 
       if (assignmentError) {
-        return { success: false, error: assignmentError.message }
+        return { success: false, error: toAppointmentErrorMessage(assignmentError, 'createAppointment') }
       }
     }
   } catch {
@@ -629,7 +630,7 @@ export async function updateAppointment(
       .maybeSingle()
 
     if (existingAppointmentError) {
-      return { success: false, error: existingAppointmentError.message }
+      return { success: false, error: toAppointmentErrorMessage(existingAppointmentError, 'updateAppointment') }
     }
 
     if (!existingAppointment) {
@@ -689,7 +690,7 @@ export async function updateAppointment(
         .maybeSingle()
 
       if (recurrenceSeriesError) {
-        return { success: false, error: recurrenceSeriesError.message }
+        return { success: false, error: toAppointmentErrorMessage(recurrenceSeriesError, 'updateAppointment') }
       }
 
       if (!recurrenceSeries) {
@@ -714,7 +715,7 @@ export async function updateAppointment(
         .eq('is_archived', false)
 
       if (recurrenceUpdateError) {
-        return { success: false, error: recurrenceUpdateError.message }
+        return { success: false, error: toAppointmentErrorMessage(recurrenceUpdateError, 'updateAppointment') }
       }
     } else {
       const { data: appointment, error: appointmentError } = await adminClient
@@ -737,7 +738,7 @@ export async function updateAppointment(
         .maybeSingle()
 
       if (appointmentError) {
-        return { success: false, error: appointmentError.message }
+        return { success: false, error: toAppointmentErrorMessage(appointmentError, 'updateAppointment') }
       }
 
       if (!appointment) {
@@ -749,7 +750,7 @@ export async function updateAppointment(
           .maybeSingle()
 
         if (latestAppointmentError) {
-          return { success: false, error: latestAppointmentError.message }
+          return { success: false, error: toAppointmentErrorMessage(latestAppointmentError, 'updateAppointment') }
         }
 
         if (!latestAppointment) {
@@ -774,7 +775,7 @@ export async function updateAppointment(
         .eq('appointment_id', id)
 
       if (existingAssignmentsError) {
-        return { success: false, error: existingAssignmentsError.message }
+        return { success: false, error: toAppointmentErrorMessage(existingAssignmentsError, 'updateAppointment') }
       }
 
       const crewPlan = planCrewChange(
@@ -802,7 +803,7 @@ export async function updateAppointment(
           .in('id', crewPlan.archiveIds)
 
         if (archiveAssignmentsError) {
-          return { success: false, error: archiveAssignmentsError.message }
+          return { success: false, error: toAppointmentErrorMessage(archiveAssignmentsError, 'updateAppointment') }
         }
       }
 
@@ -816,7 +817,7 @@ export async function updateAppointment(
           .is('clocked_out_at', null)
 
         if (deleteAssignmentsError) {
-          return { success: false, error: deleteAssignmentsError.message }
+          return { success: false, error: toAppointmentErrorMessage(deleteAssignmentsError, 'updateAppointment') }
         }
       }
 
@@ -834,7 +835,7 @@ export async function updateAppointment(
           .insert(assignmentInserts)
 
         if (assignmentInsertError) {
-          return { success: false, error: assignmentInsertError.message }
+          return { success: false, error: toAppointmentErrorMessage(assignmentInsertError, 'updateAppointment') }
         }
       }
 
@@ -855,7 +856,7 @@ export async function updateAppointment(
           .eq('is_archived', false)
 
         if (recurrenceUpdateError) {
-          return { success: false, error: recurrenceUpdateError.message }
+          return { success: false, error: toAppointmentErrorMessage(recurrenceUpdateError, 'updateAppointment') }
         }
 
         const { data: preservedAppointments, error: preservedAppointmentsError } = await adminClient
@@ -867,7 +868,7 @@ export async function updateAppointment(
           .eq('is_archived', false)
 
         if (preservedAppointmentsError) {
-          return { success: false, error: preservedAppointmentsError.message }
+          return { success: false, error: toAppointmentErrorMessage(preservedAppointmentsError, 'updateAppointment') }
         }
 
         // Every assignment, archived or not, so a removed Cleaner's hours keep their visit alive.
@@ -882,7 +883,7 @@ export async function updateAppointment(
           .eq('is_archived', false)
 
         if (futurePendingAppointmentsError) {
-          return { success: false, error: futurePendingAppointmentsError.message }
+          return { success: false, error: toAppointmentErrorMessage(futurePendingAppointmentsError, 'updateAppointment') }
         }
 
         const cleanupPlan = planFutureVisitCleanup(
@@ -909,7 +910,7 @@ export async function updateAppointment(
             .eq('status', 'scheduled')
 
           if (deleteFuturePendingError) {
-            return { success: false, error: deleteFuturePendingError.message }
+            return { success: false, error: toAppointmentErrorMessage(deleteFuturePendingError, 'updateAppointment') }
           }
         }
 
@@ -948,7 +949,7 @@ export async function updateAppointment(
             .select('id')
 
           if (regeneratedAppointmentsError) {
-            return { success: false, error: regeneratedAppointmentsError.message }
+            return { success: false, error: toAppointmentErrorMessage(regeneratedAppointmentsError, 'updateAppointment') }
           }
 
           const regeneratedAppointmentIds = (regeneratedAppointments ?? []).map((row) => row.id)
@@ -971,7 +972,7 @@ export async function updateAppointment(
               .insert(regeneratedAssignmentInserts)
 
             if (regeneratedAssignmentsError) {
-              return { success: false, error: regeneratedAssignmentsError.message }
+              return { success: false, error: toAppointmentErrorMessage(regeneratedAssignmentsError, 'updateAppointment') }
             }
           }
         }
@@ -1012,7 +1013,7 @@ async function loadAppointmentForLifecycle(id: string): Promise<LifecycleLoadRes
     .maybeSingle()
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: toAppointmentErrorMessage(error, 'loadAppointmentForLifecycle') }
   }
 
   if (!data) {
@@ -1035,7 +1036,7 @@ export async function cancelAppointment(id: string): Promise<AppointmentActionRe
     return { success: false, error: 'This appointment is already cancelled.' }
   }
 
-  // The database error is returned verbatim: a paid-invoice trigger refuses with a message the admin must read.
+  // A paid-invoice trigger refuses with P0001 and a message the admin must read; it passes through.
   const { data, error } = await createAdminClient()
     .from('appointments')
     .update({ status: 'cancelled' })
@@ -1046,7 +1047,7 @@ export async function cancelAppointment(id: string): Promise<AppointmentActionRe
     .maybeSingle()
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: toAppointmentErrorMessage(error, 'cancelAppointment') }
   }
 
   if (!data) {
@@ -1080,7 +1081,7 @@ export async function restoreAppointment(id: string): Promise<AppointmentActionR
     .maybeSingle()
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: toAppointmentErrorMessage(error, 'restoreAppointment') }
   }
 
   if (!data) {
@@ -1124,7 +1125,7 @@ async function setManuallyCompleted(id: string, manuallyCompleted: boolean): Pro
     .maybeSingle()
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: toAppointmentErrorMessage(error, 'setManuallyCompleted') }
   }
 
   if (!data) {
@@ -1165,7 +1166,7 @@ export async function updateAppointmentEmployeeAdminNotes(
     .eq('is_archived', false)
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: toAppointmentErrorMessage(error, 'updateAppointmentEmployeeAdminNotes') }
   }
 
   revalidatePath('/solutions/appointments')
