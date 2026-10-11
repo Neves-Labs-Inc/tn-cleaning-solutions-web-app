@@ -57,7 +57,7 @@ const CLOCK_ERRORS: Record<ClockErrorCode, ClockError> = {
   },
   visit_cancelled: {
     field: "form",
-    message: "This visit is cancelled. Restore it first.",
+    message: "This appointment is cancelled. Restore it first.",
   },
   clock_in_required: {
     field: "clockIn",
@@ -77,7 +77,7 @@ const CLOCK_ERRORS: Record<ClockErrorCode, ClockError> = {
   },
   clock_out_required: {
     field: "clockOut",
-    message: "Enter a clock-out. This visit ended more than an hour ago.",
+    message: "Enter a clock-out. This appointment ended more than an hour ago.",
   },
   overlap: { field: "clockIn", message: "Overlaps another session" },
   session_open: {

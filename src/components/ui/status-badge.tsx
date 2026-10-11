@@ -1,12 +1,26 @@
-import { CheckCircle2, Clock, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import type { AppointmentStatus } from "@/lib/helpers/dashboard";
-import { invoiceStatusBadge, lineStateBadge } from "./status-badge-tones";
-import { formatBusinessTime } from "@/lib/schedule";
+import {
+  activeStateBadge,
+  appointmentStatusBadge,
+  ARCHIVED_BADGE,
+  clockStatusBadge,
+  invoiceStatusBadge,
+  lineStateBadge,
+  paymentStateBadge,
+} from "./status-badge-tones";
 import { cn } from "@/lib/utils";
 
-export { invoiceStatusBadge, lineStateBadge };
+export {
+  activeStateBadge,
+  appointmentStatusBadge,
+  ARCHIVED_BADGE,
+  clockStatusBadge,
+  invoiceStatusBadge,
+  lineStateBadge,
+  paymentStateBadge,
+};
 
 export type StatusTone = "info" | "success" | "warning" | "danger" | "neutral";
 
@@ -58,40 +72,4 @@ export default function StatusBadge({
       {children}
     </Badge>
   );
-}
-
-export function appointmentStatusBadge(
-  status: AppointmentStatus,
-): StatusBadgeSpec {
-  const specs: Record<AppointmentStatus, StatusBadgeSpec> = {
-    scheduled: { tone: "info", label: "Scheduled" },
-    in_progress: { tone: "success", label: "In Progress" },
-    completed: { tone: "neutral", label: "Completed" },
-    cancelled: { tone: "danger", label: "Cancelled" },
-  };
-  return specs[status];
-}
-
-export function clockStatusBadge(
-  status: ClockStatus,
-  clockedInAt: string | null,
-  clockedOutAt: string | null,
-): StatusBadgeSpec {
-  const specs: Record<ClockStatus, StatusBadgeSpec> = {
-    not_started: { tone: "warning", label: "Not started", icon: Clock },
-    clocked_in: {
-      tone: "success",
-      label: clockedInAt
-        ? `Clocked in at ${formatBusinessTime(new Date(clockedInAt))}`
-        : "Clocked in",
-      icon: CheckCircle2,
-    },
-    clocked_out: {
-      tone: "neutral",
-      label: clockedOutAt
-        ? `Clocked out at ${formatBusinessTime(new Date(clockedOutAt))}`
-        : "Clocked out",
-    },
-  };
-  return specs[status];
 }

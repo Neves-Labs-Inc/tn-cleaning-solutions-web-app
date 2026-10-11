@@ -8,8 +8,8 @@ type UnbilledVisitListProps = {
   visits: UnbilledVisitRow[]
 }
 
-// One client's unbilled visits. Reads the Excluded and Unpriced flags directly (not groupUnbilled's
-// single tag) so a visit that is both shows both tags. The caller supplies the card around it.
+// One client's unbilled visits. Reads the Unpriced flag from the live price directly; the caller
+// supplies the card around it.
 export default function UnbilledVisitList({ visits }: UnbilledVisitListProps): React.ReactNode {
   return (
     <ul className="divide-y divide-border">
@@ -28,7 +28,6 @@ export default function UnbilledVisitList({ visits }: UnbilledVisitListProps): R
             states={visit.live_price_cents === null ? ['unpriced'] : ['ok']}
             amountCents={visit.live_price_cents ?? 0}
             appointmentId={visit.id}
-            isExcluded={visit.is_excluded}
             setPriceLink="inline"
           />
         </li>

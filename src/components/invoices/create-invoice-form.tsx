@@ -37,6 +37,8 @@ type CreateInvoiceFormProps = {
   businessDate: string
   // ?client= named a client that isn't in the list.
   isClientUnavailable: boolean
+  // ?visits= ids handed over from another page; null when none were.
+  handedOffIds: string[] | null
 }
 
 
@@ -60,18 +62,34 @@ function UnpricedNote({ count, className }: { count: number; className?: string 
       )}
     >
       <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-      {pluralize(count, 'Unpriced visit')}: set a price before issuing.
+      {pluralize(count, 'Unpriced appointment')}: set a price before issuing.
     </p>
   )
 }
 
-export function CreateInvoiceForm({ clients, clientId, visits, businessDate, isClientUnavailable }: CreateInvoiceFormProps) {
+// Handed-off ids that are among the client's claimable visits start checked; others are ignored.
+function initialSelectedIds(visits: ClaimableVisit[], businessDate: string, handedOffIds: string[] | null) {
+  return handedOffIds
+    ? new Set(visits.filter((visit) => handedOffIds.includes(visit.id)).map((visit) => visit.id))
+    : defaultSelectedIds(visits, businessDate)
+}
+
+export function CreateInvoiceForm({
+  clients,
+  clientId,
+  visits,
+  businessDate,
+  isClientUnavailable,
+  handedOffIds,
+}: CreateInvoiceFormProps) {
   const router = useRouter()
   const [isSwitching, startSwitch] = useTransition()
 
   // What the picker shows right away; the URL catches up when the transition lands.
   const [pickedId, setPickedId] = useState(clientId)
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => defaultSelectedIds(visits, businessDate))
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() =>
+    initialSelectedIds(visits, businessDate, handedOffIds)
+  )
   const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')
   const [clientError, setClientError] = useState(false)
@@ -113,7 +131,7 @@ export function CreateInvoiceForm({ clients, clientId, visits, businessDate, isC
       if (isStale) {
         router.refresh()
       }
-      setRefusal(isStale ? `${result.error} The list is updated. Check the visits and try again.` : result.error)
+      setRefusal(isStale ? `${result.error} The list is updated. Check the appointments and try again.` : result.error)
     } catch (thrown) {
       // A network or server failure: keep the admin's checks, date and notes.
       console.error('createInvoice failed', thrown)
@@ -179,14 +197,14 @@ export function CreateInvoiceForm({ clients, clientId, visits, businessDate, isC
               aria-describedby={clientError && !hasClient ? CLIENT_ERROR_ID : undefined}
             />
             {clientError && !hasClient ? <FieldError id={CLIENT_ERROR_ID}>Pick a client.</FieldError> : null}
-            <FieldDescription>Only clients with visits to bill are listed.</FieldDescription>
+            <FieldDescription>Only clients with appointments to bill are listed.</FieldDescription>
           </Field>
 
           {isClientUnavailable && !hasClient ? (
             <Alert className="animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart">
               <Info aria-hidden="true" />
               <AlertTitle>Nothing to bill for that client</AlertTitle>
-              <AlertDescription>Their visits are all on an invoice or cancelled. Pick another client.</AlertDescription>
+              <AlertDescription>Their appointments are all on an invoice or cancelled. Pick another client.</AlertDescription>
             </Alert>
           ) : null}
 
@@ -201,7 +219,7 @@ export function CreateInvoiceForm({ clients, clientId, visits, businessDate, isC
             />
           ) : (
             <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-              Pick a client to see their visits.
+              Pick a client to see their appointments.
             </p>
           )}
         </div>
@@ -212,7 +230,7 @@ export function CreateInvoiceForm({ clients, clientId, visits, businessDate, isC
             <h2 className="text-lg font-semibold tracking-tight">Summary</h2>
             <dl className="space-y-1 text-sm">
               <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Visits</dt>
+                <dt className="text-muted-foreground">Appointments</dt>
                 <dd className="tabular-nums">{chosen.length}</dd>
               </div>
               <div className="flex justify-between gap-3">
@@ -258,7 +276,7 @@ export function CreateInvoiceForm({ clients, clientId, visits, businessDate, isC
 
           <div className="sticky bottom-0 z-30 -mx-6 space-y-2 border-t bg-background/95 px-6 pt-3 pb-[calc(0.75rem+var(--safe-bottom))] shadow-lg backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:shadow-none">
             <div className="flex items-baseline justify-between gap-3 text-sm lg:hidden">
-              <span className="font-medium">{pluralize(chosen.length, 'visit')}</span>
+              <span className="font-medium">{pluralize(chosen.length, 'appointment')}</span>
               <span className="min-w-[8ch] text-right font-semibold tabular-nums">{totalLabel}</span>
             </div>
             <UnpricedNote count={unpricedCount} className="lg:hidden" />

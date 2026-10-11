@@ -3,15 +3,24 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-import { hasSessionHistory, planCrewChange, planFutureVisitCleanup } from '@/lib/appointments/crew'
+import {
+  hasSessionHistory,
+  planCrewChange,
+  planFutureVisitCleanup,
+  preservedSeriesDates,
+} from '@/lib/appointments/crew'
+import { toAppointmentErrorMessage } from '@/lib/appointments/errors'
 import {
   canCancel,
+  canEdit,
   canMarkComplete,
   canRestore,
   canUndoComplete,
+  completedDateError,
   type AppointmentStatus,
 } from '@/lib/appointments/lifecycle'
 import { parseDollarsToCents } from '@/lib/pricing/money'
+import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import type { TablesInsert } from '@/types/database'
@@ -52,6 +61,7 @@ type ParsedCreateAppointmentInput = {
 }
 
 type ParsedUpdateAppointmentInput = {
+  client_id: string
   job_id: string
   location_id: string | null
   scheduled_date: string
@@ -170,7 +180,7 @@ async function requireAdminRole(): Promise<{ success: true } | { success: false;
   } = await supabase.auth.getUser()
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: toAppointmentErrorMessage(error, 'requireAdminRole') }
   }
 
   if (!user) {
@@ -307,6 +317,7 @@ function parseCreateAppointmentFormData(formData: FormData):
 function parseUpdateAppointmentFormData(formData: FormData):
   | { success: true; data: ParsedUpdateAppointmentInput }
   | { success: false; error: string; fieldErrors: AppointmentFieldErrors } {
+  const clientId = String(formData.get('client_id') ?? '').trim()
   const jobId = String(formData.get('job_id') ?? '').trim()
   const locationId = String(formData.get('location_id') ?? '').trim()
   const scheduledDate = String(formData.get('scheduled_date') ?? '').trim()
@@ -317,6 +328,10 @@ function parseUpdateAppointmentFormData(formData: FormData):
   const employeeIds = uniqueIds(formData.getAll('employee_ids'))
 
   const fieldErrors: AppointmentFieldErrors = {}
+
+  if (!clientId) {
+    fieldErrors.client_id = 'Client is required.'
+  }
 
   if (!jobId) {
     fieldErrors.job_id = 'Job is required.'
@@ -360,6 +375,7 @@ function parseUpdateAppointmentFormData(formData: FormData):
   return {
     success: true,
     data: {
+      client_id: clientId,
       job_id: jobId,
       location_id: locationId || null,
       scheduled_date: scheduledDate,
@@ -481,7 +497,7 @@ export async function createAppointment(
         .single()
 
       if (recurrenceError) {
-        return { success: false, error: recurrenceError.message }
+        return { success: false, error: toAppointmentErrorMessage(recurrenceError, 'createAppointment') }
       }
 
       const recurrenceDates = generateRecurrenceDates(
@@ -514,7 +530,7 @@ export async function createAppointment(
         .select('id')
 
       if (appointmentsError) {
-        return { success: false, error: appointmentsError.message }
+        return { success: false, error: toAppointmentErrorMessage(appointmentsError, 'createAppointment') }
       }
 
       createdAppointmentIds = (appointments ?? []).map((row) => row.id)
@@ -539,7 +555,7 @@ export async function createAppointment(
         .single()
 
       if (appointmentError) {
-        return { success: false, error: appointmentError.message }
+        return { success: false, error: toAppointmentErrorMessage(appointmentError, 'createAppointment') }
       }
 
       createdAppointmentIds = [appointment.id]
@@ -563,7 +579,7 @@ export async function createAppointment(
         .insert(assignmentInserts)
 
       if (assignmentError) {
-        return { success: false, error: assignmentError.message }
+        return { success: false, error: toAppointmentErrorMessage(assignmentError, 'createAppointment') }
       }
     }
   } catch {
@@ -618,18 +634,20 @@ export async function updateAppointment(
     return parsedRecurrence
   }
 
+  let claimingInvoiceId: string | null = null
+
   try {
     const adminClient = createAdminClient()
 
     const { data: existingAppointment, error: existingAppointmentError } = await adminClient
       .from('appointments')
-      .select('id, client_id, recurrence_series_id, status')
+      .select('id, client_id, recurrence_series_id, status, manually_completed')
       .eq('id', id)
       .eq('is_archived', false)
       .maybeSingle()
 
     if (existingAppointmentError) {
-      return { success: false, error: existingAppointmentError.message }
+      return { success: false, error: toAppointmentErrorMessage(existingAppointmentError, 'updateAppointment') }
     }
 
     if (!existingAppointment) {
@@ -646,19 +664,39 @@ export async function updateAppointment(
       }
     }
 
-    if (existingAppointment.status === 'completed') {
-      return {
-        success: false,
-        error: 'This appointment cannot be edited because it has already been completed.',
-      }
-    }
-
-    if (existingAppointment.status === 'cancelled') {
+    if (!canEdit(existingAppointment.status)) {
       return {
         success: false,
         error: 'This appointment cannot be edited because it has been cancelled. Restore it first.',
       }
     }
+
+    const scheduledDateError = completedDateError({
+      status: existingAppointment.status,
+      scheduledDate: parsed.data.scheduled_date,
+      businessDate: getBusinessDate(new Date()),
+    })
+    if (scheduledDateError) {
+      return {
+        success: false,
+        error: 'Please correct the highlighted fields.',
+        fieldErrors: { scheduled_date: scheduledDateError },
+      }
+    }
+
+    // Read before the write: a client change drops a draft line, and that invoice's page must refresh too.
+    const { data: liveClaim, error: liveClaimError } = await adminClient
+      .from('invoice_appointments')
+      .select('invoice_id')
+      .eq('appointment_id', id)
+      .eq('is_archived', false)
+      .is('cancelled_at', null)
+      .maybeSingle()
+
+    if (liveClaimError) {
+      return { success: false, error: toAppointmentErrorMessage(liveClaimError, 'updateAppointment') }
+    }
+    claimingInvoiceId = liveClaim?.invoice_id ?? null
 
     if (parsedRecurrence.data.edit_scope === 'series' || parsedRecurrence.data.edit_scope === 'future') {
       if (!parsedRecurrence.data.recurrence_series_id) {
@@ -689,7 +727,7 @@ export async function updateAppointment(
         .maybeSingle()
 
       if (recurrenceSeriesError) {
-        return { success: false, error: recurrenceSeriesError.message }
+        return { success: false, error: toAppointmentErrorMessage(recurrenceSeriesError, 'updateAppointment') }
       }
 
       if (!recurrenceSeries) {
@@ -714,12 +752,14 @@ export async function updateAppointment(
         .eq('is_archived', false)
 
       if (recurrenceUpdateError) {
-        return { success: false, error: recurrenceUpdateError.message }
+        return { success: false, error: toAppointmentErrorMessage(recurrenceUpdateError, 'updateAppointment') }
       }
     } else {
       const { data: appointment, error: appointmentError } = await adminClient
         .from('appointments')
         .update({
+          // The invoicing trigger drops a draft line on a client change and refuses on an issued or paid one.
+          client_id: parsed.data.client_id,
           job_id: parsed.data.job_id,
           location_id: parsed.data.location_id,
           scheduled_date: parsed.data.scheduled_date,
@@ -737,7 +777,7 @@ export async function updateAppointment(
         .maybeSingle()
 
       if (appointmentError) {
-        return { success: false, error: appointmentError.message }
+        return { success: false, error: toAppointmentErrorMessage(appointmentError, 'updateAppointment') }
       }
 
       if (!appointment) {
@@ -749,7 +789,7 @@ export async function updateAppointment(
           .maybeSingle()
 
         if (latestAppointmentError) {
-          return { success: false, error: latestAppointmentError.message }
+          return { success: false, error: toAppointmentErrorMessage(latestAppointmentError, 'updateAppointment') }
         }
 
         if (!latestAppointment) {
@@ -774,7 +814,7 @@ export async function updateAppointment(
         .eq('appointment_id', id)
 
       if (existingAssignmentsError) {
-        return { success: false, error: existingAssignmentsError.message }
+        return { success: false, error: toAppointmentErrorMessage(existingAssignmentsError, 'updateAppointment') }
       }
 
       const crewPlan = planCrewChange(
@@ -788,10 +828,37 @@ export async function updateAppointment(
             correctionCount: row.clock_corrections[0]?.count ?? 0,
             acknowledgementCount: row.odd_duration_acknowledgements[0]?.count ?? 0,
           }),
+          hasClockIn: row.clocked_in_at !== null,
         })),
-        parsed.data.employee_ids
+        parsed.data.employee_ids,
+        existingAppointment
       )
       const newEmployeeIds = crewPlan.insertEmployeeIds
+
+      // Flagged before any row is archived or deleted, so the derived status never leaves completed
+      // and neither the invoicing trigger nor the completed_at stamp fires.
+      if (crewPlan.shouldTurnOnManualCompletion) {
+        const { data: manualCompletion, error: manualCompletionError } = await adminClient
+          .from('appointments')
+          .update({ manually_completed: true })
+          .eq('id', id)
+          .eq('is_archived', false)
+          .eq('status', 'completed')
+          .eq('manually_completed', false)
+          .select('id')
+          .maybeSingle()
+
+        if (manualCompletionError) {
+          return { success: false, error: toAppointmentErrorMessage(manualCompletionError, 'updateAppointment') }
+        }
+
+        if (!manualCompletion) {
+          return {
+            success: false,
+            error: 'The appointment changed while you were editing it. Refresh and try again.',
+          }
+        }
+      }
 
       // Hours records and their corrections must survive 6 years, so a removed Cleaner with any
       // history is archived; the crew trigger re-derives status on archive as it does on delete.
@@ -802,7 +869,7 @@ export async function updateAppointment(
           .in('id', crewPlan.archiveIds)
 
         if (archiveAssignmentsError) {
-          return { success: false, error: archiveAssignmentsError.message }
+          return { success: false, error: toAppointmentErrorMessage(archiveAssignmentsError, 'updateAppointment') }
         }
       }
 
@@ -816,7 +883,7 @@ export async function updateAppointment(
           .is('clocked_out_at', null)
 
         if (deleteAssignmentsError) {
-          return { success: false, error: deleteAssignmentsError.message }
+          return { success: false, error: toAppointmentErrorMessage(deleteAssignmentsError, 'updateAppointment') }
         }
       }
 
@@ -834,7 +901,7 @@ export async function updateAppointment(
           .insert(assignmentInserts)
 
         if (assignmentInsertError) {
-          return { success: false, error: assignmentInsertError.message }
+          return { success: false, error: toAppointmentErrorMessage(assignmentInsertError, 'updateAppointment') }
         }
       }
 
@@ -855,40 +922,32 @@ export async function updateAppointment(
           .eq('is_archived', false)
 
         if (recurrenceUpdateError) {
-          return { success: false, error: recurrenceUpdateError.message }
+          return { success: false, error: toAppointmentErrorMessage(recurrenceUpdateError, 'updateAppointment') }
         }
 
-        const { data: preservedAppointments, error: preservedAppointmentsError } = await adminClient
-          .from('appointments')
-          .select('scheduled_date')
-          .eq('recurrence_series_id', recurrenceSeriesId)
-          .gt('scheduled_date', appointment.scheduled_date)
-          .in('status', ['completed', 'cancelled'])
-          .eq('is_archived', false)
-
-        if (preservedAppointmentsError) {
-          return { success: false, error: preservedAppointmentsError.message }
-        }
-
-        // Every assignment, archived or not, so a removed Cleaner's hours keep their visit alive.
-        const { data: futurePendingAppointments, error: futurePendingAppointmentsError } = await adminClient
+        // Every later appointment, Protected or not, with every invoice line (released or
+        // Cancelled ones too, since deleting the appointment would cascade them off their invoice)
+        // and every assignment (archived or not, so a removed Cleaner's hours keep it alive).
+        const { data: laterAppointments, error: laterAppointmentsError } = await adminClient
           .from('appointments')
           .select(
-            'id, scheduled_date, appointment_employees(clocked_in_at, clocked_out_at, clock_corrections(count), odd_duration_acknowledgements(count))'
+            'id, scheduled_date, status, manually_completed, appointment_employees(clocked_in_at, clocked_out_at, clock_corrections(count), odd_duration_acknowledgements(count)), invoice_lines:invoice_appointments(appointment_id)'
           )
           .eq('recurrence_series_id', recurrenceSeriesId)
           .gt('scheduled_date', appointment.scheduled_date)
-          .eq('status', 'scheduled')
           .eq('is_archived', false)
 
-        if (futurePendingAppointmentsError) {
-          return { success: false, error: futurePendingAppointmentsError.message }
+        if (laterAppointmentsError) {
+          return { success: false, error: toAppointmentErrorMessage(laterAppointmentsError, 'updateAppointment') }
         }
 
         const cleanupPlan = planFutureVisitCleanup(
-          (futurePendingAppointments ?? []).map((row) => ({
+          (laterAppointments ?? []).map((row) => ({
             id: row.id,
             scheduled_date: row.scheduled_date,
+            status: row.status,
+            manually_completed: row.manually_completed,
+            hasInvoiceLine: row.invoice_lines.length > 0,
             assignments: row.appointment_employees.map((assignment) => ({
               clocked_in_at: assignment.clocked_in_at,
               clocked_out_at: assignment.clocked_out_at,
@@ -898,25 +957,23 @@ export async function updateAppointment(
           }))
         )
 
-        // Delete before regenerating: if the delete is refused (a RESTRICT audit FK, or a race),
-        // nothing has been inserted yet, so no date ends up with two visits.
+        // Delete before regenerating: if the delete is refused (a RESTRICT audit FK), nothing has
+        // been inserted yet. The function re-checks under lock, so an appointment clocked into or
+        // invoiced since the read survives, and its date is kept instead of getting a twin.
+        let deletedIds = new Set<string>()
         if (cleanupPlan.deleteIds.length > 0) {
-          const { error: deleteFuturePendingError } = await adminClient
-            .from('appointments')
-            .delete()
-            .in('id', cleanupPlan.deleteIds)
-            // A clock-in since the read moves the visit out of scheduled, so it isn't deleted.
-            .eq('status', 'scheduled')
+          const { data: deletedRows, error: deleteLaterError } = await adminClient.rpc(
+            'delete_unprotected_series_appointments',
+            { appointment_ids: cleanupPlan.deleteIds }
+          )
 
-          if (deleteFuturePendingError) {
-            return { success: false, error: deleteFuturePendingError.message }
+          if (deleteLaterError) {
+            return { success: false, error: toAppointmentErrorMessage(deleteLaterError, 'updateAppointment') }
           }
+          deletedIds = new Set(deletedRows ?? [])
         }
 
-        const preservedDates = new Set([
-          ...(preservedAppointments ?? []).map((row) => row.scheduled_date),
-          ...cleanupPlan.preservedDates,
-        ])
+        const preservedDates = preservedSeriesDates(cleanupPlan, laterAppointments ?? [], deletedIds)
 
         const nextDate = formatDate(addDays(parseDate(appointment.scheduled_date), 1))
         const recurrenceDates = generateRecurrenceDates(
@@ -948,7 +1005,7 @@ export async function updateAppointment(
             .select('id')
 
           if (regeneratedAppointmentsError) {
-            return { success: false, error: regeneratedAppointmentsError.message }
+            return { success: false, error: toAppointmentErrorMessage(regeneratedAppointmentsError, 'updateAppointment') }
           }
 
           const regeneratedAppointmentIds = (regeneratedAppointments ?? []).map((row) => row.id)
@@ -971,7 +1028,7 @@ export async function updateAppointment(
               .insert(regeneratedAssignmentInserts)
 
             if (regeneratedAssignmentsError) {
-              return { success: false, error: regeneratedAssignmentsError.message }
+              return { success: false, error: toAppointmentErrorMessage(regeneratedAssignmentsError, 'updateAppointment') }
             }
           }
         }
@@ -984,6 +1041,9 @@ export async function updateAppointment(
 
   revalidatePath('/solutions/appointments')
   revalidatePath(`/solutions/appointments/${id}`)
+  if (claimingInvoiceId) {
+    revalidatePath(`/solutions/invoices/${claimingInvoiceId}`)
+  }
   redirect(`/solutions/appointments/${id}`)
 
   return { success: true, data: { id } }
@@ -1012,7 +1072,7 @@ async function loadAppointmentForLifecycle(id: string): Promise<LifecycleLoadRes
     .maybeSingle()
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: toAppointmentErrorMessage(error, 'loadAppointmentForLifecycle') }
   }
 
   if (!data) {
@@ -1035,7 +1095,7 @@ export async function cancelAppointment(id: string): Promise<AppointmentActionRe
     return { success: false, error: 'This appointment is already cancelled.' }
   }
 
-  // The database error is returned verbatim: a paid-invoice trigger refuses with a message the admin must read.
+  // A paid-invoice trigger refuses with P0001 and a message the admin must read; it passes through.
   const { data, error } = await createAdminClient()
     .from('appointments')
     .update({ status: 'cancelled' })
@@ -1046,7 +1106,7 @@ export async function cancelAppointment(id: string): Promise<AppointmentActionRe
     .maybeSingle()
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: toAppointmentErrorMessage(error, 'cancelAppointment') }
   }
 
   if (!data) {
@@ -1080,7 +1140,7 @@ export async function restoreAppointment(id: string): Promise<AppointmentActionR
     .maybeSingle()
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: toAppointmentErrorMessage(error, 'restoreAppointment') }
   }
 
   if (!data) {
@@ -1124,7 +1184,7 @@ async function setManuallyCompleted(id: string, manuallyCompleted: boolean): Pro
     .maybeSingle()
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: toAppointmentErrorMessage(error, 'setManuallyCompleted') }
   }
 
   if (!data) {
@@ -1165,7 +1225,7 @@ export async function updateAppointmentEmployeeAdminNotes(
     .eq('is_archived', false)
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: toAppointmentErrorMessage(error, 'updateAppointmentEmployeeAdminNotes') }
   }
 
   revalidatePath('/solutions/appointments')

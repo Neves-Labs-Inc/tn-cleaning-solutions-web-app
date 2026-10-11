@@ -10,8 +10,9 @@ import type { TimeSheetMonth } from "./time-sheet-month.ts";
 // route's error boundary. No `server-only` import, so node:test can load this file; call these
 // from server code only.
 //
-// Every read leaves out archived assignments (NULL counts as live), archived visits and
-// cancelled visits, and filters dates in the query on the embedded visit.
+// Every read leaves out archived visits and cancelled visits, and filters dates in the query on
+// the embedded visit. Archived assignments (NULL counts as live) are Removed sessions: the Time
+// sheets show them, the appointment page's crew does not.
 
 type Db = SupabaseClient<Database>;
 type PageResult = { data: unknown; error: unknown };
@@ -22,7 +23,7 @@ const PAGE_SIZE = 1000;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const ADMIN_SESSION_COLUMNS = `
-  id, employee_id, clocked_in_at, clocked_out_at,
+  id, employee_id, is_archived, clocked_in_at, clocked_out_at,
   appointment:appointments!inner (
     id, scheduled_date, scheduled_start_time, scheduled_end_time, status, manually_completed,
     client:clients ( name ),
@@ -35,7 +36,7 @@ const ADMIN_SESSION_COLUMNS = `
 
 // The admin session shape plus what the appointment page shows per Cleaner.
 const APPOINTMENT_CREW_COLUMNS = `
-  id, employee_id, clocked_in_at, clocked_out_at, admin_notes,
+  id, employee_id, is_archived, clocked_in_at, clocked_out_at, admin_notes,
   appointment:appointments!inner (
     id, scheduled_date, scheduled_start_time, scheduled_end_time, status, manually_completed,
     client:clients ( name ),
@@ -55,6 +56,20 @@ const CLEANER_SESSION_COLUMNS = `
   )
 `;
 
+const REMOVED_SESSION_COLUMNS =
+  "id, scheduled_date, client_name, job_name, clocked_in_at, clocked_out_at";
+
+type LiveCleanerRow = Omit<TimeSheetRecord, "is_removed">;
+
+type RemovedSessionRow = {
+  id: string;
+  scheduled_date: string;
+  client_name: string;
+  job_name: string;
+  clocked_in_at: string | null;
+  clocked_out_at: string | null;
+};
+
 // Each page must be ordered by a unique key, or rows can repeat or vanish between pages.
 async function readAllPages<T>(queryPage: PageQuery): Promise<T[]> {
   let rows: T[] = [];
@@ -70,8 +85,9 @@ async function readAllPages<T>(queryPage: PageQuery): Promise<T[]> {
   return rows;
 }
 
-// The admin Time sheet: every live session whose visit falls in the range, optionally for one
-// Cleaner, with its corrections and acknowledgements. Admin pages only. `cleanerId` usually comes
+// The admin Time sheet: every session whose visit falls in the range, Removed sessions
+// (archived assignments) included, optionally for one Cleaner, with its corrections and
+// acknowledgements. Admin pages only. `cleanerId` usually comes
 // from the URL: one that isn't a UUID matches no Cleaner, so it returns no sessions instead of
 // Postgres refusing the cast (22P02).
 export async function fetchAdminSessions(
@@ -87,7 +103,6 @@ export async function fetchAdminSessions(
     let query = db
       .from("appointment_employees")
       .select(ADMIN_SESSION_COLUMNS)
-      .not("is_archived", "is", true)
       .eq("appointment.is_archived", false)
       .neq("appointment.status", "cancelled")
       .gte("appointment.scheduled_date", range.from)
@@ -117,16 +132,45 @@ export async function fetchAppointmentCrew(
   return (data ?? []) as unknown as AppointmentCrewRow[];
 }
 
-// The Cleaner's own month: her clocked sessions, read through the employee views.
-// `employeeId` must be the signed-in Cleaner's own id, looked up from the authenticated session,
-// never taken from a URL or form: the employee view also returns teammates' rows on shared
-// visits, so the id is what keeps her from reading co-workers' clocks.
+function toLiveRecord(row: LiveCleanerRow): TimeSheetRecord {
+  return {
+    id: row.id,
+    clocked_in_at: row.clocked_in_at,
+    clocked_out_at: row.clocked_out_at,
+    is_removed: false,
+    appointments: {
+      scheduled_date: row.appointments.scheduled_date,
+      clients: { name: row.appointments.clients.name },
+      jobs: { name: row.appointments.jobs.name },
+    },
+  };
+}
+
+function toRemovedRecord(row: RemovedSessionRow): TimeSheetRecord {
+  return {
+    id: row.id,
+    clocked_in_at: row.clocked_in_at,
+    clocked_out_at: row.clocked_out_at,
+    is_removed: true,
+    appointments: {
+      scheduled_date: row.scheduled_date,
+      clients: { name: row.client_name },
+      jobs: { name: row.job_name },
+    },
+  };
+}
+
+// The Cleaner's own month: her clocked sessions, read through the employee views, then her
+// Removed sessions. `employeeId` must be the signed-in Cleaner's own id, looked up from the
+// authenticated session, never taken from a URL or form: the employee view also returns
+// teammates' rows on shared visits, so the id is what keeps her from reading co-workers' clocks.
+// The Removed sessions view returns only the caller's own rows; the id filter there is a second lock.
 export async function fetchCleanerSessions(
   db: Db,
   employeeId: string,
   month: Pick<TimeSheetMonth, "start" | "end">,
 ): Promise<TimeSheetRecord[]> {
-  return readAllPages<TimeSheetRecord>((from, to) =>
+  const liveRows = await readAllPages<LiveCleanerRow>((from, to) =>
     db
       .from("appointment_employees_employee_view")
       .select(CLEANER_SESSION_COLUMNS)
@@ -140,4 +184,18 @@ export async function fetchCleanerSessions(
       .order("id", { ascending: true })
       .range(from, to),
   );
+  // Cancelled and archived visits are already left out by the view itself.
+  const removedRows = await readAllPages<RemovedSessionRow>((from, to) =>
+    db
+      .from("removed_sessions_employee_view")
+      .select(REMOVED_SESSION_COLUMNS)
+      .eq("employee_id", employeeId)
+      .not("clocked_in_at", "is", null)
+      .gte("scheduled_date", month.start)
+      .lte("scheduled_date", month.end)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
+
+  return [...liveRows.map(toLiveRecord), ...removedRows.map(toRemovedRecord)];
 }

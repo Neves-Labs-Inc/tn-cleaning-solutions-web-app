@@ -1,13 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState, useMemo, useState } from 'react'
-import { useFormStatus } from 'react-dom'
+import { startTransition, useActionState, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertCircle, Info, TriangleAlert } from 'lucide-react'
 
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { SearchableMultiSelect } from '@/components/ui/searchable-multi-select'
 import {
@@ -15,8 +17,16 @@ import {
   type AppointmentActionResult,
   updateAppointment,
 } from '@/lib/actions/appointments'
+import { formatMinutes } from '@/components/admin/time-sheets/format-minutes'
 import { formatRate } from '@/lib/pricing/money'
+import { planCrewChange } from '@/lib/appointments/crew'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
+
+// One live assignment's clocks, for the crew field's removal warnings.
+export type CrewClock = { employeeId: string; closedMinutes: number; hasClockIn: boolean }
+
+// A Live claim on an issued or paid invoice: its price is frozen, so the form warns the edit won't reach it.
+export type InvoiceClaim = { id: string; number: string; status: 'issued' | 'paid' }
 
 type AppointmentFormProps = {
   clients: Array<{
@@ -44,6 +54,8 @@ type AppointmentFormProps = {
     price_override_cents: number | null
     notes: string
     status: AppointmentStatus
+    manually_completed: boolean
+    crewClocks: CrewClock[]
     assignedEmployeeIds: string[]
   }
   recurrenceSeries?: {
@@ -53,6 +65,7 @@ type AppointmentFormProps = {
     end_date: string | null
     max_occurrences: number | null
   } | null
+  invoiceClaim?: InvoiceClaim | null
 }
 
 const initialState: AppointmentActionResult = {
@@ -60,17 +73,78 @@ const initialState: AppointmentActionResult = {
   error: '',
 }
 
-function SubmitButton({ isEditMode }: { isEditMode: boolean }) {
-  const { pending } = useFormStatus()
+const SCHEDULED_DATE_ERROR_ID = 'scheduled_date-error'
+// An archived employee drops out of the employee list but can still hold clocked time here.
+const REMOVED_EMPLOYEE_NAME = 'A removed employee'
 
+function SubmitButton({ isEditMode, pending }: { isEditMode: boolean; pending: boolean }) {
   return (
     <Button
       type="submit"
       disabled={pending}
+      aria-busy={pending || undefined}
       className="h-10 rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white hover:bg-emerald-700"
     >
       {pending ? 'Saving...' : isEditMode ? 'Save Changes' : 'Create Appointment'}
     </Button>
+  )
+}
+
+type FieldErrorProps = { id?: string; message: string | undefined }
+
+function FieldError({ id, message }: FieldErrorProps) {
+  if (!message) return null
+
+  return (
+    <p
+      id={id}
+      className="text-sm text-destructive animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart"
+    >
+      {message}
+    </p>
+  )
+}
+
+const CREW_WARNING_CLASSES =
+  'flex items-start gap-1.5 break-words text-sm animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart'
+
+function RemovedClockWarning({ name, minutes }: { name: string; minutes: number }) {
+  return (
+    <p className={`${CREW_WARNING_CLASSES} text-status-warning-foreground`}>
+      <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0">
+        {name} has {formatMinutes(minutes)} clocked; removing her takes them off her pay.
+      </span>
+    </p>
+  )
+}
+
+function ManualCompletionNote() {
+  return (
+    <p className={`${CREW_WARNING_CLASSES} text-status-info-foreground`}>
+      <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0">
+        No Cleaner with clocks is left. The appointment stays completed as a Manual completion.
+      </span>
+    </p>
+  )
+}
+
+function InvoiceClaimBanner({ claim }: { claim: InvoiceClaim }) {
+  return (
+    <Alert role="status" className="border-status-warning-border bg-status-warning text-status-warning-foreground">
+      <TriangleAlert aria-hidden="true" />
+      <AlertDescription className="break-words text-status-warning-foreground">
+        On invoice{' '}
+        <Link
+          href={`/solutions/invoices/${claim.id}`}
+          className="cursor-pointer rounded-sm font-medium whitespace-nowrap underline underline-offset-4 outline-none transition-[color,opacity] duration-fast focus-visible:ring-2 focus-visible:ring-ring/50 active:opacity-70 md:hover:text-foreground"
+        >
+          {claim.number}
+        </Link>{' '}
+        ({claim.status}). Changes won&apos;t update it.
+      </AlertDescription>
+    </Alert>
   )
 }
 
@@ -81,9 +155,39 @@ export function AppointmentForm({
   defaultDate,
   appointment,
   recurrenceSeries,
+  invoiceClaim = null,
 }: AppointmentFormProps) {
   const serverAction = appointment ? updateAppointment.bind(null, appointment.id) : createAppointment
-  const [state, formAction] = useActionState(serverAction, initialState)
+  const [state, formAction, isPending] = useActionState(serverAction, initialState)
+  const scheduledDateRef = useRef<HTMLInputElement>(null)
+  const fieldErrors = 'fieldErrors' in state ? state.fieldErrors : undefined
+  const scheduledDateError = fieldErrors?.scheduled_date
+  const formError = 'error' in state ? state.error : ''
+  const formErrorRef = useRef<HTMLDivElement>(null)
+
+  // A refused date is fixed in place, so focus lands on it when the action returns.
+  useEffect(() => {
+    if (scheduledDateError) {
+      scheduledDateRef.current?.focus()
+    }
+  }, [state, scheduledDateError])
+
+  // A refusal renders at the top of a long form, out of view after a mobile save: bring it to the admin.
+  useEffect(() => {
+    if (formError && !scheduledDateError) {
+      const isReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      formErrorRef.current?.focus({ preventScroll: true })
+      formErrorRef.current?.scrollIntoView({ block: 'center', behavior: isReducedMotion ? 'auto' : 'smooth' })
+    }
+  }, [state, formError, scheduledDateError])
+
+  // Dispatched by hand rather than through <form action>: React resets an action form's fields after
+  // every submit, and a refused save must keep what the admin typed.
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    startTransition(() => formAction(formData))
+  }
 
   const [selectedClientId, setSelectedClientId] = useState(appointment?.client_id ?? clients[0]?.id ?? '')
   const [selectedLocationId, setSelectedLocationId] = useState(appointment?.location_id ?? '')
@@ -138,6 +242,42 @@ export function AppointmentForm({
     return hint
   }, [selectedJob, clientRateIsStale])
 
+  const employeeNames = useMemo(
+    () => new Map(employees.map((employee) => [employee.id, employee.full_name])),
+    [employees]
+  )
+
+  // Saved-crew order; a Cleaner added in this edit has no clocks, so she never warns.
+  const removedClockWarnings = useMemo(() => {
+    if (!appointment) return []
+
+    const closedMinutesByEmployee = new Map(
+      appointment.crewClocks.map((clock) => [clock.employeeId, clock.closedMinutes])
+    )
+    return appointment.assignedEmployeeIds
+      .filter((employeeId) => !selectedEmployeeIds.includes(employeeId))
+      .map((employeeId) => ({
+        employeeId,
+        name: employeeNames.get(employeeId) ?? REMOVED_EMPLOYEE_NAME,
+        minutes: closedMinutesByEmployee.get(employeeId) ?? 0,
+      }))
+      .filter((warning) => warning.minutes > 0)
+  }, [appointment, selectedEmployeeIds, employeeNames])
+
+  // The planner the save runs, so the note shows exactly when the save turns Manual completion on.
+  const isManualCompletionAhead = useMemo(() => {
+    if (!appointment) return false
+
+    const crewRows = appointment.crewClocks.map((clock) => ({
+      id: clock.employeeId,
+      employee_id: clock.employeeId,
+      is_archived: false,
+      hasHistory: clock.hasClockIn,
+      hasClockIn: clock.hasClockIn,
+    }))
+    return planCrewChange(crewRows, selectedEmployeeIds, appointment).shouldTurnOnManualCompletion
+  }, [appointment, selectedEmployeeIds])
+
   const handleClientChange = (nextClientId: string) => {
     setSelectedClientId(nextClientId)
 
@@ -151,15 +291,19 @@ export function AppointmentForm({
 
   return (
     <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-      <form action={formAction} className="space-y-5">
-        {'error' in state && state.error ? (
-          <div
-            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
-            role="alert"
-            aria-live="polite"
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {invoiceClaim ? <InvoiceClaimBanner claim={invoiceClaim} /> : null}
+
+        {formError ? (
+          <Alert
+            ref={formErrorRef}
+            tabIndex={-1}
+            variant="destructive"
+            className="scroll-mt-24 outline-none animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart"
           >
-            {state.error}
-          </div>
+            <AlertCircle aria-hidden="true" />
+            <AlertDescription className="break-words">{formError}</AlertDescription>
+          </Alert>
         ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -169,6 +313,7 @@ export function AppointmentForm({
             </Label>
             <input type="hidden" name="client_id" value={selectedClientId} />
             <SearchableSelect
+              id="client_id"
               options={clientOptions}
               value={selectedClientId}
               onValueChange={handleClientChange}
@@ -176,29 +321,27 @@ export function AppointmentForm({
               searchPlaceholder="Search client..."
               emptyMessage="No client found."
             />
-            {'fieldErrors' in state && state.fieldErrors?.client_id ? (
-              <p className="text-xs text-red-600">{state.fieldErrors.client_id}</p>
-            ) : null}
+            <FieldError message={fieldErrors?.client_id} />
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="location_id" className="text-sm font-medium text-neutral-700">
               Location
             </Label>
-            <select
+            <NativeSelect
               id="location_id"
               name="location_id"
               value={selectedLocationId}
               onChange={(event) => setSelectedLocationId(event.target.value)}
-              className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="w-full"
             >
-              <option value="">No location</option>
+              <NativeSelectOption value="">No location</NativeSelectOption>
               {visibleLocations.map((location) => (
-                <option key={location.id} value={location.id}>
+                <NativeSelectOption key={location.id} value={location.id}>
                   {location.label} - {location.address}
-                </option>
+                </NativeSelectOption>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         </div>
 
@@ -206,27 +349,25 @@ export function AppointmentForm({
           <Label htmlFor="job_id" className="text-sm font-medium text-neutral-700">
             Job
           </Label>
-          <select
+          <NativeSelect
             id="job_id"
             name="job_id"
             required
             value={selectedJobId}
             onChange={(event) => setSelectedJobId(event.target.value)}
-            className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="w-full"
           >
-            <option value="" disabled>
+            <NativeSelectOption value="" disabled>
               Select job
-            </option>
+            </NativeSelectOption>
             {jobs.map((job) => (
-              <option key={job.id} value={job.id}>
+              <NativeSelectOption key={job.id} value={job.id}>
                 {job.name}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
+          </NativeSelect>
           {rateHint ? <p className="text-xs text-neutral-500">{rateHint}</p> : null}
-          {'fieldErrors' in state && state.fieldErrors?.job_id ? (
-            <p className="text-xs text-red-600">{state.fieldErrors.job_id}</p>
-          ) : null}
+          <FieldError message={fieldErrors?.job_id} />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
@@ -235,16 +376,16 @@ export function AppointmentForm({
               Date
             </Label>
             <Input
+              ref={scheduledDateRef}
               id="scheduled_date"
               name="scheduled_date"
               type="date"
               required
               defaultValue={appointment?.scheduled_date ?? defaultDate ?? ''}
-              className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
+              aria-invalid={scheduledDateError ? true : undefined}
+              aria-describedby={scheduledDateError ? SCHEDULED_DATE_ERROR_ID : undefined}
             />
-            {'fieldErrors' in state && state.fieldErrors?.scheduled_date ? (
-              <p className="text-xs text-red-600">{state.fieldErrors.scheduled_date}</p>
-            ) : null}
+            <FieldError id={SCHEDULED_DATE_ERROR_ID} message={scheduledDateError} />
           </div>
 
           <div className="space-y-1.5">
@@ -257,11 +398,8 @@ export function AppointmentForm({
               type="time"
               required
               defaultValue={appointment?.scheduled_start_time?.slice(0, 5) ?? ''}
-              className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
             />
-            {'fieldErrors' in state && state.fieldErrors?.scheduled_start_time ? (
-              <p className="text-xs text-red-600">{state.fieldErrors.scheduled_start_time}</p>
-            ) : null}
+            <FieldError message={fieldErrors?.scheduled_start_time} />
           </div>
 
           <div className="space-y-1.5">
@@ -274,11 +412,8 @@ export function AppointmentForm({
               type="time"
               required
               defaultValue={appointment?.scheduled_end_time?.slice(0, 5) ?? ''}
-              className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
             />
-            {'fieldErrors' in state && state.fieldErrors?.scheduled_end_time ? (
-              <p className="text-xs text-red-600">{state.fieldErrors.scheduled_end_time}</p>
-            ) : null}
+            <FieldError message={fieldErrors?.scheduled_end_time} />
           </div>
         </div>
 
@@ -298,12 +433,9 @@ export function AppointmentForm({
                   ? (appointment.price_override_cents / 100).toFixed(2)
                   : ''
               }
-              className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
               placeholder="Leave blank to bill this client's hourly rate for the scheduled time"
             />
-            {'fieldErrors' in state && state.fieldErrors?.price_override ? (
-              <p className="text-xs text-red-600">{state.fieldErrors.price_override}</p>
-            ) : null}
+            <FieldError message={fieldErrors?.price_override} />
           </div>
 
           {/* The status this form rendered with; the action refuses to save over a status that moved since. */}
@@ -311,11 +443,14 @@ export function AppointmentForm({
         </div>
 
         <div className="space-y-1.5">
-          <Label className="text-sm font-medium text-neutral-700">Assigned Employees</Label>
+          <Label htmlFor="employee_ids" className="text-sm font-medium text-neutral-700">
+            Assigned Employees
+          </Label>
           {selectedEmployeeIds.map((id) => (
             <input key={id} type="hidden" name="employee_ids" value={id} />
           ))}
           <SearchableMultiSelect
+            id="employee_ids"
             options={employeeOptions}
             value={selectedEmployeeIds}
             onValueChange={setSelectedEmployeeIds}
@@ -323,6 +458,15 @@ export function AppointmentForm({
             searchPlaceholder="Search employees..."
             emptyMessage="No employee found."
           />
+          {appointment ? (
+            // Always mounted so screen readers announce each warning as it appears.
+            <div aria-live="polite" className="space-y-1.5 empty:hidden">
+              {removedClockWarnings.map((warning) => (
+                <RemovedClockWarning key={warning.employeeId} name={warning.name} minutes={warning.minutes} />
+              ))}
+              {isManualCompletionAhead ? <ManualCompletionNote /> : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-1.5">
@@ -333,7 +477,7 @@ export function AppointmentForm({
             id="notes"
             name="notes"
             defaultValue={appointment?.notes ?? ''}
-            className="min-h-28 rounded-xl border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-950 shadow-sm"
+            className="min-h-28"
           />
         </div>
 
@@ -356,17 +500,17 @@ export function AppointmentForm({
                   <Label htmlFor="recurrence_frequency" className="text-sm font-medium text-neutral-700">
                     Frequency
                   </Label>
-                  <select
+                  <NativeSelect
                     id="recurrence_frequency"
                     name="recurrence_frequency"
                     defaultValue="weekly"
-                    className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    className="w-full"
                   >
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="biweekly">Biweekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
+                    <NativeSelectOption value="daily">Daily</NativeSelectOption>
+                    <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
+                    <NativeSelectOption value="biweekly">Biweekly</NativeSelectOption>
+                    <NativeSelectOption value="monthly">Monthly</NativeSelectOption>
+                  </NativeSelect>
                 </div>
 
                 <div className="space-y-1.5">
@@ -377,7 +521,6 @@ export function AppointmentForm({
                     id="recurrence_end_date"
                     name="recurrence_end_date"
                     type="date"
-                    className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
                   />
                 </div>
 
@@ -391,7 +534,6 @@ export function AppointmentForm({
                     type="number"
                     min="1"
                     step="1"
-                    className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
                     placeholder="Optional"
                   />
                 </div>
@@ -464,18 +606,18 @@ export function AppointmentForm({
                   <Label htmlFor="recurrence_frequency" className="text-sm font-medium text-neutral-700">
                     Frequency
                   </Label>
-                  <select
+                  <NativeSelect
                     id="recurrence_frequency"
                     name="recurrence_frequency"
                     defaultValue={recurrenceSeries.frequency}
                     required={showRecurringEditFields}
-                    className="h-11 w-full rounded-xl border border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    className="w-full"
                   >
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="biweekly">Biweekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
+                    <NativeSelectOption value="daily">Daily</NativeSelectOption>
+                    <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
+                    <NativeSelectOption value="biweekly">Biweekly</NativeSelectOption>
+                    <NativeSelectOption value="monthly">Monthly</NativeSelectOption>
+                  </NativeSelect>
                 </div>
 
                 <div className="space-y-1.5">
@@ -487,7 +629,6 @@ export function AppointmentForm({
                     name="recurrence_end_date"
                     type="date"
                     defaultValue={recurrenceSeries.end_date ?? ''}
-                    className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
                   />
                 </div>
 
@@ -502,7 +643,6 @@ export function AppointmentForm({
                     min="1"
                     step="1"
                     defaultValue={recurrenceSeries.max_occurrences ?? ''}
-                    className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm"
                     placeholder="Optional"
                   />
                 </div>
@@ -518,7 +658,7 @@ export function AppointmentForm({
           >
             Cancel
           </Link>
-          <SubmitButton isEditMode={Boolean(appointment)} />
+          <SubmitButton isEditMode={Boolean(appointment)} pending={isPending} />
         </div>
       </form>
     </section>

@@ -69,23 +69,44 @@ function adminTable() {
 }
 
 describe("fetchAdminSessions", () => {
-  it("reads every live session in the range past the 1000-row cap", async () => {
+  it("reads every session in the range, Removed ones included, past the 1000-row cap", async () => {
     const fake = createFakeSupabase({ appointment_employees: adminTable() });
 
     const rows = await fetchAdminSessions(fake.db, WEEK);
 
-    assert.equal(rows.length, LIVE_COUNT + 4);
+    assert.equal(rows.length, LIVE_COUNT + EXCLUDED_EACH + 4);
     assert.equal(new Set(rows.map((row) => row.id)).size, rows.length);
   });
 
-  it("leaves out archived assignments, archived visits, cancelled visits and other dates", async () => {
+  it("leaves out archived visits, cancelled visits and other dates", async () => {
     const fake = createFakeSupabase({ appointment_employees: adminTable() });
 
     const ids = (await fetchAdminSessions(fake.db, WEEK)).map((row) => row.id);
 
     assert.deepEqual(
-      ids.filter((id) => !id.startsWith("f-live")),
+      ids.filter((id) => !id.startsWith("f-live") && !id.startsWith("a-archived")),
       ["e-bia", "e-first-day", "e-last-day", "e-null-archived"],
+    );
+  });
+
+  it("returns Removed sessions with their archived flag, so the view can strike them", async () => {
+    const fake = createFakeSupabase({
+      appointment_employees: [
+        adminRow({ id: "live" }),
+        adminRow({ id: "removed", isArchived: true }),
+        adminRow({ id: "removed-cancelled", isArchived: true, status: "cancelled" }),
+        adminRow({ id: "removed-visit-archived", isArchived: true, isVisitArchived: true }),
+      ],
+    });
+
+    const rows = await fetchAdminSessions(fake.db, WEEK);
+
+    assert.deepEqual(
+      rows.map((row) => [row.id, row.is_archived]),
+      [
+        ["live", false],
+        ["removed", true],
+      ],
     );
   });
 
@@ -120,7 +141,7 @@ describe("fetchAdminSessions", () => {
 
       const rows = await fetchAdminSessions(fake.db, WEEK, blank);
 
-      assert.equal(rows.length, LIVE_COUNT + 4, JSON.stringify(blank));
+      assert.equal(rows.length, LIVE_COUNT + EXCLUDED_EACH + 4, JSON.stringify(blank));
     }
   });
 
@@ -176,6 +197,22 @@ function cleanerRow(seed: CleanerSeed) {
   };
 }
 
+type RemovedSeed = { id: string; employeeId?: string; clockIn?: string | null; date?: string };
+
+// The Cleaner read path's flat row: no embeds, since she can no longer read the visit itself.
+function removedRow(seed: RemovedSeed) {
+  return {
+    id: seed.id,
+    employee_id: seed.employeeId ?? "ana",
+    appointment_id: `visit-${seed.id}`,
+    scheduled_date: seed.date ?? "2026-10-04",
+    client_name: "Birch Lane",
+    job_name: "Deep clean",
+    clocked_in_at: seed.clockIn === undefined ? "2026-10-04T12:04:00+00:00" : seed.clockIn,
+    clocked_out_at: "2026-10-04T14:19:00+00:00",
+  };
+}
+
 function cleanerTable() {
   return [
     ...seedIds("a-archived", EXCLUDED_EACH).map((id) => cleanerRow({ id, isArchived: true })),
@@ -219,12 +256,75 @@ describe("fetchCleanerSessions", () => {
     await fetchCleanerSessions(fake.db, "ana", MONTH);
 
     assert.deepEqual(
-      fake.requests.map((request) => request.range),
+      fake.requests
+        .filter((request) => request.table === "appointment_employees_employee_view")
+        .map((request) => request.range),
       [
         [0, 999],
         [1000, 1999],
       ],
     );
+  });
+
+  it("adds her Removed sessions in the month, flattened into the record shape", async () => {
+    const fake = createFakeSupabase({
+      appointment_employees_employee_view: [cleanerRow({ id: "live" })],
+      removed_sessions_employee_view: [
+        removedRow({ id: "removed" }),
+        removedRow({ id: "removed-unclocked", clockIn: null }),
+        removedRow({ id: "removed-before", date: "2026-09-30" }),
+        removedRow({ id: "removed-after", date: "2026-11-01" }),
+        removedRow({ id: "removed-bia", employeeId: "bia" }),
+      ],
+    });
+
+    const records = await fetchCleanerSessions(fake.db, "ana", MONTH);
+
+    assert.deepEqual(records, [
+      {
+        id: "live",
+        clocked_in_at: "2026-10-14T13:00:00+00:00",
+        clocked_out_at: null,
+        is_removed: false,
+        appointments: {
+          scheduled_date: "2026-10-14",
+          clients: { name: "Maple House" },
+          jobs: { name: "Weekly clean" },
+        },
+      },
+      {
+        id: "removed",
+        clocked_in_at: "2026-10-04T12:04:00+00:00",
+        clocked_out_at: "2026-10-04T14:19:00+00:00",
+        is_removed: true,
+        appointments: {
+          scheduled_date: "2026-10-04",
+          clients: { name: "Birch Lane" },
+          jobs: { name: "Deep clean" },
+        },
+      },
+    ]);
+  });
+
+  it("reads every Removed session of hers past the 1000-row cap", async () => {
+    const fake = createFakeSupabase({
+      appointment_employees_employee_view: [],
+      removed_sessions_employee_view: seedIds("removed", LIVE_COUNT).map((id) => removedRow({ id })),
+    });
+
+    const records = await fetchCleanerSessions(fake.db, "ana", MONTH);
+
+    assert.equal(records.length, LIVE_COUNT);
+    assert.ok(records.every((record) => record.is_removed));
+  });
+
+  it("throws when the Removed sessions read fails", async () => {
+    const fake = createFakeSupabase(
+      { appointment_employees_employee_view: [cleanerRow({ id: "live" })] },
+      ["removed_sessions_employee_view"],
+    );
+
+    await assert.rejects(fetchCleanerSessions(fake.db, "ana", MONTH));
   });
 
   it("returns the time-sheet record shape", async () => {

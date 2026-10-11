@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight, TriangleAlert } from 'lucide-react'
 
 import StatusBadge, { lineStateBadge } from '@/components/ui/status-badge'
 import type { LineState } from '@/lib/invoices/view'
@@ -43,6 +43,22 @@ export function SetPriceLink({ appointmentId, jobName, date, className }: SetPri
   )
 }
 
+type BillingMismatchNoteProps = {
+  // The appointment's Live price as shown: an amount, or "Unpriced".
+  liveLabel: string
+  className?: string
+}
+
+// A Billing mismatch, worded the same on the appointment's Price block and on its invoice line.
+export function BillingMismatchNote({ liveLabel, className }: BillingMismatchNoteProps) {
+  return (
+    <p className={cn('flex items-start gap-1.5 text-sm text-status-warning-foreground', className)}>
+      <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <span className="min-w-0 break-words">Edited after billing: live price now {liveLabel}</span>
+    </p>
+  )
+}
+
 type VisitLineSummaryProps = {
   date: string
   startTime: string
@@ -55,11 +71,13 @@ type VisitLineSummaryProps = {
   // A Cancelled line: the text is struck and `billedAmountCents` shows struck beside the $0.00 it now charges.
   struck?: boolean
   billedAmountCents?: number | null
-  // The Receivables tag for a visit the automatic run skips.
-  isExcluded?: boolean
   // 'inline' puts the Set price link where the amount would be; 'none' leaves it to the caller (a checkbox row
   // keeps it outside its label via SetPriceLink).
   setPriceLink?: 'inline' | 'none'
+  // The price math under the amount (draft detail lines); null or absent renders nothing.
+  priceBreakdown?: string | null
+  // The Live price of a line in a Billing mismatch; null or absent renders no note.
+  mismatchLiveLabel?: string | null
   className?: string
 }
 
@@ -76,8 +94,9 @@ export function VisitLineSummary({
   appointmentId,
   struck = false,
   billedAmountCents = null,
-  isExcluded = false,
   setPriceLink = 'inline',
+  priceBreakdown = null,
+  mismatchLiveLabel = null,
   className,
 }: VisitLineSummaryProps) {
   const badges = states.flatMap((state) => {
@@ -115,16 +134,21 @@ export function VisitLineSummary({
         )}
       </div>
 
-      {badges.length > 0 || isExcluded ? (
+      {priceBreakdown ? (
+        <p className="mt-0.5 text-right text-xs break-words text-muted-foreground tabular-nums">{priceBreakdown}</p>
+      ) : null}
+
+      {badges.length > 0 ? (
         <div className="mt-1 flex flex-wrap gap-1">
           {badges.map(({ state, badge }) => (
             <StatusBadge key={state} tone={badge.tone} icon={badge.icon}>
               {badge.label}
             </StatusBadge>
           ))}
-          {isExcluded ? <StatusBadge tone="neutral">Excluded</StatusBadge> : null}
         </div>
       ) : null}
+
+      {mismatchLiveLabel !== null ? <BillingMismatchNote liveLabel={mismatchLiveLabel} className="mt-1" /> : null}
     </div>
   )
 }

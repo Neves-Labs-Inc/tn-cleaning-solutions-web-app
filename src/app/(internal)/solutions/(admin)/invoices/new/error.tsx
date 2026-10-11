@@ -22,12 +22,12 @@ export default function NewInvoiceError({
         </Button>
         <PageHeader
           title="New invoice"
-          description="Pick a client, then the visits to bill. Visits up to today start checked."
+          description="Pick a client, then the appointments to bill. Appointments up to today start checked."
         />
       </div>
       <Alert variant="destructive">
         <AlertCircle aria-hidden="true" />
-        <AlertTitle>Couldn&apos;t load visits to bill</AlertTitle>
+        <AlertTitle>Couldn&apos;t load appointments to bill</AlertTitle>
         <AlertDescription>Something went wrong loading clients and prices. Try again.</AlertDescription>
       </Alert>
       <Button variant="outline" onClick={() => unstable_retry()}>

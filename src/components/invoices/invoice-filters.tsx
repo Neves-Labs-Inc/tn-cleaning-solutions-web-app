@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { Label } from '@/components/ui/label'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Switch } from '@/components/ui/switch'
 import type { ClientOption, InvoiceFilter } from '@/lib/invoices/view'
 
@@ -27,6 +28,8 @@ const STATUS_OPTIONS: Array<{ value: InvoiceFilter['status']; label: string }> =
   { value: 'void', label: 'Void' },
 ]
 
+const ALL_CLIENTS_OPTION = { value: '', label: 'All clients' }
+
 const SWITCH_ROW = 'min-h-11 cursor-pointer gap-2 text-sm'
 
 // The URL is the source of truth: the parent turns every change into a navigation. Remount this
@@ -40,6 +43,13 @@ export default function InvoiceFilters({ filter, clients, onChange }: InvoiceFil
     setUrlQuery(filter.query)
     if (filter.query !== query.trim()) setQuery(filter.query)
   }
+
+  const clientOptions = [
+    ALL_CLIENTS_OPTION,
+    ...clients
+      .map((client) => ({ value: client.id, label: client.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })),
+  ]
 
   const searchRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -120,19 +130,15 @@ export default function InvoiceFilters({ filter, clients, onChange }: InvoiceFil
             </NativeSelectOption>
           ))}
         </NativeSelect>
-        <NativeSelect
-          aria-label="Client"
-          className="w-full"
+        <SearchableSelect
+          options={clientOptions}
           value={filter.clientId}
-          onChange={(event) => onChange({ clientId: event.target.value })}
-        >
-          <NativeSelectOption value="">All clients</NativeSelectOption>
-          {clients.map((client) => (
-            <NativeSelectOption key={client.id} value={client.id}>
-              {client.name}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
+          onValueChange={(clientId) => onChange({ clientId })}
+          placeholder="All clients"
+          searchPlaceholder="Search clients…"
+          emptyMessage="No clients found."
+          aria-label="Client"
+        />
       </div>
 
       <div className="flex flex-wrap gap-x-6 md:col-span-full xl:contents">

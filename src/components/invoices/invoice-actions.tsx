@@ -111,7 +111,7 @@ function invoiceFormData(invoiceId: string): FormData {
 }
 
 function unpricedReason(count: number): string {
-  return `Set a price on ${count} Unpriced visit${count === 1 ? '' : 's'} to issue.`
+  return `Set a price on ${count} Unpriced appointment${count === 1 ? '' : 's'} to issue.`
 }
 
 function BlockedReason({ id, count, className }: { id: string; count: number; className?: string }) {
@@ -175,7 +175,7 @@ export default function InvoiceActions({
   methods,
   businessDate,
 }: InvoiceActionsProps) {
-  const { pageError, runPageAction } = useInvoiceDetail()
+  const { pageError, runPageAction, showPageError } = useInvoiceDetail()
   const desktopReasonId = useId()
   const barReasonId = useId()
   const [sheet, setSheet] = useState<Sheet | null>(null)
@@ -196,12 +196,23 @@ export default function InvoiceActions({
     setBusyAction(null)
   }
 
+  // Opening or dismissing a sheet clears the page slot: a stale refusal behind a fresh sheet reads as
+  // if the new action failed. Not cleared on unmount, so a refusal outlives a sheet the page removed.
   function handleSheetChange(next: Sheet) {
-    return (isOpen: boolean) => setSheet(isOpen ? next : null)
+    return (isOpen: boolean) => {
+      showPageError(null)
+      setSheet(isOpen ? next : null)
+    }
+  }
+
+  function handleCancel() {
+    showPageError(null)
+    setSheet(null)
   }
 
   function openMore(event: React.MouseEvent<HTMLButtonElement>) {
     openerRef.current = event.currentTarget
+    showPageError(null)
     setIsHandingOff(false)
     setSheet('more')
   }
@@ -255,6 +266,7 @@ export default function InvoiceActions({
     function handleClick(event: React.MouseEvent<HTMLButtonElement>) {
       const isFromMore = placement === 'more'
       openerRef.current = isFromMore ? moreButtonRef.current : event.currentTarget
+      showPageError(null)
       setIsHandingOff(isFromMore)
       setSheet(action as Sheet)
     }
@@ -340,7 +352,7 @@ export default function InvoiceActions({
             lineCount={lineCount}
             totalCents={totalCents}
             businessDate={businessDate}
-            onCancel={() => setSheet(null)}
+            onCancel={handleCancel}
             onSuccess={() => setSheet(null)}
             onPendingChange={setIsSheetPending}
           />
@@ -362,7 +374,7 @@ export default function InvoiceActions({
             methods={methods}
             initial={layout.primary === 'editPayment' ? payment : null}
             businessDate={businessDate}
-            onCancel={() => setSheet(null)}
+            onCancel={handleCancel}
             onSuccess={() => setSheet(null)}
             onPendingChange={setIsSheetPending}
           />
@@ -376,8 +388,8 @@ export default function InvoiceActions({
           title={`Void ${label}?`}
           description={
             payment
-              ? "Its payment is cleared and its visits can be billed again. The number is kept and never reused. This can't be undone."
-              : "Its visits can be billed again. The number is kept and never reused. This can't be undone."
+              ? "Its payment is cleared and its appointments can be billed again. The number is kept and never reused. This can't be undone."
+              : "Its appointments can be billed again. The number is kept and never reused. This can't be undone."
           }
           confirmLabel="Void invoice"
           pendingLabel="Voiding…"

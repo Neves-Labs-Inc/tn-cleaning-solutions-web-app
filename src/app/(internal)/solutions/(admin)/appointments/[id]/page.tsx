@@ -4,17 +4,24 @@ import { ArrowLeft } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
 import AppointmentCrewClocks from '@/components/admin/appointment-crew-clocks'
+import BillingCard from '@/components/admin/billing-card'
 import AppointmentLifecycleActions, { CompletedByAdminHint } from '@/components/admin/appointment-lifecycle-actions'
+import { BillingMismatchNote } from '@/components/invoices/visit-line-summary'
+import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import PageHeader from '@/components/ui/page-header'
 import StatusBadge, { appointmentStatusBadge } from '@/components/ui/status-badge'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
+import { loadAppointmentBilling } from '@/lib/invoices/appointment-billing'
 import {
   APPOINTMENT_PRICE_COLUMNS,
   priceAppointments,
   type DisplayPrice,
   type PriceableAppointment,
 } from '@/lib/pricing'
+import { billingMismatchLiveLabel } from '@/lib/pricing/billing-mismatch'
 import { formatCents, formatRate, UNPRICED_LABEL } from '@/lib/pricing/money'
+import { getBusinessDate } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 import { buildCrewViews, type CrewMemberView } from '@/lib/time-sheets/crew-views'
 import { fetchAppointmentCrew } from '@/lib/time-sheets/queries'
@@ -26,6 +33,7 @@ type AppointmentDetailPageProps = {
 
 type AppointmentDetailRow = PriceableAppointment & {
   status: AppointmentStatus
+  completed_at: string | null
   manually_completed: boolean
   notes: string
   is_archived: boolean
@@ -61,6 +69,8 @@ type PriceView = {
   breakdown: string | null
   label: string
   isUnavailable: boolean
+  // Set when the appointment was edited after its invoice was issued: its Live price now.
+  mismatchLiveLabel: string | null
 }
 
 type CrewLoad = {
@@ -77,7 +87,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
     .select(
       `
         ${APPOINTMENT_PRICE_COLUMNS},
-        status, manually_completed, notes, is_archived,
+        status, completed_at, manually_completed, notes, is_archived,
         clients!inner ( id, name, phone, email ),
         jobs!inner ( id, name, estimated_duration_minutes, description ),
         client_locations ( id, label, address ),
@@ -93,47 +103,46 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
     notFound()
   }
 
-  const [priceView, crew] = await Promise.all([
+  const [priceView, crew, billing] = await Promise.all([
     loadPriceView(supabase, appointment),
     loadCrew(supabase, appointment.id),
+    loadAppointmentBilling(supabase, appointment),
   ])
 
   const statusBadge = appointmentStatusBadge(appointment.status)
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 space-y-3">
-            <Link
-              href="/solutions/appointments"
-              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
-            >
-              <ArrowLeft className="size-3.5" aria-hidden="true" />
-              Back to Appointments
-            </Link>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 space-y-3">
+          <Button
+            variant="ghost"
+            className="-ml-3 w-fit transition-[background-color,transform,box-shadow] duration-fast ease-out-quart active:scale-[0.98] active:bg-muted"
+            render={<Link href="/solutions/appointments" />}
+            nativeButton={false}
+          >
+            <ArrowLeft aria-hidden="true" />
+            Appointments
+          </Button>
 
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-neutral-950">{appointment.jobs?.name ?? 'Appointment'}</h1>
-              <p className="mt-2 text-sm text-neutral-600">
-                {format(parseISO(appointment.scheduled_date), 'EEEE, MMMM d, yyyy')} •{' '}
-                {appointment.scheduled_start_time.slice(0, 5)} - {appointment.scheduled_end_time.slice(0, 5)}
-              </p>
-            </div>
+          <PageHeader title={appointment.jobs?.name ?? 'Appointment'} />
+          <p className="text-sm text-muted-foreground">
+            {format(parseISO(appointment.scheduled_date), 'EEEE, MMMM d, yyyy')} •{' '}
+            {appointment.scheduled_start_time.slice(0, 5)} - {appointment.scheduled_end_time.slice(0, 5)}
+          </p>
 
-            <StatusBadge tone={statusBadge.tone}>{statusBadge.label}</StatusBadge>
+          <StatusBadge tone={statusBadge.tone}>{statusBadge.label}</StatusBadge>
 
-            <CompletedByAdminHint status={appointment.status} manuallyCompleted={appointment.manually_completed} />
-          </div>
-
-          <AppointmentLifecycleActions
-            appointmentId={appointment.id}
-            status={appointment.status}
-            manuallyCompleted={appointment.manually_completed}
-            editHref={`/solutions/appointments/${appointment.id}/edit`}
-          />
+          <CompletedByAdminHint status={appointment.status} manuallyCompleted={appointment.manually_completed} />
         </div>
-      </section>
+
+        <AppointmentLifecycleActions
+          appointmentId={appointment.id}
+          status={appointment.status}
+          manuallyCompleted={appointment.manually_completed}
+          editHref={`/solutions/appointments/${appointment.id}/edit`}
+        />
+      </div>
 
       <section className="grid gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
@@ -170,6 +179,9 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
                 <p className={cn('text-xs', priceView.isUnavailable ? 'text-red-700' : 'text-neutral-500')}>
                   {priceView.label}
                 </p>
+                {priceView.mismatchLiveLabel !== null ? (
+                  <BillingMismatchNote liveLabel={priceView.mismatchLiveLabel} className="mt-1" />
+                ) : null}
               </div>
 
               <div>
@@ -209,6 +221,19 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
         </div>
 
         <div className="space-y-4">
+          <BillingCard
+            appointment={{
+              id: appointment.id,
+              clientId: appointment.client_id,
+              clientName: appointment.clients?.name ?? 'Unknown client',
+              status: appointment.status,
+              scheduledDate: appointment.scheduled_date,
+              jobName: appointment.jobs?.name ?? 'Appointment',
+            }}
+            billing={billing}
+            businessDate={getBusinessDate(new Date())}
+          />
+
           {appointment.recurrence_series ? (
             <article className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm shadow-emerald-950/5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-700">Recurrence</h2>
@@ -271,8 +296,11 @@ async function loadPriceView(
   let view: PriceView
 
   try {
-    const priced = await priceAppointments(supabase, [appointment])
-    view = toPriceView(priced.get(appointment.id)?.display ?? { source: 'unpriced' })
+    const priced = (await priceAppointments(supabase, [appointment])).get(appointment.id)
+    view = {
+      ...toPriceView(priced?.display ?? { source: 'unpriced' }),
+      mismatchLiveLabel: priced ? billingMismatchLiveLabel(priced) : null,
+    }
   } catch (thrown) {
     console.error('Error pricing appointment:', appointment.id, thrown)
     view = {
@@ -280,14 +308,15 @@ async function loadPriceView(
       breakdown: null,
       label: 'This appointment’s price could not be loaded, so no price is shown.',
       isUnavailable: true,
+      mismatchLiveLabel: null,
     }
   }
 
   return view
 }
 
-function toPriceView(display: DisplayPrice): PriceView {
-  let view: PriceView
+function toPriceView(display: DisplayPrice): Omit<PriceView, 'mismatchLiveLabel'> {
+  let view: Omit<PriceView, 'mismatchLiveLabel'>
 
   if (display.source === 'unpriced') {
     view = {

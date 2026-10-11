@@ -10,15 +10,22 @@ import { getBusinessDate } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 
 type NewInvoicePageProps = {
-  searchParams: Promise<{ client?: string | string[] }>
+  searchParams: Promise<{ client?: string | string[]; visits?: string | string[] }>
 }
 
 function firstParam(value: string | string[] | undefined): string {
   return (Array.isArray(value) ? value[0] : value) ?? ''
 }
 
+// ?visits=<id,id> hands appointments over (from the appointment page): those that are the
+// client's claimable ones start checked. Absent, the default selection applies.
+function handedOffIds(value: string | string[] | undefined): string[] | null {
+  return value === undefined ? null : firstParam(value).split(',').filter(Boolean)
+}
+
 export default async function NewInvoicePage({ searchParams }: NewInvoicePageProps) {
-  const requestedId = firstParam((await searchParams).client)
+  const query = await searchParams
+  const requestedId = firstParam(query.client)
   const db = await createClient()
 
   // Read failures throw to error.tsx.
@@ -40,7 +47,7 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePagePro
         </Button>
         <PageHeader
           title="New invoice"
-          description="Pick a client, then the visits to bill. Visits up to today start checked."
+          description="Pick a client, then the appointments to bill. Appointments up to today start checked."
         />
       </div>
 
@@ -51,7 +58,7 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePagePro
               <ReceiptText aria-hidden="true" />
             </EmptyMedia>
             <EmptyTitle>Nothing to bill</EmptyTitle>
-            <EmptyDescription>Every visit is already on an invoice or cancelled.</EmptyDescription>
+            <EmptyDescription>Every appointment is already on an invoice or cancelled.</EmptyDescription>
           </EmptyHeader>
           <Button variant="outline" nativeButton={false} render={<Link href="/solutions/invoices" />}>
             Back to invoices
@@ -64,6 +71,7 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePagePro
           visits={visits}
           businessDate={getBusinessDate(new Date())}
           isClientUnavailable={requestedId !== '' && clientId === ''}
+          handedOffIds={handedOffIds(query.visits)}
         />
       )}
     </div>

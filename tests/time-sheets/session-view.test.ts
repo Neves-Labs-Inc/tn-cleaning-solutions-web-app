@@ -246,3 +246,59 @@ describe("buildSessionView: corrections", () => {
     );
   });
 });
+
+describe("buildSessionView: Removed sessions", () => {
+  it("marks a live session as not removed, NULL flag included", () => {
+    assert.equal(buildSessionView(closedAfter(180), AFTER_GRACE).isRemoved, false);
+    assert.equal(
+      buildSessionView(sessionRow({ is_archived: null }), AFTER_GRACE).isRemoved,
+      false,
+    );
+  });
+
+  it("marks an archived session as removed, keeping its clocks and clocked time", () => {
+    const row = { ...closedAfter(135), is_archived: true };
+
+    const view = buildSessionView(row, AFTER_GRACE);
+
+    assert.equal(view.isRemoved, true);
+    assert.equal(view.clockIn, CLOCK_IN);
+    assert.equal(view.clockedMinutes, 135);
+  });
+
+  it("never flags a removed open shift, missing clock or odd duration", () => {
+    const openShift = sessionRow({ clocked_in_at: CLOCK_IN, is_archived: true });
+    const missingClock = sessionRow({ is_archived: true });
+    const odd = { ...closedAfter(30), is_archived: true };
+
+    for (const row of [openShift, missingClock, odd]) {
+      assert.deepEqual(buildSessionView(row, AFTER_GRACE).flags, []);
+    }
+  });
+
+  it("offers no fix on a removed session", () => {
+    const rows = [
+      { ...closedAfter(180), is_archived: true },
+      sessionRow({ clocked_in_at: CLOCK_IN, is_archived: true }),
+      sessionRow({ is_archived: true }),
+    ];
+
+    for (const row of rows) {
+      assert.equal(buildSessionView(row, AFTER_GRACE).fixAction, null);
+    }
+  });
+
+  it("keeps a removed session's history: edits and a matching acknowledgement", () => {
+    const row = {
+      ...closedAfter(60),
+      is_archived: true,
+      clock_corrections: [correction()],
+      odd_duration_acknowledgements: [acknowledgement()],
+    };
+
+    const view = buildSessionView(row, AFTER_GRACE);
+
+    assert.equal(view.isEdited, true);
+    assert.equal(view.isAcknowledged, true);
+  });
+});

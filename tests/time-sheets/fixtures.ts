@@ -20,6 +20,7 @@ export function sessionRow(overrides: RowOverrides = {}): AdminSessionRow {
   return {
     id: "assignment-1",
     employee_id: "cleaner-1",
+    is_archived: false,
     clocked_in_at: null,
     clocked_out_at: null,
     employee: { id: "cleaner-1", full_name: "Ana Souza" },

@@ -1,4 +1,5 @@
 import type { AppointmentStatus } from '../appointments/lifecycle.ts'
+import { billingMismatchLiveLabel } from '../pricing/billing-mismatch.ts'
 import type { LivePrice } from '../pricing/index.ts'
 import type { InvoiceStatus, LineState } from './view.ts'
 
@@ -25,6 +26,20 @@ export function lineAmountCents(line: LineFacts, visit: VisitFacts, invoice: Inv
 }
 
 const DRAFT: InvoiceFacts = { status: 'draft' }
+
+export type MismatchLine = LineFacts & { is_released: boolean; visit: { live: LivePrice } }
+
+// The Live price to flag on a line in a Billing mismatch, or null. Only a Live claim on an issued or paid
+// invoice has a Billed amount to drift from; the invoice itself is never changed to match.
+export function lineMismatchLiveLabel(line: MismatchLine, status: InvoiceStatus): string | null {
+  const isBilledClaim = (status === 'issued' || status === 'paid') && !line.is_released && line.cancelled_at === null
+  if (!isBilledClaim || line.billed_amount_cents === null) return null
+
+  return billingMismatchLiveLabel({
+    live: line.visit.live,
+    display: { source: 'billed', amount_cents: line.billed_amount_cents },
+  })
+}
 
 export function draftTotalCents(entries: LineEntry[]): number {
   return entries.reduce((total, { line, visit }) => total + lineAmountCents(line, visit, DRAFT), 0)

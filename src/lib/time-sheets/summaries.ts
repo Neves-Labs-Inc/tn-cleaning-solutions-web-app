@@ -1,7 +1,8 @@
 import type { TimeSheetRecord } from "@/types/time-sheet-record";
 import { getClockedMinutes, type FlagKind, type SessionView } from "./session-view.ts";
 
-// Open shifts never count toward minutes: their end isn't known yet.
+// Open shifts never count toward minutes: their end isn't known yet. Removed sessions never
+// count at all: they stay listed, struck through, but are not hours worked on the crew.
 
 export type CleanerRef = { id: string; full_name: string };
 
@@ -22,7 +23,8 @@ export type CleanerMonthSummary = {
   averageMinutes: number | null;
 };
 
-function summarizeOne(cleaner: CleanerRef, views: SessionView[]): CleanerSummary {
+function summarizeOne(cleaner: CleanerRef, allViews: SessionView[]): CleanerSummary {
+  const views = allViews.filter((view) => !view.isRemoved);
   const flags = views.flatMap((view) => view.flags);
   const countFlag = (kind: FlagKind) => flags.filter((flag) => flag === kind).length;
 
@@ -53,9 +55,10 @@ export function summarizeCleaners(views: SessionView[], cleaners: CleanerRef[]):
     );
 }
 
-// The Cleaner's own month: every listed session counts, only closed ones add minutes.
+// The Cleaner's own month: every listed live session counts, only closed ones add minutes.
 export function summarizeCleanerMonth(records: TimeSheetRecord[]): CleanerMonthSummary {
-  const closedMinutes = records.flatMap((record) =>
+  const liveRecords = records.filter((record) => !record.is_removed);
+  const closedMinutes = liveRecords.flatMap((record) =>
     record.clocked_in_at && record.clocked_out_at
       ? [getClockedMinutes(record.clocked_in_at, record.clocked_out_at)]
       : [],
@@ -63,7 +66,7 @@ export function summarizeCleanerMonth(records: TimeSheetRecord[]): CleanerMonthS
   const totalMinutes = closedMinutes.reduce((total, minutes) => total + minutes, 0);
 
   return {
-    count: records.length,
+    count: liveRecords.length,
     totalMinutes,
     averageMinutes:
       closedMinutes.length === 0 ? null : Math.floor(totalMinutes / closedMinutes.length),

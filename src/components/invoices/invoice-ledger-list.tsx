@@ -55,7 +55,7 @@ function EmptyList({ hasFilter, onClear }: { hasFilter: boolean; onClear: () => 
         <EmptyDescription>
           {hasFilter
             ? 'Try a different status, client, or search.'
-            : 'Completed visits for clients with Automatic invoicing start a draft here.'}
+            : 'Create one with New invoice, or bill unbilled appointments from Receivables.'}
         </EmptyDescription>
       </EmptyHeader>
       {hasFilter ? (
@@ -154,8 +154,8 @@ export default function InvoiceLedgerList({
       {loadedCount >= INVOICE_LIST_LIMIT ? (
         <Alert>
           <Info aria-hidden="true" />
-          <AlertTitle>Showing the {INVOICE_LIST_LIMIT.toLocaleString('en-CA')} most recently created invoices</AlertTitle>
-          <AlertDescription>Invoices created before these aren&apos;t listed here.</AlertDescription>
+          <AlertTitle>Showing the {INVOICE_LIST_LIMIT.toLocaleString('en-CA')} most recent invoices</AlertTitle>
+          <AlertDescription>Invoices with older activity aren&apos;t listed here.</AlertDescription>
         </Alert>
       ) : null}
 

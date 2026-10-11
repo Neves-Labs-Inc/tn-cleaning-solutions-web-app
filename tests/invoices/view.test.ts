@@ -13,7 +13,6 @@ import {
   normalizePaymentMethodName,
   overdueInvoices,
   owedInvoices,
-  receivablesTotals,
   unbilledSummary,
   type InvoiceFilter,
   type InvoiceViewRow,
@@ -122,25 +121,6 @@ test('filterInvoices query matches number or client name, case-insensitively', (
   assert.deepEqual(filterInvoices(rows, { ...ALL, query: 'nope' }), [])
 })
 
-test('receivablesTotals counts only issued unarchived rows and splits overdue and no-due-date', () => {
-  const rows = [
-    row({ id: 'issued', total_cents: 10000, due_date: '2026-10-20' }),
-    row({ id: 'late', effective_status: 'overdue', total_cents: 5000, due_date: '2026-10-01' }),
-    row({ id: 'nodue', total_cents: 2000, due_date: null }),
-    row({ id: 'draft', status: 'draft', effective_status: 'draft', invoice_number: null, total_cents: 9900 }),
-    row({ id: 'void', status: 'void', effective_status: 'void', total_cents: 9900 }),
-    row({ id: 'paid', status: 'paid', effective_status: 'paid', total_cents: 9900 }),
-    row({ id: 'archived', total_cents: 9900, is_archived: true }),
-  ]
-
-  assert.deepEqual(receivablesTotals(rows), {
-    outstandingCents: 17000,
-    overdueCents: 5000,
-    noDueDateCents: 2000,
-    unpaidCount: 3,
-  })
-})
-
 test('clientBalances drops zero balances and sorts overdue desc then owed desc', () => {
   const rows = [
     row({ id: '1', client_id: 'a', total_cents: 9000 }),
@@ -171,28 +151,27 @@ test('overdueInvoices lists overdue unarchived rows, oldest due first', () => {
   assert.deepEqual(ids(overdueInvoices(rows)), ['old', 'new'])
 })
 
-test('groupUnbilled groups per client and tags excluded and unpriced visits', () => {
+test('groupUnbilled groups per client and tags only unpriced visits', () => {
   const visit = (id: string, client: string, name: string, overrides: Partial<UnbilledVisit> = {}): UnbilledVisit => ({
     id,
     client_id: client,
     client_name: name,
     scheduled_date: '2026-10-01',
     live_price_cents: 5000,
-    is_excluded: false,
     ...overrides,
   })
 
   const groups = groupUnbilled([
     visit('v1', 'b', 'Birch'),
     visit('v2', 'a', 'Acme', { live_price_cents: null }),
-    visit('v3', 'b', 'Birch', { is_excluded: true, live_price_cents: null }),
+    visit('v3', 'b', 'Birch', { live_price_cents: null }),
   ])
 
   assert.deepEqual(
     groups.map((g) => [g.clientName, g.visits.map((v) => [v.id, v.tag])]),
     [
       ['Acme', [['v2', 'unpriced']]],
-      ['Birch', [['v1', null], ['v3', 'excluded']]],
+      ['Birch', [['v1', null], ['v3', 'unpriced']]],
     ],
   )
 })

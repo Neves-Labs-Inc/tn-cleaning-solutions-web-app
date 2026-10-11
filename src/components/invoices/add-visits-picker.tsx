@@ -13,7 +13,7 @@ import SubmitButton from '@/components/ui/submit-button'
 import type { ClaimableVisit } from '@/lib/invoices/queries'
 
 import { ClaimableVisitList } from './claimable-visit-list'
-import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail, type DraftDetails } from './invoice-detail-context'
+import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail } from './invoice-detail-context'
 import { SHEET_BUTTON_CLASS, SheetButtons } from './sheet-buttons'
 import { submitDraftUpdate } from './submit-draft-update'
 
@@ -22,13 +22,12 @@ type AddVisitsPickerProps = {
   clientName: string
   visits: ClaimableVisit[]
   businessDate: string
-  savedDetails: DraftDetails
 }
 
-const ERROR_TITLE = "Couldn't add those visits"
+const ERROR_TITLE = "Couldn't add those appointments"
 
 function visitCount(count: number): string {
-  return `${count} visit${count === 1 ? '' : 's'}`
+  return `${count} appointment${count === 1 ? '' : 's'}`
 }
 
 export default function AddVisitsPicker({
@@ -36,7 +35,6 @@ export default function AddVisitsPicker({
   clientName,
   visits,
   businessDate,
-  savedDetails,
 }: AddVisitsPickerProps) {
   const router = useRouter()
   const { showPageError } = useInvoiceDetail()
@@ -54,7 +52,15 @@ export default function AddVisitsPicker({
     // Nothing starts checked.
     setSelected(new Set())
     setError(null)
+    showPageError(null)
     setIsOpen(true)
+  }
+
+  // Dismissing clears the page slot too; the sheet's own error stays until the next open so its
+  // content doesn't jump while it animates out.
+  function handleOpenChange(nextOpen: boolean) {
+    showPageError(null)
+    setIsOpen(nextOpen)
   }
 
   // Shown in the sheet, and in the page slot too: a refusal re-renders the page, and a draft issued
@@ -69,7 +75,7 @@ export default function AddVisitsPicker({
     showPageError(null)
 
     try {
-      const result = await submitDraftUpdate({ invoiceId, addIds: chosenIds, details: savedDetails })
+      const result = await submitDraftUpdate({ invoiceId, addIds: chosenIds })
       if (result.success) {
         toast.success(`Added ${visitCount(chosenIds.length)}`)
         setIsOpen(false)
@@ -79,7 +85,7 @@ export default function AddVisitsPicker({
       // A visit claimed elsewhere drops out of the list once the page is re-read.
       router.refresh()
     } catch (thrown) {
-      console.error('Add visits failed:', thrown)
+      console.error('Add appointments failed:', thrown)
       showError(CONNECTION_ERROR_MESSAGE)
     }
   }
@@ -94,16 +100,16 @@ export default function AddVisitsPicker({
         onClick={handleOpen}
       >
         <Plus aria-hidden="true" />
-        Add visits
+        Add appointments
       </Button>
 
       <ResponsiveDialog
         open={isOpen}
-        onOpenChange={setIsOpen}
+        onOpenChange={handleOpenChange}
         isPending={isPending}
         returnFocusRef={triggerRef}
-        title="Add visits"
-        description={`${clientName}'s visits that aren't on another invoice. Upcoming visits are billed ahead.`}
+        title="Add appointments"
+        description={`${clientName}'s appointments that aren't on another invoice. Upcoming appointments are billed ahead.`}
       >
         {visits.length === 0 ? (
           <Empty className="border">
@@ -111,8 +117,8 @@ export default function AddVisitsPicker({
               <EmptyMedia variant="icon">
                 <CalendarCheck aria-hidden="true" />
               </EmptyMedia>
-              <EmptyTitle>No visits to add</EmptyTitle>
-              <EmptyDescription>Every visit for {clientName} is already on an invoice or cancelled.</EmptyDescription>
+              <EmptyTitle>No appointments to add</EmptyTitle>
+              <EmptyDescription>Every appointment for {clientName} is already on an invoice or cancelled.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
@@ -133,9 +139,9 @@ export default function AddVisitsPicker({
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               ) : null}
-              <SheetButtons onCancel={() => setIsOpen(false)} onPendingChange={setIsPending}>
+              <SheetButtons onCancel={() => handleOpenChange(false)} onPendingChange={setIsPending}>
                 <SubmitButton
-                  label={chosenIds.length === 0 ? 'Add visits' : `Add ${visitCount(chosenIds.length)}`}
+                  label={chosenIds.length === 0 ? 'Add appointments' : `Add ${visitCount(chosenIds.length)}`}
                   pendingLabel="Adding…"
                   disabled={chosenIds.length === 0}
                   className={SHEET_BUTTON_CLASS}

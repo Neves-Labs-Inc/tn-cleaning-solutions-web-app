@@ -1,5 +1,3 @@
-import { getBusinessDate } from '../schedule/business-time.ts'
-
 export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'void'
 export type InvoiceEffectiveStatus = InvoiceStatus | 'overdue'
 export type LineState = 'ok' | 'unpriced' | 'upcoming' | 'cancelled'
@@ -30,11 +28,13 @@ export type InvoiceFilter = {
   showArchived: boolean
 }
 
+// From invoice_receivables_totals: owed figures over issued, unarchived invoices, and open drafts.
 export type ReceivablesTotals = {
   outstandingCents: number
   overdueCents: number
   noDueDateCents: number
   unpaidCount: number
+  draftCount: number
 }
 
 export type ClientBalance = {
@@ -51,10 +51,9 @@ export type UnbilledVisit = {
   client_name: string
   scheduled_date: string
   live_price_cents: number | null
-  is_excluded: boolean
 }
 
-export type UnbilledTag = 'excluded' | 'unpriced' | null
+export type UnbilledTag = 'unpriced' | null
 
 // Generic so a caller's richer visit rows (time, job, location) survive grouping.
 export type UnbilledGroup<T extends UnbilledVisit = UnbilledVisit> = {
@@ -143,17 +142,6 @@ function sumCents(rows: InvoiceViewRow[]): number {
   return rows.reduce((total, row) => total + row.total_cents, 0)
 }
 
-export function receivablesTotals(rows: InvoiceViewRow[]): ReceivablesTotals {
-  const owed = rows.filter(isOwed)
-
-  return {
-    outstandingCents: sumCents(owed),
-    overdueCents: sumCents(owed.filter((row) => row.effective_status === 'overdue')),
-    noDueDateCents: sumCents(owed.filter((row) => row.due_date === null)),
-    unpaidCount: owed.length,
-  }
-}
-
 export function clientBalances(
   rows: InvoiceViewRow[],
   clients: Array<{ id: string; name: string }>,
@@ -199,7 +187,6 @@ export function unbilledSummary(visits: Array<{ live_price_cents: number | null 
 }
 
 function tagFor(visit: UnbilledVisit): UnbilledTag {
-  if (visit.is_excluded) return 'excluded'
   return visit.live_price_cents === null ? 'unpriced' : null
 }
 
@@ -223,26 +210,6 @@ export function groupUnbilled<T extends UnbilledVisit>(visits: T[]): Array<Unbil
 
 // listInvoices returns at most this many rows (PostgREST max_rows), so a list this long was cut off.
 export const INVOICE_LIST_LIMIT = 1000
-
-type ActivityRow = { issued_date: string | null; created_at: string | null }
-
-// A draft's activity is its Eastern created date; an issued invoice's is its issue date.
-function activityDate(row: ActivityRow): string {
-  if (row.issued_date) return row.issued_date
-  return row.created_at ? getBusinessDate(new Date(row.created_at)) : ''
-}
-
-// Compared as instants: Postgres drops a zero fraction, so the strings don't sort reliably.
-function createdMillis(row: ActivityRow): number {
-  return row.created_at ? Date.parse(row.created_at) : 0
-}
-
-// Newest activity first, so a just-issued draft rises to the top of the ledger.
-export function sortByActivity<T extends ActivityRow>(rows: T[]): T[] {
-  return [...rows].sort(
-    (a, b) => activityDate(b).localeCompare(activityDate(a)) || createdMillis(b) - createdMillis(a),
-  )
-}
 
 // The bulk-issue action rejects a post with more ids than this, so a selection stops here.
 export const BULK_ISSUE_LIMIT = 200

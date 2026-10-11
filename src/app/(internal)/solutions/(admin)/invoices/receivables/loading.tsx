@@ -1,4 +1,5 @@
 import { Skeleton } from '@/components/ui/skeleton'
+import { StatTileSkeleton } from '@/components/ui/stat-tile'
 
 const TILE_COUNT = 4
 const CLIENT_ROW_COUNT = 4
@@ -18,14 +19,14 @@ export default function ReceivablesLoading() {
   return (
     <div className="space-y-6 lg:space-y-8" aria-busy="true">
       <div className="space-y-2">
-        <Skeleton className="h-11 w-28 md:h-9" />
+        <Skeleton className="-ml-3 h-(--control-height) w-28" />
         <Skeleton className="h-8 w-44" />
         <Skeleton className="h-5 w-72 max-w-full" />
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: TILE_COUNT }, (_, index) => (
-          <Skeleton key={index} className="h-26 rounded-xl" />
+          <StatTileSkeleton key={index} icon caption fitValue />
         ))}
       </div>
 

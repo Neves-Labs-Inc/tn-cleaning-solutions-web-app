@@ -14,9 +14,25 @@ export function canRestore(status: AppointmentStatus): boolean {
   return status === 'cancelled'
 }
 
-// Editing is closed once a visit is finished or cancelled; the detail page and edit page share this.
+// A completed appointment stays editable (prices get corrected after the fact); a cancelled one is
+// restored first. The detail page, edit page and updateAppointment share this.
 export function canEdit(status: AppointmentStatus): boolean {
-  return status !== 'completed' && status !== 'cancelled'
+  return status !== 'cancelled'
+}
+
+type CompletedDateFacts = {
+  status: AppointmentStatus
+  // Both YYYY-MM-DD, so they compare as strings.
+  scheduledDate: string
+  businessDate: string
+}
+
+export const COMPLETED_FUTURE_DATE_ERROR = "A completed appointment can't move to a date after today."
+
+// Work that already happened can't be scheduled for a day that hasn't come yet (Business date, Eastern).
+export function completedDateError({ status, scheduledDate, businessDate }: CompletedDateFacts): string | null {
+  const isFutureCompleted = status === 'completed' && scheduledDate > businessDate
+  return isFutureCompleted ? COMPLETED_FUTURE_DATE_ERROR : null
 }
 
 export function canMarkComplete({ status, manually_completed }: LifecycleState): boolean {

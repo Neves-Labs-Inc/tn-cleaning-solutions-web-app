@@ -8,6 +8,7 @@ import {
   groupVisitsByDate,
   hasUnpricedLine,
   lineAmountCents,
+  lineMismatchLiveLabel,
   lineState,
   type LineFacts,
   type VisitFacts,
@@ -140,4 +141,37 @@ test('a visit can be both Unpriced and Upcoming; a completed priced one has neit
   assert.deepEqual(claimableStates({ status: 'in_progress', live: priced(9000) }), ['upcoming'])
   assert.deepEqual(claimableStates({ status: 'completed', live: UNPRICED }), ['unpriced'])
   assert.deepEqual(claimableStates({ status: 'completed', live: priced(9000) }), [])
+})
+
+const PAID = { status: 'paid' } as const
+const VOID = { status: 'void' } as const
+
+function mismatchLine(overrides: { billed_amount_cents?: number | null; cancelled_at?: string | null; is_released?: boolean } = {}) {
+  return {
+    billed_amount_cents: 12000,
+    cancelled_at: null,
+    is_released: false,
+    visit: { live: priced(13500) },
+    ...overrides,
+  }
+}
+
+test('an issued or paid line whose appointment was repriced shows its Live price', () => {
+  assert.equal(lineMismatchLiveLabel(mismatchLine(), ISSUED.status), '$135.00')
+  assert.equal(lineMismatchLiveLabel(mismatchLine(), PAID.status), '$135.00')
+})
+
+test('an issued line whose appointment became Unpriced shows Unpriced', () => {
+  assert.equal(lineMismatchLiveLabel({ ...mismatchLine(), visit: { live: UNPRICED } }, ISSUED.status), 'Unpriced')
+})
+
+test('an issued line still at its Billed amount shows no mismatch', () => {
+  assert.equal(lineMismatchLiveLabel(mismatchLine({ billed_amount_cents: 13500 }), ISSUED.status), null)
+})
+
+test('draft and void invoices, cancelled lines and released lines never show a mismatch', () => {
+  assert.equal(lineMismatchLiveLabel(mismatchLine({ billed_amount_cents: null }), DRAFT.status), null)
+  assert.equal(lineMismatchLiveLabel(mismatchLine({ is_released: true }), VOID.status), null)
+  assert.equal(lineMismatchLiveLabel(mismatchLine({ cancelled_at: '2026-10-01T12:00:00Z' }), ISSUED.status), null)
+  assert.equal(lineMismatchLiveLabel(mismatchLine({ is_released: true }), ISSUED.status), null)
 })

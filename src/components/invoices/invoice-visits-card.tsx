@@ -10,14 +10,15 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import ConfirmDialog from '@/components/ui/confirm-dialog'
 import { Spinner } from '@/components/ui/spinner'
-import { claimableStates } from '@/lib/invoices/lines'
+import { claimableStates, lineMismatchLiveLabel } from '@/lib/invoices/lines'
+import { formatPriceBreakdown } from '@/lib/invoices/price-breakdown'
 import type { ClaimableVisit, InvoiceDetailLine } from '@/lib/invoices/queries'
 import { formatDateOnly, type InvoiceStatus, type LineState } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
 import { cn } from '@/lib/utils'
 
 import AddVisitsPicker from './add-visits-picker'
-import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail, type DraftDetails } from './invoice-detail-context'
+import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail } from './invoice-detail-context'
 import { submitDraftUpdate } from './submit-draft-update'
 import { formatVisitDate, SetPriceLink, VisitLineSummary } from './visit-line-summary'
 
@@ -32,13 +33,12 @@ type InvoiceVisitsCardProps = {
   isAutomatic: boolean
   unpricedCount: number
   paidDate: string | null
-  savedDetails: DraftDetails
   claimable: ClaimableVisit[]
   businessDate: string
 }
 
 const INVOICES_PATH = '/solutions/invoices'
-const REMOVE_ERROR_TITLE = "Couldn't remove that visit"
+const REMOVE_ERROR_TITLE = "Couldn't remove that appointment"
 
 // A draft shows every pill that applies (Unpriced and Upcoming together); an issued line shows its state.
 function lineStates(line: InvoiceDetailLine, status: InvoiceStatus): LineState[] {
@@ -79,6 +79,8 @@ function LineRow({ line, status, isEditable, isPending, isBusy, onRemove }: Line
           struck={isCancelled}
           billedAmountCents={line.billed_amount_cents}
           setPriceLink="none"
+          priceBreakdown={formatPriceBreakdown(line, status)}
+          mismatchLiveLabel={lineMismatchLiveLabel(line, status)}
         />
         {isUnpriced && isEditable ? (
           <SetPriceLink appointmentId={visit.id} jobName={visit.job_name} date={visit.scheduled_date} />
@@ -89,7 +91,7 @@ function LineRow({ line, status, isEditable, isPending, isBusy, onRemove }: Line
           type="button"
           variant="ghost"
           size="icon"
-          aria-label={`Remove visit on ${formatVisitDate(visit.scheduled_date)}`}
+          aria-label={`Remove appointment on ${formatVisitDate(visit.scheduled_date)}`}
           disabled={isBusy}
           className="-mr-2 shrink-0 cursor-pointer transition-colors duration-fast active:bg-muted md:hover:bg-muted md:hover:text-destructive"
           onClick={(event) => onRemove(line, event.currentTarget)}
@@ -106,7 +108,7 @@ function TotalRow({ status, totalCents, paidDate }: { status: InvoiceStatus; tot
   const isVoid = status === 'void'
   let caption: string | null = null
   if (isDraft) {
-    caption = 'Prices follow each visit until you issue.'
+    caption = 'Prices follow each appointment until you issue.'
   } else if (isVoid) {
     caption = 'Void · not owed'
   } else if (status === 'paid' && paidDate) {
@@ -141,12 +143,11 @@ export default function InvoiceVisitsCard({
   isAutomatic,
   unpricedCount,
   paidDate,
-  savedDetails,
   claimable,
   businessDate,
 }: InvoiceVisitsCardProps) {
   const router = useRouter()
-  const { runPageAction } = useInvoiceDetail()
+  const { runPageAction, showPageError } = useInvoiceDetail()
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastLine, setLastLine] = useState<InvoiceDetailLine | null>(null)
@@ -164,9 +165,9 @@ export default function InvoiceVisitsCard({
     setPendingId(line.visit.id)
 
     try {
-      const result = await submitDraftUpdate({ invoiceId, removeIds: [line.visit.id], details: savedDetails })
+      const result = await submitDraftUpdate({ invoiceId, removeIds: [line.visit.id] })
       if (result.success) {
-        toast.success(result.data.isDeleted ? 'Draft deleted' : 'Visit removed')
+        toast.success(result.data.isDeleted ? 'Draft deleted' : 'Appointment removed')
         leaveIfDeleted(result.data.isDeleted)
       } else {
         setError(result.error)
@@ -184,6 +185,7 @@ export default function InvoiceVisitsCard({
     const liveLines = lines.filter((other) => other.state !== 'cancelled')
     if (liveLines.length === 1 && liveLines[0] === line) {
       lastLineTriggerRef.current = trigger
+      showPageError(null)
       setLastLine(line)
     } else {
       void removeLine(line)
@@ -196,24 +198,26 @@ export default function InvoiceVisitsCard({
     const removed = await runPageAction(
       {
         errorTitle: REMOVE_ERROR_TITLE,
-        success: (data: { isDeleted: boolean }) => (data.isDeleted ? 'Draft deleted' : 'Visit removed'),
+        success: (data: { isDeleted: boolean }) => (data.isDeleted ? 'Draft deleted' : 'Appointment removed'),
       },
-      () => submitDraftUpdate({ invoiceId, removeIds: [lastLine.visit.id], details: savedDetails })
+      () => submitDraftUpdate({ invoiceId, removeIds: [lastLine.visit.id] })
     )
-    setLastLine(null)
-    leaveIfDeleted(removed?.isDeleted ?? false)
+    const isDeleted = removed?.isDeleted ?? false
+    // A deleted draft's confirm stays up until the ledger replaces the page.
+    if (!isDeleted) setLastLine(null)
+    leaveIfDeleted(isDeleted)
   }
 
   return (
     <Card className="gap-4 p-4 text-sm sm:p-5">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-lg font-semibold tracking-tight">Visits</h2>
+        <h2 className="text-lg font-semibold tracking-tight">Appointments</h2>
         <p className="text-sm text-muted-foreground tabular-nums">{lines.length}</p>
       </div>
 
       {isEditable && isAutomatic ? (
         <p className="text-xs text-muted-foreground">
-          Visits you remove won&apos;t rejoin an Automatic draft. You can add them back here or bill them on a manual
+          Appointments you remove won&apos;t rejoin an Automatic draft. You can add them back here or bill them on a manual
           invoice.
         </p>
       ) : null}
@@ -221,7 +225,7 @@ export default function InvoiceVisitsCard({
       {isEditable && unpricedCount > 0 ? (
         <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          Set a price on {unpricedCount} Unpriced visit{unpricedCount === 1 ? '' : 's'} to issue.
+          Set a price on {unpricedCount} Unpriced appointment{unpricedCount === 1 ? '' : 's'} to issue.
         </p>
       ) : null}
 
@@ -245,7 +249,6 @@ export default function InvoiceVisitsCard({
           clientName={clientName}
           visits={claimable}
           businessDate={businessDate}
-          savedDetails={savedDetails}
         />
       ) : null}
 
@@ -262,10 +265,12 @@ export default function InvoiceVisitsCard({
       <ConfirmDialog
         open={lastLine !== null}
         onOpenChange={(isOpen) => {
-          if (!isOpen) setLastLine(null)
+          if (isOpen) return
+          showPageError(null)
+          setLastLine(null)
         }}
         title="Delete this draft?"
-        description={`This is its only visit. Removing it deletes the draft.${isAutomatic ? " The visit won't rejoin an Automatic draft." : ''}`}
+        description={`This is its only appointment. Removing it deletes the draft.${isAutomatic ? " The appointment won't rejoin an Automatic draft." : ''}`}
         confirmLabel="Delete draft"
         pendingLabel="Deleting…"
         keepLabel="Keep draft"

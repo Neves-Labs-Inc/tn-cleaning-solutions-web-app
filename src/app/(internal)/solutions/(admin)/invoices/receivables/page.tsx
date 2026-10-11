@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/ui/page-header'
 import StatTile from '@/components/ui/stat-tile'
 import { countUnbilledVisits, getReceivables } from '@/lib/invoices/queries'
-import { clientBalances, groupUnbilled, overdueInvoices, receivablesTotals } from '@/lib/invoices/view'
+import { clientBalances, groupUnbilled, overdueInvoices } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
 import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createClient } from '@/lib/supabase/server'
@@ -22,15 +22,15 @@ export default async function ReceivablesPage() {
   const [receivables, unbilledCount] = await Promise.all([getReceivables(db), countUnbilledVisits(db)])
   const businessDate = getBusinessDate(new Date())
 
-  const totals = receivablesTotals(receivables.invoices)
-  const overdue = overdueInvoices(receivables.invoices)
+  const { totals } = receivables
+  const overdue = overdueInvoices(receivables.owed)
   // Every client, archived and inactive too, so the balances add up to the Outstanding tile.
   const balances = clientBalances(
-    receivables.invoices,
+    receivables.owed,
     receivables.clients.map(({ id, name }) => ({ id, name })),
   )
   const groups = groupUnbilled(receivables.unbilled)
-  const draftCount = receivables.invoices.filter((row) => row.status === 'draft' && !row.is_archived).length
+  const { draftCount } = totals
 
   return (
     <div className="animate-in space-y-6 duration-slow fade-in-0 lg:space-y-8">

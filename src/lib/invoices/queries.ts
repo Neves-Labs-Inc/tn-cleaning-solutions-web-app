@@ -5,10 +5,17 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 import { APPOINTMENT_PRICE_COLUMNS, type LivePrice, type PriceableAppointment } from '@/lib/pricing'
 import type { Database, Views } from '@/types/database'
-import { priceAppointmentsInBatches } from './batch'
-import { loadDraftLines, type DraftLine } from './draft-lines'
+import { priceAppointmentsInBatches, readAllPages } from './batch'
+import { scopeToClient } from './client-scope'
+import { loadDraftLines } from './draft-lines'
 import { draftTotalCents, hasUnpricedLine, lineAmountCents, lineState } from './lines'
-import { sortByActivity, type InvoiceViewRow, type LineState, type UnbilledVisit } from './view'
+import { LIVE_CLAIM_EMBED, unbilledQuery } from './unbilled-query'
+import {
+  type InvoiceViewRow,
+  type LineState,
+  type ReceivablesTotals,
+  type UnbilledVisit,
+} from './view'
 
 // The read shapes the invoice screens need, so pages never rebuild these joins. Read failures throw
 // to the route's error boundary. Every function takes the user-session client.
@@ -33,7 +40,6 @@ export type VisitDetails = {
   scheduled_end_time: string
   job_name: string
   location_label: string | null
-  location_address: string | null
   live: LivePrice
 }
 
@@ -72,7 +78,10 @@ export type UnbilledVisitRow = UnbilledVisit & {
 }
 
 export type Receivables = {
-  invoices: InvoiceListRow[]
+  // Summed in the database (invoice_receivables_totals), so right at any volume.
+  totals: ReceivablesTotals
+  // Every owed invoice (issued, unarchived), read past PostgREST's row cap.
+  owed: InvoiceListRow[]
   clients: ClientContact[]
   unbilled: UnbilledVisitRow[]
   // Open, unarchived drafts at the Live price: not owed yet.
@@ -82,10 +91,10 @@ export type Receivables = {
 type VisitRow = PriceableAppointment & {
   status: AppointmentStatus
   jobs: { name: string } | null
-  client_locations: { label: string; address: string } | null
+  client_locations: { label: string } | null
 }
 
-type UnbilledRow = VisitRow & { excluded_from_automatic: boolean; clients: { name: string } | null }
+type UnbilledRow = VisitRow & { clients: { name: string } | null }
 
 type InvoiceRow = Omit<InvoiceListRow, 'has_unpriced'>
 
@@ -103,12 +112,8 @@ const VISIT_COLUMNS = `
   ${APPOINTMENT_PRICE_COLUMNS},
   status,
   jobs ( name ),
-  client_locations ( label, address )
+  client_locations ( label )
 `
-
-// "No Live claim" as a PostgREST anti-join: embed only the visit's Live claims, then keep the rows
-// where that embed is empty. It runs in the database, so no id list travels in the URL.
-const LIVE_CLAIM_EMBED = 'live:invoice_appointments ( appointment_id )'
 
 const INVOICE_LIST_COLUMNS = `
   id, client_id, status, effective_status, invoice_number, issued_date, due_date, total_cents,
@@ -131,21 +136,20 @@ async function priceVisits(db: Db, rows: VisitRow[]): Promise<VisitDetails[]> {
     scheduled_end_time: row.scheduled_end_time,
     job_name: row.jobs?.name ?? 'Unknown job',
     location_label: row.client_locations?.label ?? null,
-    location_address: row.client_locations?.address ?? null,
     live: prices.get(row.id)?.live ?? UNPRICED,
   }))
 }
 
-async function loadInvoiceRows(
-  db: Db,
-  clientId: string | null
-): Promise<{ rows: InvoiceListRow[]; draftLines: Map<string, DraftLine[]> }> {
-  let query = db.from('invoices_with_status').select(INVOICE_LIST_COLUMNS).order('created_at', { ascending: false })
-  if (clientId) {
-    query = query.eq('client_id', clientId)
-  }
-
-  const { data, error } = await query
+// Newest activity first (issue date, else Eastern created date), ordered in the database so the
+// rows returned (up to INVOICE_LIST_LIMIT) are the newest. Client contact and has_unpriced on drafts.
+export async function listInvoices(db: Db): Promise<InvoiceListRow[]> {
+  const { data, error } = await db
+    .from('invoices_with_status')
+    .select(INVOICE_LIST_COLUMNS)
+    .order('activity_date', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false, nullsFirst: false })
+    // Rows created in the same instant still come back in one stable order.
+    .order('id', { ascending: false })
   if (error) throw error
 
   const invoices = data as unknown as InvoiceRow[]
@@ -154,7 +158,7 @@ async function loadInvoiceRows(
   const draftLines = await loadDraftLines(db, draftIds)
 
   // The view sums Billed amounts, which a draft doesn't have yet: its total is at the Live price.
-  const rows = invoices.map((row) => {
+  return invoices.map((row) => {
     const lines = draftLines.get(row.id) ?? []
     return {
       ...row,
@@ -162,30 +166,10 @@ async function loadInvoiceRows(
       has_unpriced: hasUnpricedLine(lines),
     }
   })
-
-  return { rows, draftLines }
-}
-
-// Completed after launch and still completed (completed_at isn't cleared when a visit is reopened),
-// not archived, no Live claim. Excluded and Unpriced visits are included and tagged.
-function unbilledQuery(db: Db, columns: string, options: { clientId: string | null; isCount: boolean }) {
-  let query = db
-    .from('appointments')
-    .select(`${columns}, ${LIVE_CLAIM_EMBED}`, options.isCount ? { count: 'exact', head: true } : undefined)
-    .eq('live.is_archived', false)
-    .is('live.cancelled_at', null)
-    .is('live', null)
-    .not('completed_at', 'is', null)
-    .eq('status', 'completed')
-    .eq('is_archived', false)
-  if (options.clientId) {
-    query = query.eq('client_id', options.clientId)
-  }
-  return query
 }
 
 async function loadUnbilled(db: Db, clientId: string | null): Promise<UnbilledVisitRow[]> {
-  const { data, error } = await unbilledQuery(db, `${VISIT_COLUMNS}, excluded_from_automatic, clients ( name )`, {
+  const { data, error } = await unbilledQuery(db, `${VISIT_COLUMNS}, clients ( name )`, {
     clientId,
     isCount: false,
   }).order('scheduled_date', { ascending: true })
@@ -204,19 +188,21 @@ async function loadUnbilled(db: Db, clientId: string | null): Promise<UnbilledVi
       scheduled_start_time: row.scheduled_start_time,
       scheduled_end_time: row.scheduled_end_time,
       live_price_cents: live.source === 'unpriced' ? null : live.amount_cents,
-      is_excluded: row.excluded_from_automatic,
       job_name: row.jobs?.name ?? 'Unknown job',
       location_label: row.client_locations?.label ?? null,
     }
   })
 }
 
-// Newest activity first (issue date, else created date), with client contact and has_unpriced on
-// drafts. PostgREST can't order by that expression, so the database returns the newest-created rows
-// (up to INVOICE_LIST_LIMIT) and they are reordered here.
-export async function listInvoices(db: Db): Promise<InvoiceListRow[]> {
-  const { rows } = await loadInvoiceRows(db, null)
-  return sortByActivity(rows)
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// A cheap existence check for the route layout, which must decide 404 before the page streams.
+export async function invoiceExists(db: Db, invoiceId: string): Promise<boolean> {
+  if (!UUID.test(invoiceId)) return false
+
+  const { data, error } = await db.from('invoices').select('id').eq('id', invoiceId).maybeSingle()
+  if (error) throw error
+  return data !== null
 }
 
 export async function getInvoiceDetail(db: Db, invoiceId: string): Promise<InvoiceDetail | null> {
@@ -294,17 +280,12 @@ export async function listClaimableVisits(db: Db, clientId: string): Promise<Cla
   }))
 }
 
-// PostgREST caps a response at its max-rows setting, so the client list pages through the visits.
-const BILLABLE_PAGE_SIZE = 1000
-
 type BillableRow = { client_id: string; clients: Omit<BillableClient, 'id'> | null }
 
 // Only clients with a claimable visit (the same rule as listClaimableVisits), by name.
 export async function listBillableClients(db: Db): Promise<BillableClient[]> {
-  const byId = new Map<string, BillableClient>()
-
-  for (let from = 0, isLastPage = false; !isLastPage; from += BILLABLE_PAGE_SIZE) {
-    const { data, error } = await db
+  const rows = await readAllPages((from, to) =>
+    db
       .from('appointments')
       .select(`client_id, clients ( name, is_active, is_archived ), ${LIVE_CLAIM_EMBED}`)
       .eq('live.is_archived', false)
@@ -313,39 +294,85 @@ export async function listBillableClients(db: Db): Promise<BillableClient[]> {
       .neq('status', 'cancelled')
       .eq('is_archived', false)
       .order('id', { ascending: true })
-      .range(from, from + BILLABLE_PAGE_SIZE - 1)
-    if (error) throw error
+      .range(from, to)
+  )
 
-    for (const row of data as unknown as BillableRow[]) {
-      if (row.clients) {
-        byId.set(row.client_id, { id: row.client_id, ...row.clients })
-      }
+  const byId = new Map<string, BillableClient>()
+  for (const row of rows as unknown as BillableRow[]) {
+    if (row.clients) {
+      byId.set(row.client_id, { id: row.client_id, ...row.clients })
     }
-    isLastPage = data.length < BILLABLE_PAGE_SIZE
   }
 
   return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// Inputs for receivablesTotals, clientBalances, overdueInvoices and groupUnbilled in view.ts.
+// The Receivables figures, summed in the database so they stay right past the row cap. Drafts are
+// only counted: their Live price is computed here (ADR 0001), by loadDraftedCents.
+export async function getReceivablesTotals(db: Db, clientId: string | null = null): Promise<ReceivablesTotals> {
+  const { data, error } = await db
+    .rpc('invoice_receivables_totals', { p_client_id: clientId ?? undefined })
+    .single()
+  if (error) throw error
+
+  return {
+    outstandingCents: data.outstanding_cents,
+    overdueCents: data.overdue_cents,
+    noDueDateCents: data.no_due_date_cents,
+    unpaidCount: data.unpaid_count,
+    draftCount: data.draft_count,
+  }
+}
+
+// What a client still owes: issued, unarchived. Their totals are the view's Billed amounts.
+async function loadOwedInvoices(db: Db, clientId: string | null): Promise<InvoiceListRow[]> {
+  const rows = await readAllPages((from, to) =>
+    scopeToClient(
+      db.from('invoices_with_status').select(INVOICE_LIST_COLUMNS).eq('status', 'issued').eq('is_archived', false),
+      'client_id',
+      clientId
+    )
+      .order('id', { ascending: true })
+      .range(from, to)
+  )
+
+  return (rows as unknown as InvoiceRow[]).map((row) => ({ ...row, has_unpriced: false }))
+}
+
+// Open, unarchived drafts at the Live price. An archived draft's lines are released, so it has none.
+async function loadDraftedCents(db: Db, clientId: string | null): Promise<number> {
+  const drafts = await readAllPages((from, to) =>
+    scopeToClient(db.from('invoices').select('id').eq('status', 'draft').eq('is_archived', false), 'client_id', clientId)
+      .order('id', { ascending: true })
+      .range(from, to)
+  )
+
+  const draftLines = await loadDraftLines(
+    db,
+    drafts.map((draft) => draft.id)
+  )
+  return [...draftLines.values()].reduce((total, lines) => total + draftTotalCents(lines), 0)
+}
+
+// Inputs for clientBalances, overdueInvoices, owedInvoices and groupUnbilled in view.ts.
 // Pass a client id to scope everything to one client (the client page).
 export async function getReceivables(db: Db, clientId: string | null = null): Promise<Receivables> {
-  let clientsQuery = db.from('clients').select('id, name, phone, email').order('name', { ascending: true })
-  if (clientId) {
-    clientsQuery = clientsQuery.eq('id', clientId)
-  }
+  const clientsQuery = scopeToClient(
+    db.from('clients').select('id, name, phone, email').order('name', { ascending: true }),
+    'id',
+    clientId
+  )
 
-  const [{ rows, draftLines }, { data: clients, error: clientsError }, unbilled] = await Promise.all([
-    loadInvoiceRows(db, clientId),
+  const [totals, owed, draftedCents, { data: clients, error: clientsError }, unbilled] = await Promise.all([
+    getReceivablesTotals(db, clientId),
+    loadOwedInvoices(db, clientId),
+    loadDraftedCents(db, clientId),
     clientsQuery,
     loadUnbilled(db, clientId),
   ])
   if (clientsError) throw clientsError
 
-  const openDraftIds = rows.filter((row) => row.status === 'draft' && !row.is_archived).map((row) => row.id)
-  const draftedCents = openDraftIds.reduce((total, id) => total + draftTotalCents(draftLines.get(id) ?? []), 0)
-
-  return { invoices: rows, clients, unbilled, drafted_cents: draftedCents }
+  return { totals, owed, clients, unbilled, drafted_cents: draftedCents }
 }
 
 // The dashboard's Unbilled tile: the same rows Receivables lists, counted in the database.

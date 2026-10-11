@@ -84,7 +84,7 @@ export default function IssueForm({
       <input type="hidden" name="invoice_id" value={invoiceId} />
 
       <p className="text-sm font-medium tabular-nums">
-        {lineCount} {lineCount === 1 ? 'visit' : 'visits'} · {formatCents(totalCents)}
+        {lineCount} {lineCount === 1 ? 'appointment' : 'appointments'} · {formatCents(totalCents)}
       </p>
 
       <Field data-invalid={dueDateError ? true : undefined}>

@@ -1,10 +1,11 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, TriangleAlert } from 'lucide-react'
 import type { PostgrestError } from '@supabase/supabase-js'
 
-import { AppointmentForm } from '@/components/admin/appointment-form'
+import { AppointmentForm, type InvoiceClaim } from '@/components/admin/appointment-form'
 import { AppointmentScheduleContext } from '@/components/admin/new-appointment-schedule-context'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   APPOINTMENT_PRICE_COLUMNS,
   priceAppointments,
@@ -15,6 +16,7 @@ import {
 import { formatCents, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
 import { canEdit, type AppointmentStatus } from '@/lib/appointments/lifecycle'
+import { getClockedMinutes } from '@/lib/time-sheets/session-view'
 
 type EditAppointmentPageProps = {
   params: Promise<{ id: string }>
@@ -28,11 +30,16 @@ type RecurrenceSeriesRow = {
   max_occurrences: number | null
 }
 
+type LiveClaimRow = {
+  invoice: { id: string; invoice_number: string | null; status: 'draft' | 'issued' | 'paid' | 'void' } | null
+}
+
 type AppointmentRow = PriceableAppointment & {
   location_id: string | null
   recurrence_series_id: string | null
   notes: string
   status: AppointmentStatus
+  manually_completed: boolean
   is_archived: boolean
   appointment_employees: Array<{ employee_id: string }> | null
 }
@@ -46,13 +53,15 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
     { data: clients, error: clientsError },
     { data: jobs, error: jobsError },
     { data: employees, error: employeesError },
+    { data: liveClaim, error: liveClaimError },
+    { data: crewClockRows, error: crewClocksError },
   ] = await Promise.all([
     supabase
       .from('appointments')
       .select(
         `
           ${APPOINTMENT_PRICE_COLUMNS},
-          location_id, recurrence_series_id, notes, status, is_archived,
+          location_id, recurrence_series_id, notes, status, manually_completed, is_archived,
           appointment_employees(employee_id)
         `
       )
@@ -76,6 +85,20 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
       .select('id, full_name')
       .eq('is_archived', false)
       .order('full_name', { ascending: true }),
+    // The appointment's Live claim, if any: a released or Cancelled line claims nothing.
+    supabase
+      .from('invoice_appointments')
+      .select('invoice:invoices ( id, invoice_number, status )')
+      .eq('appointment_id', id)
+      .eq('is_archived', false)
+      .is('cancelled_at', null)
+      .maybeSingle(),
+    // The crew field warns about removing clocked time and about an automatic Manual completion.
+    supabase
+      .from('appointment_employees')
+      .select('employee_id, clocked_in_at, clocked_out_at')
+      .eq('appointment_id', id)
+      .not('is_archived', 'is', true),
   ])
 
   if (appointmentError || !appointment || appointment.is_archived) {
@@ -98,7 +121,9 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
     recurrenceSeriesError = error
   }
 
-  const loadError = clientsError ?? jobsError ?? employeesError ?? recurrenceSeriesError
+  // A failed claim read blocks the form: it must never show without knowing whether it's invoiced.
+  const loadError = clientsError ?? jobsError ?? employeesError ?? liveClaimError ?? recurrenceSeriesError
+  const invoiceClaim = toInvoiceClaim(liveClaim as LiveClaimRow | null)
 
   const jobRows = jobs ?? []
 
@@ -112,7 +137,9 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
     priceErrorMessage = thrown instanceof Error ? thrown.message : 'The appointment price could not be loaded.'
   }
 
-  const loadErrorMessage = loadError?.message ?? priceErrorMessage
+  // The form must never show without the clocks its crew warnings are built from.
+  const loadErrorMessage =
+    loadError?.message ?? (crewClocksError ? CREW_CLOCKS_ERROR_MESSAGE : null) ?? priceErrorMessage
 
   // Only the appointment's own Job is priced, so only it can show this client's negotiated rate;
   // the form says the rate applies on save for any other Job.
@@ -136,6 +163,13 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
     price_override_cents: typedAppointment.price_override_cents,
     notes: typedAppointment.notes,
     status: typedAppointment.status,
+    manually_completed: typedAppointment.manually_completed,
+    crewClocks: (crewClockRows ?? []).map((row) => ({
+      employeeId: row.employee_id,
+      closedMinutes:
+        row.clocked_in_at && row.clocked_out_at ? getClockedMinutes(row.clocked_in_at, row.clocked_out_at) : 0,
+      hasClockIn: row.clocked_in_at !== null,
+    })),
     assignedEmployeeIds: (typedAppointment.appointment_employees ?? []).map((row) => row.employee_id),
   }
   const [scheduledYearValue, scheduledMonthValue] = typedAppointment.scheduled_date.split('-', 3)
@@ -179,11 +213,12 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
             {loadErrorMessage}
           </section>
         ) : !canEdit(typedAppointment.status) ? (
-          <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-            {typedAppointment.status === 'completed'
-              ? 'This appointment cannot be edited because it has already been completed.'
-              : 'This appointment cannot be edited because it has been cancelled. Restore it to make changes.'}
-          </section>
+          <Alert role="status" className={WARNING_ALERT_CLASSES}>
+            <TriangleAlert aria-hidden="true" />
+            <AlertDescription className="text-status-warning-foreground">
+              This appointment cannot be edited because it has been cancelled. Restore it to make changes.
+            </AlertDescription>
+          </Alert>
         ) : (
           // Keyed on the status so a clock-driven change remounts the form with the fresh expected_status.
           <AppointmentForm
@@ -203,11 +238,25 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
             employees={employees ?? []}
             appointment={appointmentFormAppointment}
             recurrenceSeries={recurrenceSeries ?? null}
+            invoiceClaim={invoiceClaim}
           />
         )}
       </div>
     </div>
   )
+}
+
+const CREW_CLOCKS_ERROR_MESSAGE = "Couldn't load this appointment's clocks. Refresh the page to try again."
+
+const WARNING_ALERT_CLASSES = 'border-status-warning-border bg-status-warning text-status-warning-foreground'
+
+// Only an issued or paid invoice froze a price the edit won't reach; a draft line follows the edit.
+function toInvoiceClaim(row: LiveClaimRow | null): InvoiceClaim | null {
+  const invoice = row?.invoice ?? null
+  if (!invoice || invoice.invoice_number === null) return null
+  if (invoice.status !== 'issued' && invoice.status !== 'paid') return null
+
+  return { id: invoice.id, number: invoice.invoice_number, status: invoice.status }
 }
 
 function formatDisplayPrice(display: DisplayPrice) {

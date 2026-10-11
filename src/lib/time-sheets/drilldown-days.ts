@@ -54,6 +54,7 @@ export type SessionRowView = {
   isAcknowledged: boolean;
   isManualCompletion: boolean;
   isEdited: boolean;
+  isRemoved: boolean;
   // Newest first.
   corrections: HistoryCorrection[];
   acknowledgements: HistoryAcknowledgement[];
@@ -85,6 +86,7 @@ export function toSessionRowView(view: SessionView): SessionRowView {
     isAcknowledged: view.isAcknowledged,
     isManualCompletion: view.isManualCompletion,
     isEdited: view.isEdited,
+    isRemoved: view.isRemoved,
     corrections: view.corrections.map((item) => ({
       id: item.id,
       correctedByName: item.corrected_by_name,

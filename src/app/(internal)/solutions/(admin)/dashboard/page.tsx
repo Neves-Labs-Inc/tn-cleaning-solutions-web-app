@@ -16,8 +16,7 @@ import type {
     TodayAppointmentRow,
     UpcomingAppointmentRow
 } from '@/lib/helpers/dashboard'
-import { countUnbilledVisits, listInvoices } from '@/lib/invoices/queries'
-import { receivablesTotals } from '@/lib/invoices/view'
+import { countUnbilledVisits, getReceivablesTotals } from '@/lib/invoices/queries'
 import type { ReceivablesTotals } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
 import StatTile from '@/components/ui/stat-tile'
@@ -33,8 +32,8 @@ type Db = Awaited<ReturnType<typeof createClient>>
 // A failed read returns null so the page shows an error, never a wrong $0.00.
 async function loadReceivablesSummary(db: Db): Promise<ReceivablesSummary | null> {
     try {
-        const [invoices, unbilledCount] = await Promise.all([listInvoices(db), countUnbilledVisits(db)])
-        return { totals: receivablesTotals(invoices.filter((invoice) => !invoice.is_archived)), unbilledCount }
+        const [totals, unbilledCount] = await Promise.all([getReceivablesTotals(db), countUnbilledVisits(db)])
+        return { totals, unbilledCount }
     } catch (error) {
         console.error('Dashboard receivables failed to load', error)
         return null
@@ -124,7 +123,7 @@ export default async function DashboardPage() {
                         href={RECEIVABLES_HREF}
                         label="Unbilled"
                         value={String(receivables.unbilledCount)}
-                        caption={receivables.unbilledCount > 0 ? 'Visits not invoiced' : 'All visits billed'}
+                        caption={receivables.unbilledCount > 0 ? 'Appointments not invoiced' : 'All appointments billed'}
                         icon={<CalendarX2 className="size-5" aria-hidden="true" />}
                     />
                     <StatTile

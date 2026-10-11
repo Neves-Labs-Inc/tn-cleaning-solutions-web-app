@@ -7,6 +7,7 @@ import ClockedValue from "@/components/admin/time-sheets/clocked-value";
 import SessionBadges from "@/components/admin/time-sheets/session-badges";
 import SessionHistory from "@/components/admin/time-sheets/session-history";
 import { getSessionFocusId } from "@/components/admin/time-sheets/session-panel-ids";
+import { REMOVED_VALUE_CLASSES } from "@/components/ui/status-badge-tones";
 import type { SessionRowView } from "@/lib/time-sheets/drilldown-days";
 import { cn } from "@/lib/utils";
 
@@ -66,15 +67,33 @@ export default function SessionCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-base font-semibold break-words">{title}</p>
+          <p
+            className={cn(
+              "text-base font-semibold break-words",
+              view.isRemoved && "text-muted-foreground",
+            )}
+          >
+            {title}
+          </p>
           {detail}
         </div>
-        <p className="shrink-0 text-base font-semibold">
+        <p
+          className={cn(
+            "shrink-0 text-base font-semibold",
+            view.isRemoved && ["font-normal", REMOVED_VALUE_CLASSES],
+          )}
+        >
           <ClockedValue minutes={view.clockedMinutes} />
+          {view.isRemoved ? <span className="sr-only">, not counted</span> : null}
         </p>
       </div>
 
-      <p className="flex flex-wrap items-center gap-1.5 text-sm">
+      <p
+        className={cn(
+          "flex flex-wrap items-center gap-1.5 text-sm",
+          view.isRemoved && REMOVED_VALUE_CLASSES,
+        )}
+      >
         <ClockTime instant={view.clockIn} />
         <ArrowRight
           className="size-3.5 text-muted-foreground"

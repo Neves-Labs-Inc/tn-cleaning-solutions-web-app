@@ -151,7 +151,7 @@ export function ClaimableVisitList({
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-baseline gap-3">
-          <h2 className="text-lg font-semibold tracking-tight">Visits</h2>
+          <h2 className="text-lg font-semibold tracking-tight">Appointments</h2>
           <p className="min-w-[3ch] text-sm text-muted-foreground tabular-nums">
             {isLoading ? '—' : `${selected.size} of ${visits.length} selected`}
           </p>

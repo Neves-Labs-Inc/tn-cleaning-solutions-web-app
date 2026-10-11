@@ -1,3 +1,5 @@
+import type { AppointmentStatus } from "./lifecycle.ts";
+
 // An existing appointment_employees row as the crew planner sees it.
 export type ExistingAssignment = {
   id: string;
@@ -5,25 +7,39 @@ export type ExistingAssignment = {
   // NULL counts as live, matching the SQL's coalesce(is_archived, false).
   is_archived: boolean | null;
   hasHistory: boolean;
+  hasClockIn: boolean;
+};
+
+export type CrewAppointment = {
+  status: AppointmentStatus;
+  manually_completed: boolean;
 };
 
 export type CrewChangePlan = {
   archiveIds: string[];
   deleteIds: string[];
   insertEmployeeIds: string[];
+  // Must be written before any archive or delete so the status never leaves completed.
+  shouldTurnOnManualCompletion: boolean;
 };
 
 // Hours records must survive 6 years (Ontario ESA, CRA), so a removed Cleaner
 // with any session history is archived instead of deleted. Archived rows are
 // history only: they never count as assigned and are never unarchived.
+// A completed appointment left with no clocked Cleaner would derive back to
+// scheduled, so it becomes a Manual completion instead.
 export function planCrewChange(
   existingRows: ExistingAssignment[],
   submittedEmployeeIds: string[],
+  appointment: CrewAppointment,
 ): CrewChangePlan {
   const submitted = new Set(submittedEmployeeIds);
   const liveRows = existingRows.filter((row) => row.is_archived !== true);
   const removedRows = liveRows.filter((row) => !submitted.has(row.employee_id));
   const liveEmployeeIds = new Set(liveRows.map((row) => row.employee_id));
+  const isClockedCrewLeft = liveRows.some(
+    (row) => row.hasClockIn && submitted.has(row.employee_id),
+  );
 
   return {
     archiveIds: removedRows.filter((row) => row.hasHistory).map((row) => row.id),
@@ -31,6 +47,10 @@ export function planCrewChange(
     insertEmployeeIds: [...submitted].filter(
       (employeeId) => !liveEmployeeIds.has(employeeId),
     ),
+    shouldTurnOnManualCompletion:
+      appointment.status === "completed" &&
+      !appointment.manually_completed &&
+      !isClockedCrewLeft,
   };
 }
 
@@ -52,34 +72,59 @@ export function hasSessionHistory(facts: SessionHistoryFacts): boolean {
   );
 }
 
-// A later scheduled visit in a series, as a "this and future" edit sees it.
+// A later appointment in a series, as a "this and following" edit sees it.
 // assignments covers every row, archived or not.
 export type FutureVisit = {
   id: string;
   scheduled_date: string;
+  status: AppointmentStatus;
+  manually_completed: boolean;
+  // Any invoice_appointments row: a Live claim, a Cancelled line, or a released one.
+  hasInvoiceLine: boolean;
   assignments: SessionHistoryFacts[];
 };
 
 export type FutureVisitCleanupPlan = {
   deleteIds: string[];
-  // Dates that keep their existing visit, so they mustn't be regenerated.
+  // Dates that keep their existing appointment, so they mustn't be regenerated.
   preservedDates: string[];
 };
 
-// No hours record is ever deleted: a visit where any assignment (archived or
-// not) has history stays put, like a completed or cancelled one.
+// A Series edit never deletes a Protected appointment (CONTEXT.md): deleting one with any invoice
+// line would cascade that line off its invoice, even a void or issued one, and erase what the
+// client was billed. No hours record is ever deleted either.
+function isProtected(visit: FutureVisit): boolean {
+  return (
+    visit.status !== "scheduled" ||
+    visit.manually_completed ||
+    visit.hasInvoiceLine ||
+    visit.assignments.some(hasSessionHistory)
+  );
+}
+
 export function planFutureVisitCleanup(
   visits: FutureVisit[],
 ): FutureVisitCleanupPlan {
-  const isPreserved = (visit: FutureVisit): boolean =>
-    visit.assignments.some(hasSessionHistory);
-
   return {
     deleteIds: visits
-      .filter((visit) => !isPreserved(visit))
+      .filter((visit) => !isProtected(visit))
       .map((visit) => visit.id),
     preservedDates: visits
-      .filter(isPreserved)
+      .filter(isProtected)
       .map((visit) => visit.scheduled_date),
   };
+}
+
+// The dates regeneration must skip. delete_unprotected_series_appointments re-checks under lock,
+// so a planned delete it skipped (clocked into or invoiced since the read) keeps its date too.
+export function preservedSeriesDates(
+  plan: FutureVisitCleanupPlan,
+  laterAppointments: Pick<FutureVisit, "id" | "scheduled_date">[],
+  deletedIds: ReadonlySet<string>,
+): Set<string> {
+  const plannedDeleteIds = new Set(plan.deleteIds);
+  const skippedDates = laterAppointments
+    .filter((visit) => plannedDeleteIds.has(visit.id) && !deletedIds.has(visit.id))
+    .map((visit) => visit.scheduled_date);
+  return new Set([...plan.preservedDates, ...skippedDates]);
 }

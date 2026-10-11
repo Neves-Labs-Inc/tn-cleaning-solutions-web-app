@@ -6,6 +6,7 @@ import ClockedValue from "@/components/admin/time-sheets/clocked-value";
 import SessionBadges from "@/components/admin/time-sheets/session-badges";
 import SessionHistory from "@/components/admin/time-sheets/session-history";
 import { getSessionFocusId } from "@/components/admin/time-sheets/session-panel-ids";
+import { REMOVED_VALUE_CLASSES } from "@/components/ui/status-badge-tones";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { SessionRowView } from "@/lib/time-sheets/drilldown-days";
 import { cn } from "@/lib/utils";
@@ -40,7 +41,14 @@ export default function SessionTableRows({
         tabIndex={-1}
         className="px-4 align-top whitespace-normal outline-none"
       >
-        <p className="font-medium break-words">{view.clientName}</p>
+        <p
+          className={cn(
+            "font-medium break-words",
+            view.isRemoved && "text-muted-foreground",
+          )}
+        >
+          {view.clientName}
+        </p>
         <p className="text-muted-foreground">{view.jobName}</p>
       </TableCell>
     ),
@@ -50,8 +58,14 @@ export default function SessionTableRows({
       </TableCell>
     ),
     clocked: (
-      <TableCell className="align-top font-semibold">
+      <TableCell
+        className={cn(
+          "align-top font-semibold",
+          view.isRemoved && ["font-normal", REMOVED_VALUE_CLASSES],
+        )}
+      >
         <ClockedValue minutes={view.clockedMinutes} />
+        {view.isRemoved ? <span className="sr-only">, not counted</span> : null}
       </TableCell>
     ),
     status: (
@@ -82,10 +96,14 @@ export default function SessionTableRows({
       >
         {cells.visit}
         {cells.scheduled}
-        <TableCell className="align-top">
+        <TableCell
+          className={cn("align-top", view.isRemoved && REMOVED_VALUE_CLASSES)}
+        >
           <ClockTime instant={view.clockIn} />
         </TableCell>
-        <TableCell className="align-top">
+        <TableCell
+          className={cn("align-top", view.isRemoved && REMOVED_VALUE_CLASSES)}
+        >
           <ClockTime instant={view.clockOut} />
         </TableCell>
         {cells.clocked}

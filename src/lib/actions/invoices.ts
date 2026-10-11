@@ -4,7 +4,15 @@ import { revalidatePath } from 'next/cache'
 
 import { messageFor, type LedgerErrorCode } from '@/lib/invoices/errors'
 import { BULK_ISSUE_LIMIT } from '@/lib/invoices/view'
-import { InvoiceLedger, type BulkIssueOutcome, type LedgerResult, type PaymentInput } from '@/lib/invoices/ledger'
+import {
+  InvoiceLedger,
+  type BulkIssueOutcome,
+  type DraftInput,
+  type LedgerResult,
+  type MarkPaidInput,
+  type PaymentInput,
+} from '@/lib/invoices/ledger'
+import { parseDollarsToCents } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
 
 // Thin by design: parse the form, check the session is an admin, call the ledger, revalidate,
@@ -15,6 +23,7 @@ export type InvoiceActionResult<T = null> =
   | { success: false; error: string; code: LedgerErrorCode }
 
 const INVOICES_PATH = '/solutions/invoices'
+const APPOINTMENTS_PATH = '/solutions/appointments'
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // Caps on what a form can post: a bulk issue runs a few queries per draft in series.
@@ -86,6 +95,28 @@ function payment(formData: FormData): PaymentInput | undefined {
   return { paidDate, method, reference }
 }
 
+// Each appointment's amount is posted as amount_<appointment id>, in dollars. One that is blank or
+// not a valid amount makes every line undefined: the caller refuses it as unpriced_line.
+function markPaidLines(formData: FormData, appointmentIds: string[]): MarkPaidInput['lines'] | undefined {
+  const lines = appointmentIds.flatMap((appointmentId) => {
+    const amountCents = parseDollarsToCents(String(formData.get(`amount_${appointmentId}`) ?? ''))
+    return amountCents === null ? [] : [{ appointmentId, amountCents }]
+  })
+  return lines.length === appointmentIds.length ? lines : undefined
+}
+
+// Only the details form's Save posts write_details. A line change doesn't, so a page with stale
+// details can't overwrite a due date or notes saved elsewhere: null leaves them as stored.
+function draftDetails(formData: FormData): DraftInput | null | undefined {
+  if (!flag(formData, 'write_details')) return null
+
+  const dueDate = optionalDate(formData, 'due_date')
+  const notes = optionalText(formData, 'notes', MAX_NOTES_LENGTH)
+  if (dueDate === undefined || notes === undefined) return undefined
+
+  return { dueDate, notes }
+}
+
 // Called only with an id the parser accepted as a UUID, so the detail path is never free text.
 function revalidateInvoicing(invoiceId?: string) {
   revalidatePath(INVOICES_PATH)
@@ -123,8 +154,8 @@ export async function createInvoice(_previous: unknown, formData: FormData): Pro
   return toActionResult(result)
 }
 
-// Takes the visits added and removed against what the page loaded, and always the current due
-// date and notes: SQL overwrites both, so a missing value would clear it.
+// Takes the visits added and removed against what the page loaded, and the due date and notes only
+// from Save (see draftDetails).
 export async function updateDraft(
   _previous: unknown,
   formData: FormData
@@ -132,18 +163,19 @@ export async function updateDraft(
   const invoiceId = id(formData, 'invoice_id')
   const addAppointmentIds = ids(formData, 'add_appointment_ids')
   const removeAppointmentIds = ids(formData, 'remove_appointment_ids')
-  const dueDate = optionalDate(formData, 'due_date')
-  const notes = optionalText(formData, 'notes', MAX_NOTES_LENGTH)
-  const isValid = invoiceId && addAppointmentIds && removeAppointmentIds && dueDate !== undefined && notes !== undefined
+  const details = draftDetails(formData)
+  const isValid = invoiceId && addAppointmentIds && removeAppointmentIds && details !== undefined
   if (!isValid) return refuse('invalid_input')
 
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
 
-  const result = await admin.ledger.updateDraft(invoiceId, { addAppointmentIds, removeAppointmentIds, dueDate, notes })
-  // A deleted draft's page would re-render as not-found before the client leaves it.
+  const result = await admin.ledger.updateDraft(invoiceId, { addAppointmentIds, removeAppointmentIds, details })
+  // Any revalidation re-renders the open page with the action's response, and a deleted draft's page
+  // is not-found: it would flash before the client reaches the ledger. The ledger and the other
+  // pages are dynamic, so they read fresh when navigated to.
   const isDeleted = result.ok && result.data.isDeleted
-  revalidateInvoicing(isDeleted ? undefined : invoiceId)
+  if (!isDeleted) revalidateInvoicing(invoiceId)
   return toActionResult(result)
 }
 
@@ -198,6 +230,36 @@ export async function recordPayment(_previous: unknown, formData: FormData): Pro
 
   const result = await admin.ledger.recordPayment(invoiceId, input)
   revalidateInvoicing(invoiceId)
+  return toActionResult(result)
+}
+
+// Mark paid: the appointments' new invoice is created issued and paid. Posts client_id,
+// appointment_ids, amount_<id> per appointment and the payment fields of the Record payment form.
+export async function markAppointmentsPaid(
+  _previous: unknown,
+  formData: FormData
+): Promise<InvoiceActionResult<{ invoiceId: string; invoiceNumber: string }>> {
+  const clientId = id(formData, 'client_id')
+  const appointmentIds = ids(formData, 'appointment_ids')
+  const input = payment(formData)
+  if (!clientId || !appointmentIds || !input) return refuse('invalid_input')
+  if (appointmentIds.length === 0) return refuse('empty_lines')
+
+  const lines = markPaidLines(formData, appointmentIds)
+  if (!lines) return refuse('unpriced_line')
+
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
+
+  const result = await admin.ledger.markPaid({ clientId, lines, ...input })
+  if (!result.ok) return toActionResult(result)
+
+  // The ids passed the UUID parser, so the detail paths are never free text.
+  revalidateInvoicing(result.data.invoiceId)
+  revalidatePath(APPOINTMENTS_PATH)
+  for (const appointmentId of appointmentIds) {
+    revalidatePath(`${APPOINTMENTS_PATH}/${appointmentId}`)
+  }
   return toActionResult(result)
 }
 
