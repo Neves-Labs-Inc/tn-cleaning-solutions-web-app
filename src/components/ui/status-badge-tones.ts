@@ -1,8 +1,9 @@
 // Plain .ts so node:test can load it; status-badge.tsx re-exports these, keeping
 // the status-to-tone mapping next to the component (DESIGN.md §3.2, §10).
-import { CheckCircle2, CircleDashed, Clock, Hourglass, Pencil, UserMinus } from "lucide-react";
+import { CheckCircle2, CircleDashed, Clock, Hourglass, Pencil, ReceiptText, UserMinus } from "lucide-react";
 
 import type { AppointmentStatus } from '../../lib/helpers/dashboard'
+import type { PaymentState } from '../../lib/invoices/payment-state'
 import type { InvoiceEffectiveStatus, LineState } from '../../lib/invoices/view'
 import { formatBusinessTime } from '../../lib/schedule/business-time.ts'
 import type { FlagKind, SessionView } from "../../lib/time-sheets/session-view";
@@ -30,6 +31,13 @@ const APPOINTMENT_STATUS_BADGES: Record<AppointmentStatus, StatusBadgeSpec> = {
   cancelled: { tone: 'danger', label: 'Cancelled' },
 }
 
+// Icon plus label on every state, so it never rests on colour alone.
+const PAYMENT_STATE_BADGES: Record<PaymentState, StatusBadgeSpec> = {
+  unbilled: { tone: 'warning', label: 'Unbilled', icon: CircleDashed },
+  billed: { tone: 'info', label: 'Billed', icon: ReceiptText },
+  paid: { tone: 'success', label: 'Paid', icon: CheckCircle2 },
+}
+
 export const ARCHIVED_BADGE: StatusBadgeSpec = { tone: 'neutral', label: 'Archived' }
 
 export function invoiceStatusBadge(status: InvoiceEffectiveStatus): StatusBadgeSpec {
@@ -42,6 +50,10 @@ export function lineStateBadge(state: LineState): StatusBadgeSpec | null {
 
 export function appointmentStatusBadge(status: AppointmentStatus): StatusBadgeSpec {
   return APPOINTMENT_STATUS_BADGES[status]
+}
+
+export function paymentStateBadge(state: PaymentState): StatusBadgeSpec {
+  return PAYMENT_STATE_BADGES[state]
 }
 
 export function clockStatusBadge(

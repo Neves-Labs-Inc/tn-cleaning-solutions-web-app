@@ -9,6 +9,7 @@ import { priceAppointmentsInBatches, readAllPages } from './batch'
 import { scopeToClient } from './client-scope'
 import { loadDraftLines } from './draft-lines'
 import { draftTotalCents, hasUnpricedLine, lineAmountCents, lineState } from './lines'
+import { LIVE_CLAIM_EMBED, unbilledQuery } from './unbilled-query'
 import {
   type InvoiceViewRow,
   type LineState,
@@ -114,10 +115,6 @@ const VISIT_COLUMNS = `
   client_locations ( label )
 `
 
-// "No Live claim" as a PostgREST anti-join: embed only the visit's Live claims, then keep the rows
-// where that embed is empty. It runs in the database, so no id list travels in the URL.
-const LIVE_CLAIM_EMBED = 'live:invoice_appointments ( appointment_id )'
-
 const INVOICE_LIST_COLUMNS = `
   id, client_id, status, effective_status, invoice_number, issued_date, due_date, total_cents,
   is_archived, is_automatic, created_at,
@@ -169,21 +166,6 @@ export async function listInvoices(db: Db): Promise<InvoiceListRow[]> {
       has_unpriced: hasUnpricedLine(lines),
     }
   })
-}
-
-// Completed after launch and still completed (completed_at isn't cleared when a visit is reopened),
-// not archived, no Live claim. Unpriced visits are included and tagged.
-function unbilledQuery(db: Db, columns: string, options: { clientId: string | null; isCount: boolean }) {
-  const query = db
-    .from('appointments')
-    .select(`${columns}, ${LIVE_CLAIM_EMBED}`, options.isCount ? { count: 'exact', head: true } : undefined)
-    .eq('live.is_archived', false)
-    .is('live.cancelled_at', null)
-    .is('live', null)
-    .not('completed_at', 'is', null)
-    .eq('status', 'completed')
-    .eq('is_archived', false)
-  return scopeToClient(query, 'client_id', options.clientId)
 }
 
 async function loadUnbilled(db: Db, clientId: string | null): Promise<UnbilledVisitRow[]> {

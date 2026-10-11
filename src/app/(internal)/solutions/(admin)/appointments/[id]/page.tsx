@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
 import AppointmentCrewClocks from '@/components/admin/appointment-crew-clocks'
+import BillingCard from '@/components/admin/billing-card'
 import AppointmentLifecycleActions, { CompletedByAdminHint } from '@/components/admin/appointment-lifecycle-actions'
 import { BillingMismatchNote } from '@/components/invoices/visit-line-summary'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/ca
 import PageHeader from '@/components/ui/page-header'
 import StatusBadge, { appointmentStatusBadge } from '@/components/ui/status-badge'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
+import { loadAppointmentBilling } from '@/lib/invoices/appointment-billing'
 import {
   APPOINTMENT_PRICE_COLUMNS,
   priceAppointments,
@@ -19,6 +21,7 @@ import {
 } from '@/lib/pricing'
 import { billingMismatchLiveLabel } from '@/lib/pricing/billing-mismatch'
 import { formatCents, formatRate, UNPRICED_LABEL } from '@/lib/pricing/money'
+import { getBusinessDate } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 import { buildCrewViews, type CrewMemberView } from '@/lib/time-sheets/crew-views'
 import { fetchAppointmentCrew } from '@/lib/time-sheets/queries'
@@ -30,6 +33,7 @@ type AppointmentDetailPageProps = {
 
 type AppointmentDetailRow = PriceableAppointment & {
   status: AppointmentStatus
+  completed_at: string | null
   manually_completed: boolean
   notes: string
   is_archived: boolean
@@ -83,7 +87,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
     .select(
       `
         ${APPOINTMENT_PRICE_COLUMNS},
-        status, manually_completed, notes, is_archived,
+        status, completed_at, manually_completed, notes, is_archived,
         clients!inner ( id, name, phone, email ),
         jobs!inner ( id, name, estimated_duration_minutes, description ),
         client_locations ( id, label, address ),
@@ -99,9 +103,10 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
     notFound()
   }
 
-  const [priceView, crew] = await Promise.all([
+  const [priceView, crew, billing] = await Promise.all([
     loadPriceView(supabase, appointment),
     loadCrew(supabase, appointment.id),
+    loadAppointmentBilling(supabase, appointment),
   ])
 
   const statusBadge = appointmentStatusBadge(appointment.status)
@@ -216,6 +221,19 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
         </div>
 
         <div className="space-y-4">
+          <BillingCard
+            appointment={{
+              id: appointment.id,
+              clientId: appointment.client_id,
+              clientName: appointment.clients?.name ?? 'Unknown client',
+              status: appointment.status,
+              scheduledDate: appointment.scheduled_date,
+              jobName: appointment.jobs?.name ?? 'Appointment',
+            }}
+            billing={billing}
+            businessDate={getBusinessDate(new Date())}
+          />
+
           {appointment.recurrence_series ? (
             <article className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm shadow-emerald-950/5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-700">Recurrence</h2>

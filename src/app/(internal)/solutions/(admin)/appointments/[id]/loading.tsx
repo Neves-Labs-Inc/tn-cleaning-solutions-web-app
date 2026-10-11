@@ -2,6 +2,8 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 
 const CREW_ROW_KEYS = ['first', 'second']
+const BILLING_STEP_KEYS = ['completed', 'billed', 'paid']
+const BILLING_ACTION_KEYS = ['primary', 'secondary']
 
 // Mirrors the detail page's header and two-column body so nothing jumps when it loads.
 export default function AppointmentDetailLoading() {
@@ -42,7 +44,28 @@ export default function AppointmentDetailLoading() {
             </ul>
           </Card>
         </div>
-        <Skeleton className="h-48" />
+        <div className="space-y-4">
+          <Card className="gap-4 p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <Skeleton className="h-5 w-16" />
+              <Skeleton className="h-5 w-20 rounded-full" />
+            </div>
+            <div className="space-y-3">
+              {BILLING_STEP_KEYS.map((key) => (
+                <div key={key} className="flex items-center gap-3">
+                  <Skeleton className="size-6 rounded-full" />
+                  <Skeleton className="h-4 w-28" />
+                </div>
+              ))}
+            </div>
+            <Skeleton className="h-4 w-full" />
+            <div className="flex flex-col gap-2">
+              {BILLING_ACTION_KEYS.map((key) => (
+                <Skeleton key={key} className="h-11 w-full md:h-9" />
+              ))}
+            </div>
+          </Card>
+        </div>
       </section>
     </div>
   )

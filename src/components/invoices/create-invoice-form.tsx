@@ -37,6 +37,8 @@ type CreateInvoiceFormProps = {
   businessDate: string
   // ?client= named a client that isn't in the list.
   isClientUnavailable: boolean
+  // ?visits= ids handed over from another page; null when none were.
+  handedOffIds: string[] | null
 }
 
 
@@ -65,13 +67,29 @@ function UnpricedNote({ count, className }: { count: number; className?: string 
   )
 }
 
-export function CreateInvoiceForm({ clients, clientId, visits, businessDate, isClientUnavailable }: CreateInvoiceFormProps) {
+// Handed-off ids that are among the client's claimable visits start checked; others are ignored.
+function initialSelectedIds(visits: ClaimableVisit[], businessDate: string, handedOffIds: string[] | null) {
+  return handedOffIds
+    ? new Set(visits.filter((visit) => handedOffIds.includes(visit.id)).map((visit) => visit.id))
+    : defaultSelectedIds(visits, businessDate)
+}
+
+export function CreateInvoiceForm({
+  clients,
+  clientId,
+  visits,
+  businessDate,
+  isClientUnavailable,
+  handedOffIds,
+}: CreateInvoiceFormProps) {
   const router = useRouter()
   const [isSwitching, startSwitch] = useTransition()
 
   // What the picker shows right away; the URL catches up when the transition lands.
   const [pickedId, setPickedId] = useState(clientId)
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => defaultSelectedIds(visits, businessDate))
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() =>
+    initialSelectedIds(visits, businessDate, handedOffIds)
+  )
   const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')
   const [clientError, setClientError] = useState(false)

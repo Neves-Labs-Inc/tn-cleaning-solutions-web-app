@@ -8,6 +8,7 @@ import {
   clockStatusBadge,
   invoiceStatusBadge,
   lineStateBadge,
+  paymentStateBadge,
 } from "./status-badge-tones";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,7 @@ export {
   clockStatusBadge,
   invoiceStatusBadge,
   lineStateBadge,
+  paymentStateBadge,
 };
 
 export type StatusTone = "info" | "success" | "warning" | "danger" | "neutral";
