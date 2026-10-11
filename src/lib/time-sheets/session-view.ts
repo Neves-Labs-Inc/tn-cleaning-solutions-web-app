@@ -24,6 +24,8 @@ export type AppointmentStatus = Tables<"appointments">["status"];
 export type AdminSessionRow = {
   id: string;
   employee_id: string;
+  // A Removed session: the Cleaner was taken off the crew after it had history. NULL is live.
+  is_archived: boolean | null;
   clocked_in_at: string | null;
   clocked_out_at: string | null;
   appointment: {
@@ -70,6 +72,8 @@ export type SessionView = {
   flags: FlagKind[];
   isEdited: boolean;
   isAcknowledged: boolean;
+  // Shown struck through, never flagged, fixed or counted.
+  isRemoved: boolean;
   clockedMinutes: number | null;
   scheduledMinutes: number;
   oddRatioPercent: number | null;
@@ -154,6 +158,7 @@ export function buildSessionView(row: AdminSessionRow, now: Date): SessionView {
     (scheduledEnd.getTime() - scheduledStart.getTime()) / MS_PER_MINUTE,
   );
 
+  const isRemoved = row.is_archived === true;
   const state = getState(row, graceEnd, now);
   const clockedMinutes =
     row.clocked_in_at && row.clocked_out_at
@@ -176,9 +181,10 @@ export function buildSessionView(row: AdminSessionRow, now: Date): SessionView {
 
   const flags = FLAG_KINDS.filter(
     (kind) =>
-      (kind === "open_shift" && state === "open") ||
-      (kind === "missing_clock" && state === "not_clocked") ||
-      (kind === "odd_duration" && isOddLength && !hasMatchingAcknowledgement),
+      !isRemoved &&
+      ((kind === "open_shift" && state === "open") ||
+        (kind === "missing_clock" && state === "not_clocked") ||
+        (kind === "odd_duration" && isOddLength && !hasMatchingAcknowledgement)),
   );
 
   return {
@@ -202,10 +208,12 @@ export function buildSessionView(row: AdminSessionRow, now: Date): SessionView {
     flags,
     isEdited: row.clock_corrections.length > 0,
     isAcknowledged: isOddLength && hasMatchingAcknowledgement,
+    isRemoved,
     clockedMinutes,
     scheduledMinutes,
     oddRatioPercent: ratio === null ? null : Math.round(ratio * PERCENT),
-    fixAction: getFixAction(state, scheduledStart, now),
+    // correct_session_clocks refuses a Cleaner no longer on the crew.
+    fixAction: isRemoved ? null : getFixAction(state, scheduledStart, now),
     corrections: newestFirst(row.clock_corrections, (item) => item.corrected_at),
     acknowledgements,
   };

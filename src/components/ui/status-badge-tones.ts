@@ -1,6 +1,6 @@
 // Plain .ts so node:test can load it; status-badge.tsx re-exports these, keeping
 // the status-to-tone mapping next to the component (DESIGN.md §3.2, §10).
-import { CheckCircle2, CircleDashed, Clock, Hourglass, Pencil } from "lucide-react";
+import { CheckCircle2, CircleDashed, Clock, Hourglass, Pencil, UserMinus } from "lucide-react";
 
 import type { AppointmentStatus } from '../../lib/helpers/dashboard'
 import type { InvoiceEffectiveStatus, LineState } from '../../lib/invoices/view'
@@ -96,8 +96,21 @@ type TimeSheetBadgeView = Pick<
   | "isAcknowledged"
   | "isManualCompletion"
   | "isEdited"
+  | "isRemoved"
   | "fixAction"
 >;
+
+// A Removed session (a Cleaner taken off the crew after it had history), on the admin and the
+// Cleaner Time sheets alike. The pill, not the strike-through, is what says it.
+export const REMOVED_SESSION_BADGE: StatusBadgeSpec = {
+  tone: "neutral",
+  label: "Removed",
+  icon: UserMinus,
+};
+
+// A Removed session's clocked time and In/Out times, struck through and muted. Line-through is
+// not announced, so pair the struck duration with a visually hidden ", not counted".
+export const REMOVED_VALUE_CLASSES = "line-through decoration-muted-foreground/60 text-muted-foreground";
 
 // An upcoming session is offered Add session once its scheduled start passes (fixAction "add"),
 // so from then on the badge stops promising a future visit.
@@ -121,13 +134,16 @@ function timeSheetFlagBadge(flag: FlagKind, oddRatioPercent: number | null): Sta
 }
 
 // The pills a session wears, in fixed order: its flags, In progress or Upcoming (Not clocked in
-// once due), an acknowledged Odd duration, Manual completion, Edited. Admin screens only:
-// Cleaners never see flags.
+// once due), an acknowledged Odd duration, Manual completion, Edited. A Removed session swaps
+// everything before its history pills for Removed. Admin screens only: Cleaners never see flags.
 export function timeSheetFlagBadges(view: TimeSheetBadgeView): StatusBadgeSpec[] {
-  const badges: Array<StatusBadgeSpec | null> = [
+  const liveBadges: Array<StatusBadgeSpec | null> = [
     ...view.flags.map((flag) => timeSheetFlagBadge(flag, view.oddRatioPercent)),
     view.state === "in_progress" ? { tone: "success", label: "In progress" } : null,
     upcomingBadge(view),
+  ];
+  const badges: Array<StatusBadgeSpec | null> = [
+    ...(view.isRemoved ? [REMOVED_SESSION_BADGE] : liveBadges),
     view.isAcknowledged
       ? { tone: "neutral", label: "Odd duration · OK'd", icon: CheckCircle2 }
       : null,

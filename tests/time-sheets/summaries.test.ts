@@ -13,10 +13,16 @@ const ANA = { id: "ana", full_name: "Ana Souza" };
 const BIA = { id: "bia", full_name: "Bia Lima" };
 const CARLA = { id: "carla", full_name: "Carla Dias" };
 
-function viewFor(cleaner: { id: string; full_name: string }, clockIn: string | null, clockOut: string | null) {
+function viewFor(
+  cleaner: { id: string; full_name: string },
+  clockIn: string | null,
+  clockOut: string | null,
+  isArchived = false,
+) {
   const row = sessionRow({
-    id: `${cleaner.id}-${clockIn}-${clockOut}`,
+    id: `${cleaner.id}-${clockIn}-${clockOut}-${isArchived}`,
     employee_id: cleaner.id,
+    is_archived: isArchived,
     employee: cleaner,
     clocked_in_at: clockIn,
     clocked_out_at: clockOut,
@@ -75,13 +81,43 @@ describe("summarizeCleaners", () => {
     assert.equal(ana.flagTotal, 0);
     assert.equal(ana.closedMinutes, 0);
   });
+
+  it("leaves Removed sessions out of counts, minutes, open shifts and flags", () => {
+    const views = [
+      viewFor(ANA, "2026-10-14T13:00:00Z", "2026-10-14T16:00:00Z"), // 180, counted
+      viewFor(ANA, "2026-10-14T13:00:00Z", "2026-10-14T15:15:00Z", true), // removed, 135
+      viewFor(ANA, "2026-10-14T13:00:00Z", null, true), // removed open shift
+      viewFor(ANA, null, null, true), // removed, never clocked
+    ];
+
+    const [ana] = summarizeCleaners(views, [ANA]);
+
+    assert.deepEqual(ana, {
+      cleaner: ANA,
+      sessionCount: 1,
+      closedMinutes: 180,
+      openCount: 0,
+      flagCounts: { open_shift: 0, missing_clock: 0, odd_duration: 0 },
+      flagTotal: 0,
+    });
+  });
+
+  it("keeps a Cleaner whose sessions were all removed, at zero", () => {
+    const views = [viewFor(ANA, "2026-10-14T13:00:00Z", "2026-10-14T16:00:00Z", true)];
+
+    const [ana] = summarizeCleaners(views, [ANA]);
+
+    assert.equal(ana.sessionCount, 0);
+    assert.equal(ana.closedMinutes, 0);
+  });
 });
 
-function record(clockIn: string | null, clockOut: string | null) {
+function record(clockIn: string | null, clockOut: string | null, isRemoved = false) {
   return {
-    id: `${clockIn}-${clockOut}`,
+    id: `${clockIn}-${clockOut}-${isRemoved}`,
     clocked_in_at: clockIn,
     clocked_out_at: clockOut,
+    is_removed: isRemoved,
     appointments: {
       scheduled_date: "2026-10-14",
       clients: { name: "Maple House" },
@@ -110,6 +146,30 @@ describe("summarizeCleanerMonth", () => {
 
     assert.deepEqual(summarizeCleanerMonth(records), {
       count: 1,
+      totalMinutes: 0,
+      averageMinutes: null,
+    });
+  });
+
+  it("leaves her Removed sessions out of the count, total and average", () => {
+    const records = [
+      record("2026-10-14T13:00:00Z", "2026-10-14T16:00:00Z"), // 180
+      record("2026-10-15T13:00:00Z", "2026-10-15T14:00:00Z", true), // removed, 60
+      record("2026-10-16T13:00:00Z", null, true), // removed, never clocked out
+    ];
+
+    assert.deepEqual(summarizeCleanerMonth(records), {
+      count: 1,
+      totalMinutes: 180,
+      averageMinutes: 180,
+    });
+  });
+
+  it("is zero with no average for a month holding only Removed sessions", () => {
+    const records = [record("2026-10-15T13:00:00Z", "2026-10-15T14:00:00Z", true)];
+
+    assert.deepEqual(summarizeCleanerMonth(records), {
+      count: 0,
       totalMinutes: 0,
       averageMinutes: null,
     });

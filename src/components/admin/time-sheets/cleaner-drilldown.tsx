@@ -148,25 +148,30 @@ export default function CleanerDrilldown({
     element?.focus();
   }, [openPanel]);
 
-  // Acknowledge first, then the fix button, so the fix button stays rightmost.
-  const renderActions = (view: SessionRowView, layout: SessionLayout) => (
-    <SessionRowActions layout={layout}>
-      <AcknowledgeButton
-        layout={layout}
-        view={view}
-        isOpen={isAckOpen(view)}
-        onOpen={() => openAck(view.id)}
-      />
-      <ClockFixButton
-        view={view}
-        layout={layout}
-        id={getFixButtonId(view.id, layout)}
-        expanded={isPanelOpen(view.id, "fix")}
-        controlsId={getFixPanelId(view.id, layout)}
-        onOpen={() => togglePanel(view.id, "fix")}
-      />
-    </SessionRowActions>
-  );
+  // Acknowledge first, then the fix button, so the fix button stays rightmost. A Removed session
+  // is read-only: the view already offers it nothing, and this keeps its slot empty regardless.
+  const renderActions = (view: SessionRowView, layout: SessionLayout) => {
+    if (view.isRemoved) return undefined;
+
+    return (
+      <SessionRowActions layout={layout}>
+        <AcknowledgeButton
+          layout={layout}
+          view={view}
+          isOpen={isAckOpen(view)}
+          onOpen={() => openAck(view.id)}
+        />
+        <ClockFixButton
+          view={view}
+          layout={layout}
+          id={getFixButtonId(view.id, layout)}
+          expanded={isPanelOpen(view.id, "fix")}
+          controlsId={getFixPanelId(view.id, layout)}
+          onOpen={() => togglePanel(view.id, "fix")}
+        />
+      </SessionRowActions>
+    );
+  };
 
   const renderAckPanel = (view: SessionRowView) =>
     isAckOpen(view) ? (
@@ -177,8 +182,10 @@ export default function CleanerDrilldown({
       />
     ) : undefined;
 
-  const renderCardPanel = (view: SessionRowView) =>
-    isPanelOpen(view.id, "fix") && view.fixAction ? (
+  const renderCardPanel = (view: SessionRowView) => {
+    if (view.isRemoved) return undefined;
+
+    return isPanelOpen(view.id, "fix") && view.fixAction ? (
       <ClockCorrectionForm
         layout="card"
         view={view}
@@ -189,10 +196,13 @@ export default function CleanerDrilldown({
     ) : (
       renderAckPanel(view)
     );
+  };
 
   const getRowEditor = (view: SessionRowView) => {
     const { fixAction } = view;
-    if (!isPanelOpen(view.id, "fix") || !fixAction) return undefined;
+    if (view.isRemoved || !isPanelOpen(view.id, "fix") || !fixAction) {
+      return undefined;
+    }
 
     return function RowEditor(cells: ReadOnlyCells): React.ReactNode {
       return (

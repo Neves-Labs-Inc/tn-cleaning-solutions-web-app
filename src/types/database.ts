@@ -775,6 +775,19 @@ export type Database = {
         }
         Relationships: []
       }
+      removed_sessions_employee_view: {
+        Row: {
+          id: string
+          appointment_id: string
+          employee_id: string
+          scheduled_date: string
+          client_name: string
+          job_name: string
+          clocked_in_at: string | null
+          clocked_out_at: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       acknowledge_odd_duration: {

@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CheckCircle2, CircleDashed, Clock, Hourglass, Pencil } from "lucide-react";
+import { CheckCircle2, CircleDashed, Clock, Hourglass, Pencil, UserMinus } from "lucide-react";
 
-import { timeSheetFlagBadges } from "../../src/components/ui/status-badge-tones.ts";
+import {
+  REMOVED_SESSION_BADGE,
+  timeSheetFlagBadges,
+} from "../../src/components/ui/status-badge-tones.ts";
 
 type BadgeInput = Parameters<typeof timeSheetFlagBadges>[0];
 
@@ -14,6 +17,7 @@ const BASE: BadgeInput = {
   isAcknowledged: false,
   isManualCompletion: false,
   isEdited: false,
+  isRemoved: false,
   fixAction: null,
 };
 
@@ -98,4 +102,45 @@ test("flags come first, then state, acknowledgement, Manual completion and Edite
     acknowledged.map((badge) => badge.label),
     ["Odd duration · OK'd", "Manual completion", "Edited"],
   );
+});
+
+test("a Removed session wears a neutral Removed pill", () => {
+  assert.deepEqual(REMOVED_SESSION_BADGE, { tone: "neutral", label: "Removed", icon: UserMinus });
+  assert.deepEqual(timeSheetFlagBadges({ ...BASE, isRemoved: true }), [REMOVED_SESSION_BADGE]);
+});
+
+test("a Removed session keeps its history pills after Removed, in their usual order", () => {
+  const badges = timeSheetFlagBadges({
+    ...BASE,
+    isRemoved: true,
+    isAcknowledged: true,
+    isManualCompletion: true,
+    isEdited: true,
+  });
+
+  assert.deepEqual(
+    badges.map((badge) => badge.label),
+    ["Removed", "Odd duration · OK'd", "Manual completion", "Edited"],
+  );
+});
+
+test("a Removed session never wears flags, In progress, Upcoming or Not clocked in", () => {
+  const states = [
+    { state: "open", flags: ["open_shift"] },
+    { state: "not_clocked", flags: ["missing_clock"] },
+    { state: "closed", flags: ["odd_duration"] },
+    { state: "in_progress", flags: [] },
+    { state: "upcoming", flags: [], fixAction: null },
+    { state: "upcoming", flags: [], fixAction: "add" },
+  ] as const;
+
+  for (const input of states) {
+    const badges = timeSheetFlagBadges({
+      ...BASE,
+      ...input,
+      flags: [...input.flags],
+      isRemoved: true,
+    });
+    assert.deepEqual(badges, [REMOVED_SESSION_BADGE], input.state);
+  }
 });
