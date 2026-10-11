@@ -30,6 +30,10 @@ One Cleaner's sessions for a date range, placed by each appointment's scheduled 
 **Open shift**:
 A session with a clock-in but no clock-out. It appears on a Time sheet as in progress, but never counts toward totals or pay.
 
+**Removed session**:
+The session of a Cleaner taken off an appointment's crew after she had clocks, a Clock correction or an acknowledgement. It is kept for good and stays on her Time sheet, shown struck through as removed, for both the admin and the Cleaner, but it never counts toward totals, pay or Appointment status. Putting the Cleaner back on the crew starts a new session.
+_Avoid_: deleted session, archived shift
+
 **Clock correction**:
 An admin changing a session's clocks after the fact: editing a time, closing an Open shift, entering the clocks for an assigned Cleaner who never clocked in, or clearing a session's clocks. Every one is kept for good with who, when, the old and new times, and an optional reason, and the session is marked edited. Entering clocks for a Cleaner who never clocked in needs a clock-out once the appointment is an hour past its scheduled end. It counts exactly like a clock the Cleaner made, so it can move Appointment status. It is refused on a cancelled appointment, on a Cleaner no longer on the crew, if it would overlap another of the Cleaner's sessions, or on an appointment in a paid Pay run, but allowed on a Manual completion.
 _Avoid_: correction (that is a Pay run fix), override, manual session
@@ -68,7 +72,7 @@ An extra on a Cleaner's next Pay run, positive or negative, that fixes a mistake
 Follows the Cleaners' clocks: scheduled until someone clocks in, in progress while anyone who clocked in has not yet clocked out, completed once every Cleaner who clocked in has clocked out (a Cleaner who never clocks in does not hold it open). Cancelled is set by an admin and ignores the clocks. A completed or cancelled appointment refuses further clocks until an admin reopens it.
 
 **Manual completion**:
-An admin marking an appointment completed regardless of its clocks. It holds until undone. Hours on it are only what was clocked.
+An admin marking an appointment completed regardless of its clocks. It holds until undone. Hours on it are only what was clocked. Taking the last Cleaner with clocks off a completed appointment turns it on, so the appointment stays completed.
 _Avoid_: force complete
 
 **Restore**:
@@ -95,6 +99,10 @@ What an appointment would be charged now: its appointment override if set, other
 The amount frozen on an appointment's live invoice line. It wins over the Live price wherever a price is shown.
 _Avoid_: billed price cache
 
+**Billing mismatch**:
+An appointment on an issued or paid invoice whose Live price no longer equals its Billed amount, because it was edited after billing. The appointment and its invoice line both show it; the invoice is never changed to match, it is voided and reissued if the client should be charged differently.
+_Avoid_: stale price, repriced visit
+
 **Unpriced**:
 An appointment whose Live price can't be worked out. Every appointment has a Job today, so this is a defensive state the price module reports rather than one any screen creates. It is never issued at $0: it goes on a draft as a $0 line, and that draft can't be issued until the line is priced.
 
@@ -111,11 +119,11 @@ The draft invoice a client's completed appointments join as each one is complete
 _Avoid_: invoice run, billing cycle
 
 **Automatic invoicing**:
-A per-client setting, on by default, that decides whether the client's completed appointments join an Automatic draft. Turning it off leaves an open Automatic draft as it is; turning it back on picks up only appointments completed from then on. The client's active or archived status plays no part.
+A per-client setting, off by default, that decides whether the client's completed appointments join an Automatic draft. Turning it off leaves an open Automatic draft as it is; turning it back on picks up only appointments completed from then on. The client's active or archived status plays no part.
 _Avoid_: manual-only client, billing mode
 
 **Excluded appointment**:
-A completed appointment an admin removed from an Automatic draft. It never rejoins one, but can still be billed on a manual invoice.
+A completed appointment an admin removed from an Automatic draft. It never rejoins one, but can still be billed on a manual invoice. It only matters for a client with Automatic invoicing on; elsewhere it is an ordinary Unbilled appointment.
 _Avoid_: excluded visit
 
 **Upcoming line**:
@@ -147,8 +155,16 @@ What clients owe: the total of every issued invoice. An issued invoice with no d
 _Avoid_: open (it hid overdue invoices), receivable balance
 
 **Unbilled appointment**:
-An appointment completed after launch that is not cancelled and has no Live claim. It includes Excluded appointments and Unpriced appointments, which are shown with a tag so they aren't forgotten.
+An appointment completed after launch that is not cancelled and has no Live claim. It includes Excluded appointments, shown like any other, and Unpriced appointments, shown with a tag so they aren't forgotten.
 _Avoid_: uninvoiced, missed appointment, visit
+
+**Payment state**:
+Where an appointment stands with billing: Unbilled (an Unbilled appointment), Billed (its Live claim is on a draft or issued invoice) or Paid (its Live claim is on a paid invoice). An appointment that isn't completed and has no Live claim has no Payment state.
+_Avoid_: paid status, billing status
+
+**Mark paid**:
+Recording that one or more of a client's appointments were paid without a prior invoice, e.g. cash on the spot. It creates an ordinary invoice for them that is issued and paid in one step and never sent. Any appointment that isn't cancelled can be marked paid; one on a draft leaves the draft, and one on an issued invoice is paid through that invoice instead.
+_Avoid_: cash receipt, quick invoice
 
 ## Relationships
 
