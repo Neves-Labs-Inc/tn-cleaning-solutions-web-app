@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import type { AppointmentStatus } from '../appointments/lifecycle.ts'
 import { APPOINTMENT_PRICE_COLUMNS, type PriceableAppointment } from '../pricing/index.ts'
-import { inBatches, priceAppointmentsInBatches } from './batch.ts'
+import { inBatches, priceAppointmentsInBatches, readAllPages } from './batch.ts'
 import type { LineEntry } from './lines.ts'
 
 export type DraftLine = LineEntry & { appointment_id: string }
@@ -18,15 +18,20 @@ const UNREADABLE_VISIT = { status: 'scheduled', live: { source: 'unpriced' } } a
 async function loadLiveLines(db: Db, invoiceIds: string[]): Promise<LineRow[]> {
   const lines: LineRow[] = []
 
+  // A batch of drafts can hold more lines than one response carries, so each batch is paged.
   for (const batch of inBatches(invoiceIds)) {
-    const { data, error } = await db
-      .from('invoice_appointments')
-      .select('invoice_id, appointment_id')
-      .in('invoice_id', batch)
-      .eq('is_archived', false)
-      .is('cancelled_at', null)
-    if (error) throw error
-    lines.push(...data)
+    const page = await readAllPages((from, to) =>
+      db
+        .from('invoice_appointments')
+        .select('invoice_id, appointment_id')
+        .in('invoice_id', batch)
+        .eq('is_archived', false)
+        .is('cancelled_at', null)
+        .order('invoice_id', { ascending: true })
+        .order('appointment_id', { ascending: true })
+        .range(from, to)
+    )
+    lines.push(...page)
   }
 
   return lines

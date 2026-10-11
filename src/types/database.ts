@@ -31,6 +31,7 @@
 // `created_at` and `updated_at` have no NOT NULL constraint on the table, so they are nullable here.
 // `total_cents` is derived: the sum of the invoice's live, uncancelled lines (0 when none).
 // `effective_status` is `status` with an issued, past-due invoice reported as 'overdue'.
+// `activity_date` is `issued_date`, else the Eastern date of `created_at`; the ledger orders by it.
 //
 // `npm run db:check-types` (run in CI) fails when a table, view or column name here and in the
 // database `public` schema disagree. It compares names only, never types or nullability.
@@ -761,6 +762,7 @@ export type Database = {
           payment_reference: string | null
           total_cents: number
           effective_status: 'draft' | 'issued' | 'paid' | 'void' | 'overdue'
+          activity_date: string | null
         }
         Relationships: []
       }
@@ -809,6 +811,16 @@ export type Database = {
       invoice_issue: {
         Args: { p_invoice_id: string; p_lines: Json; p_due_date: string | null }
         Returns: string
+      }
+      invoice_receivables_totals: {
+        Args: { p_client_id?: string | null }
+        Returns: {
+          outstanding_cents: number
+          overdue_cents: number
+          no_due_date_cents: number
+          unpaid_count: number
+          draft_count: number
+        }[]
       }
       invoice_record_payment: {
         Args: { p_invoice_id: string; p_paid_date: string | null; p_method: string; p_reference: string | null }

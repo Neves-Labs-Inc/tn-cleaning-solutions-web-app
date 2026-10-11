@@ -39,14 +39,14 @@ create function public.pgtap_effective_status(invoice uuid) returns text
 $$;
 
 
--- Shape: every invoices column plus the derived total and status (20261009130000) ------------
+-- Shape: every invoices column plus the derived total, status (20261009130000) and activity date
 
 select view_owner_is('public', 'invoices_with_status', 'postgres', 'invoices_with_status is still owned by postgres');
 select columns_are('public', 'invoices_with_status', array[
 	'id', 'client_id', 'status', 'issued_date', 'due_date', 'notes', 'created_at', 'updated_at',
 	'is_archived', 'invoice_number', 'is_automatic', 'paid_date', 'payment_method',
-	'payment_reference', 'total_cents', 'effective_status'
-], 'invoices_with_status lists every invoices column plus total_cents and effective_status');
+	'payment_reference', 'total_cents', 'effective_status', 'activity_date'
+], 'invoices_with_status lists every invoices column plus total_cents, effective_status and activity_date');
 select is(
 	(select reloptions::text[] @> array['security_invoker=true'] from pg_class where oid = 'public.invoices_with_status'::regclass),
 	true, 'invoices_with_status keeps security_invoker');

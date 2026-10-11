@@ -13,7 +13,6 @@ import {
   normalizePaymentMethodName,
   overdueInvoices,
   owedInvoices,
-  receivablesTotals,
   unbilledSummary,
   type InvoiceFilter,
   type InvoiceViewRow,
@@ -120,25 +119,6 @@ test('filterInvoices query matches number or client name, case-insensitively', (
   assert.deepEqual(ids(filterInvoices(rows, { ...ALL, query: ' birch ' })), ['b'])
   assert.deepEqual(ids(filterInvoices(rows, { ...ALL, query: 'ACME' })), ['a'])
   assert.deepEqual(filterInvoices(rows, { ...ALL, query: 'nope' }), [])
-})
-
-test('receivablesTotals counts only issued unarchived rows and splits overdue and no-due-date', () => {
-  const rows = [
-    row({ id: 'issued', total_cents: 10000, due_date: '2026-10-20' }),
-    row({ id: 'late', effective_status: 'overdue', total_cents: 5000, due_date: '2026-10-01' }),
-    row({ id: 'nodue', total_cents: 2000, due_date: null }),
-    row({ id: 'draft', status: 'draft', effective_status: 'draft', invoice_number: null, total_cents: 9900 }),
-    row({ id: 'void', status: 'void', effective_status: 'void', total_cents: 9900 }),
-    row({ id: 'paid', status: 'paid', effective_status: 'paid', total_cents: 9900 }),
-    row({ id: 'archived', total_cents: 9900, is_archived: true }),
-  ]
-
-  assert.deepEqual(receivablesTotals(rows), {
-    outstandingCents: 17000,
-    overdueCents: 5000,
-    noDueDateCents: 2000,
-    unpaidCount: 3,
-  })
 })
 
 test('clientBalances drops zero balances and sorts overdue desc then owed desc', () => {

@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import StatTile from '@/components/ui/stat-tile'
 import type { Receivables } from '@/lib/invoices/queries'
-import { clientBalances, owedInvoices, unbilledSummary } from '@/lib/invoices/view'
+import { owedInvoices, unbilledSummary } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
 import { OwedInvoiceRow } from './owed-invoice-row'
 
@@ -45,23 +45,22 @@ function BillingError({ clientId }: { clientId: string }) {
 	)
 }
 
-function BalanceTiles({ client, receivables }: { client: BillingSectionProps['client']; receivables: Receivables }) {
-	const owed = owedInvoices(receivables.invoices)
-	const overdueCount = owed.filter((invoice) => invoice.effective_status === 'overdue').length
-	// clientBalances drops a client that owes nothing, so no row means zero.
-	const balance = clientBalances(receivables.invoices, [{ id: client.id, name: client.name }])[0]
+// Tiles come from invoice_receivables_totals scoped to this client, so they're right at any volume.
+function BalanceTiles({ receivables }: { receivables: Receivables }) {
+	const { totals } = receivables
+	const overdueCount = receivables.owed.filter((invoice) => invoice.effective_status === 'overdue').length
 
 	return (
 		<>
 			<StatTile
 				label="Owed"
-				value={formatCents(balance?.owedCents ?? 0)}
-				caption={owed.length > 0 ? pluralize(owed.length, 'issued invoice') : 'Nothing owed'}
+				value={formatCents(totals.outstandingCents)}
+				caption={totals.unpaidCount > 0 ? pluralize(totals.unpaidCount, 'issued invoice') : 'Nothing owed'}
 				fitValue
 			/>
 			<StatTile
 				label="Overdue"
-				value={formatCents(balance?.overdueCents ?? 0)}
+				value={formatCents(totals.overdueCents)}
 				caption={overdueCount > 0 ? `${overdueCount} past due` : 'Nothing past due'}
 				fitValue
 			/>
@@ -70,7 +69,7 @@ function BalanceTiles({ client, receivables }: { client: BillingSectionProps['cl
 }
 
 function OwedInvoices({ receivables, businessDate }: { receivables: Receivables; businessDate: string }) {
-	const owed = owedInvoices(receivables.invoices)
+	const owed = owedInvoices(receivables.owed)
 
 	return (
 		<div className="space-y-3">
@@ -165,7 +164,7 @@ export function BillingSection({ client, receivables, businessDate }: BillingSec
 			) : (
 				<>
 					<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-						<BalanceTiles client={client} receivables={receivables} />
+						<BalanceTiles receivables={receivables} />
 						<div className="col-span-2">
 							<AutomaticInvoicingSwitch
 								clientId={client.id}

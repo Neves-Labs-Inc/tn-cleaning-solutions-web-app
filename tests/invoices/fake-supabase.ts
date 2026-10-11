@@ -24,7 +24,7 @@ export function success(data: unknown = null): RpcResponse {
 }
 
 // Hand-rolled stand-in for the reads the ledger and price module make (`from().select()` with
-// `.in() .eq() .is() .not()` filters, awaited for `{ data, error }`) and for `.rpc()`, whose answer the
+// `.in() .eq() .is() .not()` filters, `.order() .range()` paging, awaited for `{ data, error }`) and for `.rpc()`, whose answer the
 // test scripts. Filters are applied, so archived and cancelled rows drop out the way they do in Postgres.
 // `tables` is live: a test can change it between calls to simulate a concurrent write.
 // `failingTables` makes every read of those tables answer with an error, like a dropped connection.
@@ -37,6 +37,8 @@ export function createFakeSupabase(
 
   function from(table: string) {
     const filters: Filter[] = []
+    const orderColumns: string[] = []
+    let window: { from: number; to: number } | null = null
 
     const builder = {
       select: () => builder,
@@ -57,13 +59,27 @@ export function createFakeSupabase(
         filters.push((row) => (row[column] ?? null) !== value)
         return builder
       },
+      // Ascending only, compared as strings: enough for the id orders the paged reads use.
+      order: (column: string) => {
+        orderColumns.push(column)
+        return builder
+      },
+      range: (from: number, to: number) => {
+        window = { from, to }
+        return builder
+      },
       then: (resolve: (result: { data: Row[] | null; error: RpcError | null }) => unknown) => {
         if (failingTables.includes(table)) {
           const error = { message: 'connection reset', details: null, hint: null, code: '08006' }
           return Promise.resolve({ data: null, error }).then(resolve)
         }
 
-        const data = (tables[table] ?? []).filter((row) => filters.every((filter) => filter(row)))
+        const matching = (tables[table] ?? []).filter((row) => filters.every((filter) => filter(row)))
+        const ordered = [...matching].sort((a, b) => {
+          const column = orderColumns.find((name) => String(a[name]) !== String(b[name]))
+          return column ? String(a[column]).localeCompare(String(b[column])) : 0
+        })
+        const data = window ? ordered.slice(window.from, window.to + 1) : ordered
         return Promise.resolve({ data, error: null }).then(resolve)
       },
     }
