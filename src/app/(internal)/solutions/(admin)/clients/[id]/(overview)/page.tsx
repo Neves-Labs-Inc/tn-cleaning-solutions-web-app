@@ -1,9 +1,14 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, MapPin, Pencil, RotateCcw } from 'lucide-react'
+import { AlertCircle, ArrowLeft, MapPin, Pencil, Plus, RotateCcw } from 'lucide-react'
 
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import PageHeader from '@/components/ui/page-header'
+import StatusBadge, { activeStateBadge, ARCHIVED_BADGE } from '@/components/ui/status-badge'
+import SubmitButton from '@/components/ui/submit-button'
 import { archiveLocation, restoreLocation } from '@/lib/actions/clients'
 import { getReceivables } from '@/lib/invoices/queries'
 import { getBusinessDate } from '@/lib/schedule/business-time'
@@ -22,6 +27,13 @@ type LocationRow = {
 	is_active: boolean
 	is_archived: boolean
 }
+
+const PRESS_CLASS_NAME =
+	'transition-[background-color,transform,box-shadow] duration-fast ease-out-quart active:scale-[0.98]'
+const HEADER_BUTTON_CLASS_NAME = `w-full sm:w-auto ${PRESS_CLASS_NAME}`
+const SECTION_TITLE_CLASS_NAME = 'text-lg font-semibold tracking-tight'
+const TERM_CLASS_NAME = 'text-xs font-semibold uppercase tracking-wider text-muted-foreground'
+const DETAIL_CLASS_NAME = 'text-sm leading-6 text-foreground break-words'
 
 function LocationCard({ location, clientId }: { location: LocationRow; clientId: string }) {
 	async function handleLocationStateChange(formData: FormData) {
@@ -42,63 +54,99 @@ function LocationCard({ location, clientId }: { location: LocationRow; clientId:
 		await archiveLocation(locationId)
 	}
 
+	const activeBadge = activeStateBadge(location.is_active)
+
 	return (
-		<Card className="rounded-2xl border border-neutral-200 bg-white py-0 shadow-sm shadow-emerald-950/5">
-			<CardHeader className="gap-2 border-b border-neutral-100 px-5 py-4">
+		<Card>
+			<CardHeader className="gap-2">
 				<div className="flex items-start justify-between gap-3">
-					<div className="min-w-0">
-						<CardTitle className="truncate text-base font-semibold text-neutral-950">{location.label}</CardTitle>
-						<p className="mt-1 text-sm text-neutral-600">{location.address}</p>
-					</div>
-					<span
-						className={`rounded-full px-2 py-1 text-xs font-medium ${
-							location.is_active
-								? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-								: 'border border-neutral-200 bg-neutral-100 text-neutral-600'
-						}`}
-					>
-						{location.is_active ? 'Active' : 'Inactive'}
-					</span>
+					<CardTitle className="min-w-0 text-base font-semibold break-words">{location.label}</CardTitle>
+					<StatusBadge tone={activeBadge.tone}>{activeBadge.label}</StatusBadge>
 				</div>
+				<p className="text-sm text-muted-foreground break-words">{location.address}</p>
 			</CardHeader>
 
-			<CardContent className="px-5 py-4">
-				<p className="text-sm leading-6 text-neutral-600">{location.notes || 'No notes added.'}</p>
+			<CardContent>
+				<p className="text-sm leading-6 text-muted-foreground break-words">{location.notes || 'No notes added.'}</p>
 			</CardContent>
 
-			<CardFooter className="justify-between border-t border-neutral-100 px-5 py-3">
-				<Link
-					href={`/solutions/clients/${clientId}/locations/${location.id}/edit`}
-					className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-neutral-50"
+			<CardFooter className="justify-between gap-2 border-t border-border">
+				<Button
+					variant="outline"
+					className={PRESS_CLASS_NAME}
+					render={<Link href={`/solutions/clients/${clientId}/locations/${location.id}/edit`} />}
+					nativeButton={false}
 				>
-					<Pencil className="size-3.5" aria-hidden="true" />
+					<Pencil aria-hidden="true" data-icon="inline-start" />
 					Edit
-				</Link>
+				</Button>
 
 				<form action={handleLocationStateChange}>
 					<input type="hidden" name="locationId" value={location.id} />
 					<input type="hidden" name="isArchived" value={location.is_archived ? 'true' : 'false'} />
-					<Button
-						type="submit"
-						variant="outline"
-						className={`h-8 cursor-pointer rounded-full px-3 text-xs font-medium ${
-							location.is_archived
-								? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-								: 'border-neutral-200 bg-white text-neutral-700 hover:bg-red-500/80'
-						}`}
-					>
-						{location.is_archived ? (
-							<>
-								<RotateCcw className="size-3.5" aria-hidden="true" />
-								Restore
-							</>
-						) : (
-							'Archive'
-						)}
-					</Button>
+					{location.is_archived ? (
+						<SubmitButton
+							variant="outline"
+							className={PRESS_CLASS_NAME}
+							label="Restore"
+							pendingLabel="Restoring…"
+							icon={<RotateCcw aria-hidden="true" />}
+						/>
+					) : (
+						<SubmitButton
+							variant="outline"
+							className={PRESS_CLASS_NAME}
+							label="Archive"
+							pendingLabel="Archiving…"
+						/>
+					)}
 				</form>
 			</CardFooter>
 		</Card>
+	)
+}
+
+function LocationsError({ clientId }: { clientId: string }) {
+	return (
+		<Alert variant="destructive" className="has-data-[slot=alert-action]:pr-28">
+			<AlertCircle aria-hidden="true" />
+			<AlertTitle>Couldn&apos;t load locations</AlertTitle>
+			<AlertDescription>Client info is fine; this client&apos;s addresses didn&apos;t load.</AlertDescription>
+			<AlertAction>
+				<Button
+					variant="outline"
+					className="text-foreground"
+					render={<Link href={`/solutions/clients/${clientId}`} />}
+					nativeButton={false}
+				>
+					Try again
+				</Button>
+			</AlertAction>
+		</Alert>
+	)
+}
+
+function LocationsList({ locations, clientId }: { locations: LocationRow[]; clientId: string }) {
+	if (locations.length === 0) {
+		return (
+			<Empty className="rounded-lg bg-card ring-1 ring-foreground/10">
+				<EmptyHeader>
+					<EmptyMedia variant="icon">
+						<MapPin aria-hidden="true" />
+					</EmptyMedia>
+					<EmptyTitle>No locations yet</EmptyTitle>
+					<EmptyDescription>Add a location to assign appointments to a specific service address.</EmptyDescription>
+				</EmptyHeader>
+			</Empty>
+		)
+	}
+
+	return (
+		<div className="grid gap-3 md:grid-cols-2">
+			{locations.map((location) => (
+				<LocationCard key={location.id} location={location} clientId={clientId} />
+			))}
+		</div>
 	)
 }
 
@@ -130,114 +178,91 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
 		notFound()
 	}
 
-	return (
-		<div className="space-y-6">
-			<section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-				<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-					<div className="space-y-3">
-						<Link
-							href="/solutions/clients"
-							className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
-						>
-							<ArrowLeft className="size-3.5" aria-hidden="true" />
-							Back to Clients
-						</Link>
-						<div>
-							<h1 className="text-3xl font-bold tracking-tight text-neutral-950">{client.name}</h1>
-							<div className="mt-2 flex items-center gap-2">
-								<span
-									className={`rounded-full px-2 py-1 text-xs font-medium ${
-										client.is_active
-											? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-											: 'border border-neutral-200 bg-neutral-100 text-neutral-600'
-									}`}
-								>
-									{client.is_active ? 'Active' : 'Inactive'}
-								</span>
-								{client.is_archived ? (
-									<span className="rounded-full border border-neutral-200 bg-neutral-100 px-2 py-1 text-xs font-medium text-neutral-600">
-										Archived
-									</span>
-								) : null}
-							</div>
-						</div>
-					</div>
+	const activeBadge = activeStateBadge(client.is_active)
 
-					<div className="flex flex-wrap gap-2">
-						<Link href={`/solutions/clients/${client.id}/pricing`}>
-							<Button className="h-10 rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white hover:bg-emerald-700">
-								Custom Pricing
+	return (
+		<div className="animate-in space-y-6 duration-slow fade-in-0 lg:space-y-8">
+			<div className="min-w-0 space-y-3">
+				<Button
+					variant="ghost"
+					className={`-ml-3 w-fit active:bg-muted ${PRESS_CLASS_NAME}`}
+					render={<Link href="/solutions/clients" />}
+					nativeButton={false}
+				>
+					<ArrowLeft aria-hidden="true" />
+					Clients
+				</Button>
+				<PageHeader
+					title={client.name}
+					action={
+						<div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+							<Button
+								variant="outline"
+								className={HEADER_BUTTON_CLASS_NAME}
+								render={<Link href={`/solutions/clients/${client.id}/pricing`} />}
+								nativeButton={false}
+							>
+								Custom pricing
 							</Button>
-						</Link>
-						<Link href={`/solutions/clients/${client.id}/edit`}>
-							<Button className="h-10 rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white hover:bg-emerald-700">
-								<Pencil className="size-4" aria-hidden="true" />
-								Edit Client
+							<Button
+								variant="outline"
+								className={HEADER_BUTTON_CLASS_NAME}
+								render={<Link href={`/solutions/clients/${client.id}/edit`} />}
+								nativeButton={false}
+							>
+								<Pencil aria-hidden="true" data-icon="inline-start" />
+								Edit client
 							</Button>
-						</Link>
-					</div>
+						</div>
+					}
+				/>
+				<div className="flex flex-wrap items-center gap-2">
+					<StatusBadge tone={activeBadge.tone}>{activeBadge.label}</StatusBadge>
+					{client.is_archived ? <StatusBadge tone={ARCHIVED_BADGE.tone}>{ARCHIVED_BADGE.label}</StatusBadge> : null}
 				</div>
-			</section>
+			</div>
 
 			<BillingSection client={client} receivables={receivables} businessDate={getBusinessDate(new Date())} />
 
-			<section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-				<h2 className="text-lg font-semibold text-neutral-950">Client Info</h2>
-				<div className="mt-4 grid gap-4 sm:grid-cols-2">
-					<div>
-						<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Email</p>
-						<p className="mt-1 text-sm text-neutral-700">{client.email || 'Not provided'}</p>
+			<Card className="gap-4 p-4 sm:p-5">
+				<h2 className={SECTION_TITLE_CLASS_NAME}>Client info</h2>
+				<dl className="grid gap-4 sm:grid-cols-2">
+					<div className="space-y-1">
+						<dt className={TERM_CLASS_NAME}>Email</dt>
+						<dd className={DETAIL_CLASS_NAME}>{client.email || 'Not provided'}</dd>
 					</div>
-					<div>
-						<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Phone</p>
-						<p className="mt-1 text-sm text-neutral-700">{client.phone || 'Not provided'}</p>
+					<div className="space-y-1">
+						<dt className={TERM_CLASS_NAME}>Phone</dt>
+						<dd className={DETAIL_CLASS_NAME}>{client.phone || 'Not provided'}</dd>
 					</div>
-				</div>
-				<div className="mt-4">
-					<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Notes</p>
-					<p className="mt-1 text-sm leading-6 text-neutral-700">{client.notes || 'No notes added.'}</p>
-				</div>
-			</section>
+					<div className="space-y-1 sm:col-span-2">
+						<dt className={TERM_CLASS_NAME}>Notes</dt>
+						<dd className={DETAIL_CLASS_NAME}>{client.notes || 'No notes added.'}</dd>
+					</div>
+				</dl>
+			</Card>
 
 			<section className="space-y-4">
-				<div className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-						<div>
-							<h2 className="text-lg font-semibold text-neutral-950">Locations</h2>
-							<p className="mt-1 text-sm text-neutral-600">Manage all service addresses for this client.</p>
-						</div>
-						<Link href={`/solutions/clients/${client.id}/locations/new`}>
-							<Button className="h-10 rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white hover:bg-emerald-700">
-								Add Location
-							</Button>
-						</Link>
+				<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<h2 className={SECTION_TITLE_CLASS_NAME}>Locations</h2>
+						<p className="text-sm text-muted-foreground">Manage all service addresses for this client.</p>
 					</div>
+					<Button
+						variant="outline"
+						className={HEADER_BUTTON_CLASS_NAME}
+						render={<Link href={`/solutions/clients/${client.id}/locations/new`} />}
+						nativeButton={false}
+					>
+						<Plus aria-hidden="true" data-icon="inline-start" />
+						Add location
+					</Button>
 				</div>
 
 				{locationsError ? (
-					<section className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-						{locationsError.message}
-					</section>
-				) : null}
-
-				{(locations?.length ?? 0) > 0 ? (
-					<div className="grid gap-4 md:grid-cols-2">
-						{(locations ?? []).map((location) => (
-							<LocationCard key={location.id} location={location as LocationRow} clientId={client.id} />
-						))}
-					</div>
+					<LocationsError clientId={client.id} />
 				) : (
-					<section className="rounded-2xl border border-emerald-100 bg-white p-10 shadow-sm shadow-emerald-950/5">
-						<div className="mx-auto flex max-w-md flex-col items-center text-center">
-							<div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
-								<MapPin className="size-6" aria-hidden="true" />
-							</div>
-							<h3 className="text-lg font-semibold text-neutral-950">No locations yet</h3>
-							<p className="mt-2 text-sm leading-6 text-neutral-600">
-								Add a location to assign appointments to a specific service address.
-							</p>
-						</div>
-					</section>
+					<LocationsList locations={(locations ?? []) as LocationRow[]} clientId={client.id} />
 				)}
 			</section>
 		</div>

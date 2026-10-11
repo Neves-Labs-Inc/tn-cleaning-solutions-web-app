@@ -6,11 +6,28 @@ import { toast } from 'sonner'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { setClientAutomaticInvoicing } from '@/lib/actions/invoices'
 
 const FALLBACK_ERROR = 'Try again.'
+const CARD_CLASSES = 'space-y-1 rounded-lg bg-card p-4 shadow-sm ring-1 ring-foreground/10'
+const DESCRIPTION =
+  "Completed appointments join an Automatic draft. Turning this off keeps the open draft; new completions won't join it."
+
+// Same shell and the real description, so the loading card wraps to the loaded height.
+export function AutomaticInvoicingSwitchSkeleton() {
+  return (
+    <div className={CARD_CLASSES}>
+      <div className="flex min-h-11 items-center justify-between">
+        <Skeleton className="h-4 w-36" />
+        <Skeleton className="h-5 w-9 rounded-full" />
+      </div>
+      <p className="text-sm text-muted-foreground">{DESCRIPTION}</p>
+    </div>
+  )
+}
 
 type AutomaticInvoicingSwitchProps = {
   clientId: string
@@ -51,7 +68,7 @@ export default function AutomaticInvoicingSwitch({ clientId, clientName, isOn }:
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1 rounded-lg bg-card p-4 shadow-sm ring-1 ring-foreground/10">
+      <div className={CARD_CLASSES}>
         <Label
           aria-busy={isSaving}
           className="min-h-11 cursor-pointer justify-between gap-3 py-2 text-sm font-semibold -mx-2 rounded-md px-2 md:hover:bg-muted/50"
@@ -62,10 +79,7 @@ export default function AutomaticInvoicingSwitch({ clientId, clientName, isOn }:
           </span>
           <Switch checked={optimisticIsOn} disabled={isSaving} onCheckedChange={handleCheckedChange} />
         </Label>
-        <p className="text-sm text-muted-foreground">
-          Completed appointments join an Automatic draft. Turning this off keeps the open draft; new completions won&apos;t
-          join it.
-        </p>
+        <p className="text-sm text-muted-foreground">{DESCRIPTION}</p>
       </div>
 
       {error === null ? null : (

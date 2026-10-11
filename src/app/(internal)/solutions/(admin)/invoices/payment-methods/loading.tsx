@@ -7,7 +7,7 @@ const ROW_SKELETON_COUNT = 4;
 export default function PaymentMethodsLoading(): React.ReactNode {
   return (
     <div className="max-w-2xl space-y-6 lg:space-y-8" aria-busy="true">
-      <Skeleton className="h-11 w-28" />
+      <Skeleton className="-ml-3 h-(--control-height) w-28" />
       <div className="space-y-2">
         <Skeleton className="h-8 w-52" />
         <Skeleton className="h-4 w-72 max-w-full" />

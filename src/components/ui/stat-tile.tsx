@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 type StatTileProps = {
@@ -14,6 +15,8 @@ type StatTileProps = {
   className?: string;
 };
 
+const TILE_CLASSES = "flex flex-col gap-1 rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10";
+
 export default function StatTile({
   label,
   value,
@@ -24,7 +27,7 @@ export default function StatTile({
   className,
 }: StatTileProps): React.ReactNode {
   const rootClassName = cn(
-    "flex flex-col gap-1 rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10",
+    TILE_CLASSES,
     fitValue && "@container",
     href &&
       "cursor-pointer outline-none transition-[background-color,box-shadow] duration-fast ease-out-quart active:bg-muted md:hover:ring-foreground/20 focus-visible:ring-2 focus-visible:ring-ring",
@@ -62,4 +65,36 @@ export default function StatTile({
     );
   }
   return <div className={rootClassName}>{content}</div>;
+}
+
+type StatTileSkeletonProps = {
+  icon?: boolean;
+  caption?: boolean;
+  fitValue?: boolean;
+  className?: string;
+};
+
+// Each bar fills the line box of the real text and runs the same container queries, so the
+// loading tile is exactly as tall as the loaded one at every width.
+export function StatTileSkeleton({
+  icon = false,
+  caption = false,
+  fitValue = false,
+  className,
+}: StatTileSkeletonProps): React.ReactNode {
+  return (
+    <div className={cn(TILE_CLASSES, fitValue && "@container", className)}>
+      {/* The 20px icon sets the label row's height when there is one. */}
+      <div className={cn("flex items-center", icon ? "h-5" : "h-4")}>
+        <Skeleton className="h-full w-20" />
+      </div>
+      <Skeleton
+        className={cn(
+          "w-24",
+          fitValue ? "h-7 @[8.5rem]:h-8 @[11rem]:h-9" : "h-8 sm:h-9",
+        )}
+      />
+      {caption ? <Skeleton className="h-4 w-28" /> : null}
+    </div>
+  );
 }

@@ -2,9 +2,11 @@
 // the status-to-tone mapping next to the component (DESIGN.md §3.2, §10).
 import { CheckCircle2, CircleDashed, Clock, Hourglass, Pencil } from "lucide-react";
 
+import type { AppointmentStatus } from '../../lib/helpers/dashboard'
 import type { InvoiceEffectiveStatus, LineState } from '../../lib/invoices/view'
+import { formatBusinessTime } from '../../lib/schedule/business-time.ts'
 import type { FlagKind, SessionView } from "../../lib/time-sheets/session-view";
-import type { StatusBadgeSpec } from './status-badge'
+import type { ClockStatus, StatusBadgeSpec } from './status-badge'
 
 const INVOICE_STATUS_BADGES: Record<InvoiceEffectiveStatus, StatusBadgeSpec> = {
   draft: { tone: 'neutral', label: 'Draft' },
@@ -21,12 +23,50 @@ const LINE_STATE_BADGES: Record<LineState, StatusBadgeSpec | null> = {
   cancelled: { tone: 'danger', label: 'Cancelled' },
 }
 
+const APPOINTMENT_STATUS_BADGES: Record<AppointmentStatus, StatusBadgeSpec> = {
+  scheduled: { tone: 'info', label: 'Scheduled' },
+  in_progress: { tone: 'success', label: 'In Progress' },
+  completed: { tone: 'neutral', label: 'Completed' },
+  cancelled: { tone: 'danger', label: 'Cancelled' },
+}
+
+export const ARCHIVED_BADGE: StatusBadgeSpec = { tone: 'neutral', label: 'Archived' }
+
 export function invoiceStatusBadge(status: InvoiceEffectiveStatus): StatusBadgeSpec {
   return INVOICE_STATUS_BADGES[status]
 }
 
 export function lineStateBadge(state: LineState): StatusBadgeSpec | null {
   return LINE_STATE_BADGES[state]
+}
+
+export function appointmentStatusBadge(status: AppointmentStatus): StatusBadgeSpec {
+  return APPOINTMENT_STATUS_BADGES[status]
+}
+
+export function clockStatusBadge(
+  status: ClockStatus,
+  clockedInAt: string | null,
+  clockedOutAt: string | null,
+): StatusBadgeSpec {
+  const specs: Record<ClockStatus, StatusBadgeSpec> = {
+    not_started: { tone: 'warning', label: 'Not started', icon: Clock },
+    clocked_in: {
+      tone: 'success',
+      label: clockedInAt ? `Clocked in at ${formatBusinessTime(new Date(clockedInAt))}` : 'Clocked in',
+      icon: CheckCircle2,
+    },
+    clocked_out: {
+      tone: 'neutral',
+      label: clockedOutAt ? `Clocked out at ${formatBusinessTime(new Date(clockedOutAt))}` : 'Clocked out',
+    },
+  }
+  return specs[status]
+}
+
+// The Active / Inactive pill on client and location rows.
+export function activeStateBadge(isActive: boolean): StatusBadgeSpec {
+  return isActive ? { tone: 'success', label: 'Active' } : { tone: 'neutral', label: 'Inactive' }
 }
 
 type InvoiceFlagRow = {
@@ -42,7 +82,7 @@ export function invoiceFlagBadges(row: InvoiceFlagRow): StatusBadgeSpec[] {
   const badges: Array<StatusBadgeSpec | null> = [
     invoiceStatusBadge(row.effective_status),
     row.is_automatic ? { tone: 'neutral', label: 'Automatic' } : null,
-    row.is_archived ? { tone: 'neutral', label: 'Archived' } : null,
+    row.is_archived ? ARCHIVED_BADGE : null,
     row.has_unpriced ? lineStateBadge('unpriced') : null,
   ]
   return badges.filter((badge) => badge !== null)

@@ -5,7 +5,9 @@ import { notFound } from 'next/navigation'
 
 import AppointmentCrewClocks from '@/components/admin/appointment-crew-clocks'
 import AppointmentLifecycleActions, { CompletedByAdminHint } from '@/components/admin/appointment-lifecycle-actions'
+import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import PageHeader from '@/components/ui/page-header'
 import StatusBadge, { appointmentStatusBadge } from '@/components/ui/status-badge'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 import {
@@ -102,38 +104,36 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 space-y-3">
-            <Link
-              href="/solutions/appointments"
-              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
-            >
-              <ArrowLeft className="size-3.5" aria-hidden="true" />
-              Back to Appointments
-            </Link>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 space-y-3">
+          <Button
+            variant="ghost"
+            className="-ml-3 w-fit transition-[background-color,transform,box-shadow] duration-fast ease-out-quart active:scale-[0.98] active:bg-muted"
+            render={<Link href="/solutions/appointments" />}
+            nativeButton={false}
+          >
+            <ArrowLeft aria-hidden="true" />
+            Appointments
+          </Button>
 
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-neutral-950">{appointment.jobs?.name ?? 'Appointment'}</h1>
-              <p className="mt-2 text-sm text-neutral-600">
-                {format(parseISO(appointment.scheduled_date), 'EEEE, MMMM d, yyyy')} •{' '}
-                {appointment.scheduled_start_time.slice(0, 5)} - {appointment.scheduled_end_time.slice(0, 5)}
-              </p>
-            </div>
+          <PageHeader title={appointment.jobs?.name ?? 'Appointment'} />
+          <p className="text-sm text-muted-foreground">
+            {format(parseISO(appointment.scheduled_date), 'EEEE, MMMM d, yyyy')} •{' '}
+            {appointment.scheduled_start_time.slice(0, 5)} - {appointment.scheduled_end_time.slice(0, 5)}
+          </p>
 
-            <StatusBadge tone={statusBadge.tone}>{statusBadge.label}</StatusBadge>
+          <StatusBadge tone={statusBadge.tone}>{statusBadge.label}</StatusBadge>
 
-            <CompletedByAdminHint status={appointment.status} manuallyCompleted={appointment.manually_completed} />
-          </div>
-
-          <AppointmentLifecycleActions
-            appointmentId={appointment.id}
-            status={appointment.status}
-            manuallyCompleted={appointment.manually_completed}
-            editHref={`/solutions/appointments/${appointment.id}/edit`}
-          />
+          <CompletedByAdminHint status={appointment.status} manuallyCompleted={appointment.manually_completed} />
         </div>
-      </section>
+
+        <AppointmentLifecycleActions
+          appointmentId={appointment.id}
+          status={appointment.status}
+          manuallyCompleted={appointment.manually_completed}
+          editHref={`/solutions/appointments/${appointment.id}/edit`}
+        />
+      </div>
 
       <section className="grid gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
