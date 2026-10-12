@@ -7,7 +7,10 @@ import { AlertCircle, Info, TriangleAlert } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import SubmitButton from '@/components/ui/submit-button'
 import { Textarea } from '@/components/ui/textarea'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { SearchableSelect } from '@/components/ui/searchable-select'
@@ -77,19 +80,15 @@ const initialState: AppointmentActionResult = {
 const SCHEDULED_DATE_ERROR_ID = 'scheduled_date-error'
 // An archived employee drops out of the employee list but can still hold clocked time here.
 const REMOVED_EMPLOYEE_NAME = 'A removed employee'
+const RECURRENCE_HEADING_ID = 'recurrence-settings-heading'
 
-function SubmitButton({ isEditMode, pending }: { isEditMode: boolean; pending: boolean }) {
-  return (
-    <Button
-      type="submit"
-      disabled={pending}
-      aria-busy={pending || undefined}
-      className="h-10 rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white hover:bg-emerald-700"
-    >
-      {pending ? 'Saving...' : isEditMode ? 'Save Changes' : 'Create Appointment'}
-    </Button>
-  )
-}
+// Visual 20px (DESIGN §8); the indicator dot is sized up to match.
+const RADIO_CLASSES = 'mt-0.5 size-5 [&_[data-slot=radio-group-indicator]]:size-5'
+const LABEL_CLASSES = 'text-sm text-foreground'
+const PRESS_CLASSES = 'transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]'
+const ENTER_CLASSES = 'animate-in fade-in-0 slide-in-from-top-1 duration-base ease-out-quart'
+const CHOICE_ROW_CLASSES =
+  '-mx-2 flex min-h-11 cursor-pointer items-start gap-3 rounded-md px-2 py-2.5 transition-colors duration-fast active:bg-muted has-[:focus-visible]:bg-muted/50 md:hover:bg-muted/50'
 
 type FieldErrorProps = { id?: string; message: string | undefined }
 
@@ -295,27 +294,15 @@ export function AppointmentForm({
   }
 
   return (
-    <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
+    <section className="rounded-lg bg-card p-4 text-card-foreground shadow-sm ring-1 ring-foreground/10 sm:p-5">
       <form onSubmit={handleSubmit} className="space-y-5">
         {invoiceClaim ? <InvoiceClaimBanner claim={invoiceClaim} /> : null}
 
-        {formError ? (
-          <Alert
-            ref={formErrorRef}
-            tabIndex={-1}
-            variant="destructive"
-            className="scroll-mt-24 outline-none animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart"
-          >
-            <AlertCircle aria-hidden="true" />
-            <AlertDescription className="break-words">{formError}</AlertDescription>
-          </Alert>
-        ) : null}
-
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="client_id" className="text-sm font-medium text-neutral-700">
+          <Field className="min-w-0">
+            <FieldLabel htmlFor="client_id" className={LABEL_CLASSES}>
               Client
-            </Label>
+            </FieldLabel>
             <input type="hidden" name="client_id" value={selectedClientId} />
             <SearchableSelect
               id="client_id"
@@ -327,12 +314,12 @@ export function AppointmentForm({
               emptyMessage="No client found."
             />
             <FieldError message={fieldErrors?.client_id} />
-          </div>
+          </Field>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="location_id" className="text-sm font-medium text-neutral-700">
+          <Field className="min-w-0">
+            <FieldLabel htmlFor="location_id" className={LABEL_CLASSES}>
               Location
-            </Label>
+            </FieldLabel>
             <NativeSelect
               id="location_id"
               name="location_id"
@@ -347,20 +334,20 @@ export function AppointmentForm({
                 </NativeSelectOption>
               ))}
             </NativeSelect>
-          </div>
+          </Field>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="job_id" className="text-sm font-medium text-neutral-700">
+        <Field className="min-w-0">
+          <FieldLabel htmlFor="job_id" className={LABEL_CLASSES}>
             Job
-          </Label>
+          </FieldLabel>
           <NativeSelect
             id="job_id"
             name="job_id"
             required
             value={selectedJobId}
             onChange={(event) => setSelectedJobId(event.target.value)}
-              className="w-full"
+            className="w-full"
           >
             <NativeSelectOption value="" disabled>
               Select job
@@ -371,15 +358,15 @@ export function AppointmentForm({
               </NativeSelectOption>
             ))}
           </NativeSelect>
-          {rateHint ? <p className="text-xs text-neutral-500">{rateHint}</p> : null}
+          {rateHint ? <FieldDescription>{rateHint}</FieldDescription> : null}
           <FieldError message={fieldErrors?.job_id} />
-        </div>
+        </Field>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="scheduled_date" className="text-sm font-medium text-neutral-700">
+          <Field className="min-w-0">
+            <FieldLabel htmlFor="scheduled_date" className={LABEL_CLASSES}>
               Date
-            </Label>
+            </FieldLabel>
             <Input
               ref={scheduledDateRef}
               id="scheduled_date"
@@ -391,12 +378,12 @@ export function AppointmentForm({
               aria-describedby={scheduledDateError ? SCHEDULED_DATE_ERROR_ID : undefined}
             />
             <FieldError id={SCHEDULED_DATE_ERROR_ID} message={scheduledDateError} />
-          </div>
+          </Field>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="scheduled_start_time" className="text-sm font-medium text-neutral-700">
-              Start Time
-            </Label>
+          <Field className="min-w-0">
+            <FieldLabel htmlFor="scheduled_start_time" className={LABEL_CLASSES}>
+              Start time
+            </FieldLabel>
             <Input
               id="scheduled_start_time"
               name="scheduled_start_time"
@@ -405,12 +392,12 @@ export function AppointmentForm({
               defaultValue={appointment?.scheduled_start_time?.slice(0, 5) ?? ''}
             />
             <FieldError message={fieldErrors?.scheduled_start_time} />
-          </div>
+          </Field>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="scheduled_end_time" className="text-sm font-medium text-neutral-700">
-              End Time
-            </Label>
+          <Field className="min-w-0">
+            <FieldLabel htmlFor="scheduled_end_time" className={LABEL_CLASSES}>
+              End time
+            </FieldLabel>
             <Input
               id="scheduled_end_time"
               name="scheduled_end_time"
@@ -419,38 +406,39 @@ export function AppointmentForm({
               defaultValue={appointment?.scheduled_end_time?.slice(0, 5) ?? ''}
             />
             <FieldError message={fieldErrors?.scheduled_end_time} />
-          </div>
+          </Field>
         </div>
 
-        <div className="grid gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="price_override" className="text-sm font-medium text-neutral-700">
-              Manual price override ($)
-            </Label>
-            <Input
-              id="price_override"
-              name="price_override"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={
-                appointment?.price_override_cents != null
-                  ? (appointment.price_override_cents / 100).toFixed(2)
-                  : ''
-              }
-              placeholder="Leave blank to bill this client's hourly rate for the scheduled time"
-            />
-            <FieldError message={fieldErrors?.price_override} />
-          </div>
+        <Field className="min-w-0">
+          <FieldLabel htmlFor="price_override" className={LABEL_CLASSES}>
+            Manual price override ($)
+          </FieldLabel>
+          <Input
+            id="price_override"
+            name="price_override"
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            enterKeyHint="next"
+            defaultValue={
+              appointment?.price_override_cents != null
+                ? (appointment.price_override_cents / 100).toFixed(2)
+                : ''
+            }
+            placeholder="e.g. 120.00"
+          />
+          <FieldDescription>Leave blank to bill this client&apos;s hourly rate for the scheduled time.</FieldDescription>
+          <FieldError message={fieldErrors?.price_override} />
+        </Field>
 
-          {/* The status this form rendered with; the action refuses to save over a status that moved since. */}
-          {appointment ? <input type="hidden" name="expected_status" value={appointment.status} /> : null}
-        </div>
+        {/* The status this form rendered with; the action refuses to save over a status that moved since. */}
+        {appointment ? <input type="hidden" name="expected_status" value={appointment.status} /> : null}
 
-        <div className="space-y-1.5">
-          <Label htmlFor="employee_ids" className="text-sm font-medium text-neutral-700">
-            Assigned Employees
-          </Label>
+        <Field className="min-w-0">
+          <FieldLabel htmlFor="employee_ids" className={LABEL_CLASSES}>
+            Assigned employees
+          </FieldLabel>
           {selectedEmployeeIds.map((id) => (
             <input key={id} type="hidden" name="employee_ids" value={id} />
           ))}
@@ -472,198 +460,192 @@ export function AppointmentForm({
               {isManualCompletionAhead ? <ManualCompletionNote /> : null}
             </div>
           ) : null}
-        </div>
+        </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="notes" className="text-sm font-medium text-neutral-700">
+        <Field className="min-w-0">
+          <FieldLabel htmlFor="notes" className={LABEL_CLASSES}>
             Notes
-          </Label>
+          </FieldLabel>
           <Textarea
             id="notes"
             name="notes"
+            enterKeyHint="done"
             defaultValue={appointment?.notes ?? ''}
-            className="min-h-28"
+            className="min-h-28 scroll-mb-40 md:scroll-mb-0"
           />
-        </div>
+        </Field>
 
         {!appointment ? (
-          <div className="space-y-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
-            <label className="flex cursor-pointer items-center gap-2.5 text-sm font-medium text-neutral-700">
-              <input
-                type="checkbox"
-                name="is_recurring"
-                checked={isRecurring}
-                onChange={(event) => setIsRecurring(event.target.checked)}
-                className="size-4 rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500"
-              />
-              Make this a recurring appointment
+          <div className="space-y-3 rounded-lg border bg-muted/50 p-4">
+            <label className={CHOICE_ROW_CLASSES}>
+              <Checkbox checked={isRecurring} onCheckedChange={setIsRecurring} className="mt-0.5 size-5" />
+              <span className="min-w-0 space-y-0.5">
+                <span className="block text-sm font-medium text-foreground">Make this a recurring appointment</span>
+              </span>
             </label>
+            {/* The checkbox has no name: the action reads is_recurring === 'on', so post exactly that. */}
+            {isRecurring ? <input type="hidden" name="is_recurring" value="on" /> : null}
 
             {isRecurring ? (
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="recurrence_frequency" className="text-sm font-medium text-neutral-700">
-                    Frequency
-                  </Label>
-                  <NativeSelect
-                    id="recurrence_frequency"
-                    name="recurrence_frequency"
-                    defaultValue="weekly"
-                    className="w-full"
-                  >
-                    <NativeSelectOption value="daily">Daily</NativeSelectOption>
-                    <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
-                    <NativeSelectOption value="biweekly">Biweekly</NativeSelectOption>
-                    <NativeSelectOption value="monthly">Monthly</NativeSelectOption>
-                  </NativeSelect>
-                </div>
+              <div className={`grid gap-4 sm:grid-cols-3 ${ENTER_CLASSES}`}>
+                <Field className="min-w-0">
+                <FieldLabel htmlFor="recurrence_frequency" className={LABEL_CLASSES}>
+                  Frequency
+                </FieldLabel>
+                <NativeSelect
+                  id="recurrence_frequency"
+                  name="recurrence_frequency"
+                  defaultValue="weekly"
+                  className="w-full"
+                >
+                  <NativeSelectOption value="daily">Daily</NativeSelectOption>
+                  <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
+                  <NativeSelectOption value="biweekly">Biweekly</NativeSelectOption>
+                  <NativeSelectOption value="monthly">Monthly</NativeSelectOption>
+                </NativeSelect>
+              </Field>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="recurrence_end_date" className="text-sm font-medium text-neutral-700">
-                    End Date
-                  </Label>
-                  <Input
-                    id="recurrence_end_date"
-                    name="recurrence_end_date"
-                    type="date"
-                  />
-                </div>
+                <Field className="min-w-0">
+                <FieldLabel htmlFor="recurrence_end_date" className={LABEL_CLASSES}>
+                  End date
+                </FieldLabel>
+                <Input id="recurrence_end_date" name="recurrence_end_date" type="date" />
+              </Field>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="recurrence_max_occurrences" className="text-sm font-medium text-neutral-700">
-                    Max Occurrences
-                  </Label>
-                  <Input
-                    id="recurrence_max_occurrences"
-                    name="recurrence_max_occurrences"
-                    type="number"
-                    min="1"
-                    step="1"
-                    placeholder="Optional"
-                  />
-                </div>
+              <Field className="min-w-0">
+                <FieldLabel htmlFor="recurrence_max_occurrences" className={LABEL_CLASSES}>
+                  Max occurrences
+                </FieldLabel>
+                <Input
+                  id="recurrence_max_occurrences"
+                  name="recurrence_max_occurrences"
+                  type="number"
+                  min="1"
+                  step="1"
+                  placeholder="Optional"
+                />
+              </Field>
               </div>
             ) : null}
           </div>
         ) : isEditingRecurringAppointment && recurrenceSeries ? (
-          <div className="space-y-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+          <div className="space-y-4 rounded-lg border bg-muted/50 p-4">
             <input type="hidden" name="recurrence_series_id" value={recurrenceSeries.id} />
+            <input type="hidden" name="edit_scope" value={editScope} />
 
             <div className="space-y-3">
-              <p className="text-sm font-medium text-neutral-700">Recurrence Settings</p>
+              <p id={RECURRENCE_HEADING_ID} className="text-sm font-medium text-foreground">
+                Recurrence settings
+              </p>
 
-              <label className="flex cursor-pointer items-start gap-2.5">
-                <input
-                  type="radio"
-                  name="edit_scope"
-                  value="occurrence"
-                  checked={editScope === 'occurrence'}
-                  onChange={(event) => setEditScope(event.target.value as 'occurrence' | 'future')}
-                  className="mt-0.5 size-4 border-neutral-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="space-y-0.5">
-                  <span className="block text-sm font-medium text-neutral-700">This appointment only</span>
-                  <span className="text-xs text-neutral-500 mt-0.5">Update only this appointment&apos;s details</span>
-                </span>
-              </label>
+              <RadioGroup
+                aria-labelledby={RECURRENCE_HEADING_ID}
+                value={editScope}
+                onValueChange={(value) => setEditScope(value as 'occurrence' | 'future')}
+                className="gap-0"
+              >
+                <label className={CHOICE_ROW_CLASSES}>
+                  <RadioGroupItem value="occurrence" className={RADIO_CLASSES} />
+                  <span className="min-w-0 space-y-0.5">
+                    <span className="block text-sm font-medium text-foreground">This appointment only</span>
+                    <span className="block text-sm text-muted-foreground">
+                      Update only this appointment&apos;s details
+                    </span>
+                  </span>
+                </label>
 
-              {/* <label className="flex cursor-pointer items-start gap-2.5">
-                <input
-                  type="radio"
-                  name="edit_scope"
-                  value="series"
-                  checked={editScope === 'series'}
-                  onChange={(event) => setEditScope(event.target.value as 'occurrence' | 'series' | 'future')}
-                  className="mt-0.5 size-4 border-neutral-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="space-y-0.5">
-                  <span className="block text-sm font-medium text-neutral-700">Series settings (frequency & schedule)</span>
-                  <span className="text-xs text-neutral-500 mt-0.5">Update the recurrence pattern for the whole series</span>
-                </span>
-              </label> */}
-
-              <label className="flex cursor-pointer items-start gap-2.5">
-                <input
-                  type="radio"
-                  name="edit_scope"
-                  value="future"
-                  checked={editScope === 'future'}
-                  onChange={(event) => setEditScope(event.target.value as 'occurrence' | 'future')}
-                  className="mt-0.5 size-4 border-neutral-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="space-y-0.5">
-                  <span className="block text-sm font-medium text-neutral-700">This and all future appointments</span>
-                  <span className="text-xs text-neutral-500 mt-0.5">Update this and all upcoming pending appointments</span>
-                </span>
-              </label>
+                <label className={CHOICE_ROW_CLASSES}>
+                  <RadioGroupItem value="future" className={RADIO_CLASSES} />
+                  <span className="min-w-0 space-y-0.5">
+                    <span className="block text-sm font-medium text-foreground">
+                      This and all future appointments
+                    </span>
+                    <span className="block text-sm text-muted-foreground">
+                      Update this and all upcoming pending appointments
+                    </span>
+                  </span>
+                </label>
+              </RadioGroup>
             </div>
 
-            {/* {editScope === 'series' && recurrenceSeries ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                Only the recurrence pattern will be updated. Changes to date, time, and other fields will be
-                ignored in this mode.
-              </div>
-            ) : null} */}
-
             {showRecurringEditFields ? (
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="recurrence_frequency" className="text-sm font-medium text-neutral-700">
-                    Frequency
-                  </Label>
-                  <NativeSelect
-                    id="recurrence_frequency"
-                    name="recurrence_frequency"
-                    defaultValue={recurrenceSeries.frequency}
-                    required={showRecurringEditFields}
-                    className="w-full"
-                  >
-                    <NativeSelectOption value="daily">Daily</NativeSelectOption>
-                    <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
-                    <NativeSelectOption value="biweekly">Biweekly</NativeSelectOption>
-                    <NativeSelectOption value="monthly">Monthly</NativeSelectOption>
-                  </NativeSelect>
-                </div>
+              <div className={`grid gap-4 sm:grid-cols-3 ${ENTER_CLASSES}`}>
+                <Field className="min-w-0">
+                <FieldLabel htmlFor="recurrence_frequency" className={LABEL_CLASSES}>
+                  Frequency
+                </FieldLabel>
+                <NativeSelect
+                  id="recurrence_frequency"
+                  name="recurrence_frequency"
+                  defaultValue={recurrenceSeries.frequency}
+                  required={showRecurringEditFields}
+                  className="w-full"
+                >
+                  <NativeSelectOption value="daily">Daily</NativeSelectOption>
+                  <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
+                  <NativeSelectOption value="biweekly">Biweekly</NativeSelectOption>
+                  <NativeSelectOption value="monthly">Monthly</NativeSelectOption>
+                </NativeSelect>
+              </Field>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="recurrence_end_date" className="text-sm font-medium text-neutral-700">
-                    End Date
-                  </Label>
-                  <Input
-                    id="recurrence_end_date"
-                    name="recurrence_end_date"
-                    type="date"
-                    defaultValue={recurrenceSeries.end_date ?? ''}
-                  />
-                </div>
+                <Field className="min-w-0">
+                <FieldLabel htmlFor="recurrence_end_date" className={LABEL_CLASSES}>
+                  End date
+                </FieldLabel>
+                <Input id="recurrence_end_date" name="recurrence_end_date" type="date"
+                  defaultValue={recurrenceSeries.end_date ?? ''} />
+              </Field>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="recurrence_max_occurrences" className="text-sm font-medium text-neutral-700">
-                    Max Occurrences
-                  </Label>
-                  <Input
-                    id="recurrence_max_occurrences"
-                    name="recurrence_max_occurrences"
-                    type="number"
-                    min="1"
-                    step="1"
-                    defaultValue={recurrenceSeries.max_occurrences ?? ''}
-                    placeholder="Optional"
-                  />
-                </div>
+              <Field className="min-w-0">
+                <FieldLabel htmlFor="recurrence_max_occurrences" className={LABEL_CLASSES}>
+                  Max occurrences
+                </FieldLabel>
+                <Input
+                  id="recurrence_max_occurrences"
+                  name="recurrence_max_occurrences"
+                  type="number"
+                  min="1"
+                  step="1"
+                  defaultValue={recurrenceSeries.max_occurrences ?? ''}
+                  placeholder="Optional"
+                />
+              </Field>
               </div>
             ) : null}
           </div>
         ) : null}
 
-        <div className="flex items-center justify-end gap-3 border-t border-neutral-100 pt-4">
-          <Link
-            href={appointment ? `/solutions/appointments/${appointment.id}` : '/solutions/appointments'}
-            className="inline-flex h-10 items-center rounded-full border border-neutral-200 bg-white px-4 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
-          >
-            Cancel
-          </Link>
-          <SubmitButton isEditMode={Boolean(appointment)} pending={isPending} />
+        <div className="sticky bottom-0 z-30 -mx-4 -mb-4 space-y-2 rounded-b-lg border-t bg-background/95 px-4 pt-3 pb-[calc(0.75rem+var(--safe-bottom))] shadow-lg backdrop-blur sm:-mx-5 sm:-mb-5 sm:px-5 md:static md:mx-0 md:mb-0 md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none">
+          {formError ? (
+            <Alert
+              ref={formErrorRef}
+              tabIndex={-1}
+              variant="destructive"
+              className="scroll-mt-24 outline-none animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart"
+            >
+              <AlertCircle aria-hidden="true" />
+              <AlertDescription className="break-words">{formError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 md:flex md:justify-end">
+            <Button
+              variant="outline"
+              size="lg"
+              className={`active:bg-muted ${PRESS_CLASSES}`}
+              nativeButton={false}
+              render={<Link href={appointment ? `/solutions/appointments/${appointment.id}` : '/solutions/appointments'} />}
+            >
+              Cancel
+            </Button>
+            <SubmitButton
+              label={appointment ? 'Save Changes' : 'Create Appointment'}
+              pendingLabel="Saving…"
+              isPending={isPending}
+              size="lg"
+              className={`w-full md:w-auto ${PRESS_CLASSES}`}
+            />
+          </div>
         </div>
       </form>
     </section>
