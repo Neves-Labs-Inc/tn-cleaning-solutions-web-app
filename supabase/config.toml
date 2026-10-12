@@ -240,6 +240,10 @@ otp_expiry = 3600
 subject = "Welcome to TN Cleaning Solutions"
 content_path = "./supabase/templates/invite-email.html"
 
+[auth.email.template.recovery]
+subject = "Reset your CleanSchedule password"
+content_path = "./supabase/templates/recovery-email.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true
