@@ -32,9 +32,26 @@ const TRIGGER_CLASS =
   'inline-flex min-h-11 cursor-pointer items-center gap-1 rounded-sm text-sm font-medium text-primary underline-offset-4 outline-none transition-opacity duration-fast focus-visible:ring-2 focus-visible:ring-ring/50 active:opacity-70 enabled:md:hover:underline disabled:cursor-default disabled:opacity-50'
 const ERROR_TITLE = "Couldn't update the total"
 
-type EditorFormProps = Omit<LineTotalEditorProps, 'jobName' | 'date' | 'isOpen' | 'isBusy' | 'onOpenChange'> & { onClose: () => void }
+type EditorFormProps = Omit<LineTotalEditorProps, 'jobName' | 'date' | 'isOpen' | 'onOpenChange'> & { onClose: () => void }
 
-function EditorForm({ invoiceId, appointmentId, amountCents, isOverridden, onClose, onPendingChange }: EditorFormProps) {
+type PendingLabelProps = { isPending: boolean; idle: string; pending: string }
+
+// Both labels share one grid cell, so the button keeps the wider of the two widths.
+function PendingLabel({ isPending, idle, pending }: PendingLabelProps) {
+  return (
+    <span className="grid *:col-start-1 *:row-start-1">
+      <span className={cn(isPending && 'invisible')}>{idle}</span>
+      {isPending ? (
+        <span className="inline-flex items-center justify-center gap-1.5">
+          <Spinner aria-hidden="true" />
+          {pending}
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
+function EditorForm({ invoiceId, appointmentId, amountCents, isOverridden, isBusy, onClose, onPendingChange }: EditorFormProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const inputId = `line-total-${appointmentId}`
   const errorId = useId()
@@ -57,12 +74,18 @@ function EditorForm({ invoiceId, appointmentId, amountCents, isOverridden, onClo
     if (formError) inputRef.current?.focus()
   }, [formError])
 
+  // Clicking Save leaves focus on the button, so a validation error pulls it back to the input.
+  useEffect(() => {
+    if (fieldError) inputRef.current?.focus()
+  }, [fieldError])
+
   return (
     <form
       noValidate
       aria-label="Edit total"
       onSubmit={(event) => {
         event.preventDefault()
+        if (isBusy) return
         void save()
       }}
       onKeyDown={(event) => {
@@ -98,15 +121,13 @@ function EditorForm({ invoiceId, appointmentId, amountCents, isOverridden, onClo
       </Field>
 
       <div className="flex gap-2">
-        <Button type="submit" disabled={isPending} aria-busy={pendingAction === 'save' || undefined} className="min-w-24 flex-1 sm:flex-none">
-          {pendingAction === 'save' ? (
-            <>
-              <Spinner aria-hidden="true" />
-              Saving…
-            </>
-          ) : (
-            'Save'
-          )}
+        <Button
+          type="submit"
+          disabled={isPending || isBusy}
+          aria-busy={pendingAction === 'save' || undefined}
+          className="flex-1 sm:flex-none"
+        >
+          <PendingLabel isPending={pendingAction === 'save'} idle="Save" pending="Saving…" />
         </Button>
         <Button type="button" variant="outline" disabled={isPending} onClick={onClose} className="flex-1 sm:flex-none">
           Cancel
@@ -117,19 +138,12 @@ function EditorForm({ invoiceId, appointmentId, amountCents, isOverridden, onClo
         <Button
           type="button"
           variant="ghost"
-          disabled={isPending}
+          disabled={isPending || isBusy}
           aria-busy={pendingAction === 'clear' || undefined}
           onClick={() => void clear()}
-          className="self-start text-primary sm:ml-auto"
+          className="self-start text-primary sm:ml-auto sm:self-end"
         >
-          {pendingAction === 'clear' ? (
-            <>
-              <Spinner aria-hidden="true" />
-              Clearing…
-            </>
-          ) : (
-            'Use calculated price'
-          )}
+          <PendingLabel isPending={pendingAction === 'clear'} idle="Use calculated price" pending="Clearing…" />
         </Button>
       ) : null}
 
@@ -172,7 +186,7 @@ export default function LineTotalEditor({
   }
 
   if (isOpen) {
-    return <EditorForm amountCents={amountCents} {...formProps} onClose={handleClose} />
+    return <EditorForm amountCents={amountCents} isBusy={isBusy} {...formProps} onClose={handleClose} />
   }
 
   return (
