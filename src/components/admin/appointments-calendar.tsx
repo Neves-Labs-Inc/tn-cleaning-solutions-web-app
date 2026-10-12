@@ -15,7 +15,12 @@ import {
 
 import { Button } from '@/components/ui/button'
 import PaymentStatePill from '@/components/ui/payment-state-pill'
-import { appointmentDisplayBadge, NOT_CLOCKED_BADGE } from '@/components/ui/status-badge'
+import {
+  appointmentCardTone,
+  appointmentDisplayBadge,
+  CARD_TINT_CLASSES,
+  NOT_CLOCKED_BADGE,
+} from '@/components/ui/status-badge'
 import { splitDayEvents, type ScheduleAppointment } from '@/lib/appointments/overview'
 import { cn } from '@/lib/utils'
 
@@ -29,31 +34,42 @@ type AppointmentsCalendarProps = {
   businessDate: string
 }
 
-// Warning text only for the Not clocked spec; every other status stays muted.
+// Danger text only for the Not clocked spec; every other status stays muted.
 const STATUS_TEXT_CLASSES = {
-  warning: 'text-status-warning-foreground',
+  danger: 'text-status-danger-foreground',
   default: 'text-muted-foreground',
 }
+
+// Muted-foreground is too faint on a status tint, so tinted cards use foreground/70.
+const TINTED_SECONDARY_TEXT_CLASS = 'text-foreground/70'
 
 export const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export function CalendarEvent({ appointment }: { appointment: ScheduleAppointment }): React.ReactNode {
   const status = appointmentDisplayBadge(appointment.status, appointment.isNotClocked)
-  const statusTextClass = status === NOT_CLOCKED_BADGE ? STATUS_TEXT_CLASSES.warning : STATUS_TEXT_CLASSES.default
+  const tone = appointmentCardTone(appointment)
+  const secondaryTextClass = tone === null ? STATUS_TEXT_CLASSES.default : TINTED_SECONDARY_TEXT_CLASS
+  const statusTextClass = status === NOT_CLOCKED_BADGE ? STATUS_TEXT_CLASSES.danger : secondaryTextClass
 
   return (
     <Link
       href={`/solutions/appointments/${appointment.id}`}
       title={calendarEventTitle(appointment)}
       className={cn(
-        'block cursor-pointer space-y-0.5 rounded-md border bg-background px-1.5 py-1 text-xs leading-tight outline-none transition-colors duration-fast hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:bg-muted',
+        'block cursor-pointer space-y-0.5 rounded-md border px-1.5 py-1 text-xs leading-tight outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+        tone === null
+          ? 'bg-background transition-colors duration-fast hover:bg-muted active:bg-muted'
+          : cn(
+              CARD_TINT_CLASSES[tone],
+              'transition-[box-shadow,scale] duration-fast ease-out-quart hover:ring-1 hover:ring-foreground/20 active:scale-[0.98]'
+            ),
         appointment.status === 'cancelled' && 'line-through opacity-60'
       )}
     >
       <p className="truncate font-medium">
         <span className="font-mono tabular-nums">{appointment.startTime.slice(0, 5)}</span> {appointment.jobName}
       </p>
-      <p className="truncate text-muted-foreground">{appointment.clientName}</p>
+      <p className={cn('truncate', secondaryTextClass)}>{appointment.clientName}</p>
       <div className="flex flex-wrap items-center gap-1">
         <span className={cn('text-xs', statusTextClass)}>{status.label}</span>
         <PaymentStatePill state={appointment.paymentState} className="h-5 max-w-full min-w-0 overflow-hidden px-1.5 text-xs [&>svg]:size-3" />
