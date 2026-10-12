@@ -262,6 +262,8 @@ export function AppointmentForm({
     [jobs, selectedJobId]
   )
 
+  // Blank, invalid or over-cap overrides are ignored, so the estimate shows the calculated price.
+  const parsedOverride = parseDollarsToCents(priceOverride)
   const estimate = estimateAppointmentTotal({
     jobRateCents: selectedJob?.hourly_rate_cents ?? null,
     clientRules: clientJobRules[`${selectedClientId}:${selectedJobId}`] ?? [],
@@ -269,7 +271,7 @@ export function AppointmentForm({
     startTime: startTime || null,
     endTime: endTime || null,
     cleaners: selectedEmployeeIds.length,
-    overrideCents: parseDollarsToCents(priceOverride),
+    overrideCents: 'cents' in parsedOverride ? parsedOverride.cents : null,
   })
 
   const employeeNames = useMemo(

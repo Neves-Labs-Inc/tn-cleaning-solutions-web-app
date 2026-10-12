@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 
 import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
 import { setDraftLinePrice } from '@/lib/actions/invoices'
-import { parseDollarsToCents } from '@/lib/pricing/money'
+import { AMOUNT_TOO_LARGE_MESSAGE, parseDollarsToCents } from '@/lib/pricing/money'
 
 import { CONNECTION_ERROR_MESSAGE } from './invoice-detail-context'
 
@@ -75,8 +75,9 @@ export function useLineTotalEdit({ invoiceId, appointmentId, amountCents, onClos
   }
 
   async function save() {
-    if (parseDollarsToCents(value) === null) {
-      setFieldError(INVALID_AMOUNT_MESSAGE)
+    const amount = parseDollarsToCents(value)
+    if ('error' in amount) {
+      setFieldError(amount.error === 'too_large' ? AMOUNT_TOO_LARGE_MESSAGE : INVALID_AMOUNT_MESSAGE)
       return
     }
 

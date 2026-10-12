@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-import { parseDollarsToCents } from '@/lib/pricing/money'
+import { AMOUNT_TOO_LARGE_MESSAGE, parseDollarsToCents } from '@/lib/pricing/money'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 
@@ -60,9 +60,10 @@ function parseJobFormData(formData: FormData):
     fieldErrors.name = 'Name is required.'
   }
 
-  const hourlyRateCents = parseDollarsToCents(hourlyRateRaw)
-  if (hourlyRateCents === null) {
-    fieldErrors.hourly_rate_cents = 'Enter a valid hourly rate in dollars.'
+  const hourlyRate = parseDollarsToCents(hourlyRateRaw)
+  if ('error' in hourlyRate) {
+    fieldErrors.hourly_rate_cents =
+      hourlyRate.error === 'too_large' ? AMOUNT_TOO_LARGE_MESSAGE : 'Enter a valid hourly rate in dollars.'
   }
 
   let estimatedDurationMinutes: number | null = null
@@ -81,7 +82,7 @@ function parseJobFormData(formData: FormData):
     }
   }
 
-  if (hourlyRateCents === null || Object.keys(fieldErrors).length > 0) {
+  if ('error' in hourlyRate || Object.keys(fieldErrors).length > 0) {
     return {
       success: false,
       error: 'Please correct the highlighted fields.',
@@ -94,7 +95,7 @@ function parseJobFormData(formData: FormData):
     data: {
       name,
       description: descriptionRaw || null,
-      hourly_rate_cents: hourlyRateCents,
+      hourly_rate_cents: hourlyRate.cents,
       estimated_duration_minutes: estimatedDurationMinutes,
     },
   }

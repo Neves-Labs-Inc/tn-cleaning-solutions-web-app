@@ -2,29 +2,48 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
+  AMOUNT_TOO_LARGE_MESSAGE,
   durationMinutes,
   formatCents,
   formatRate,
   hourlyAmountCents,
+  MAX_AMOUNT_CENTS,
   parseDollarsToCents,
 } from '../../src/lib/pricing/money.ts'
 
-test('parseDollarsToCents converts well-formed dollar strings', () => {
-  assert.equal(parseDollarsToCents('0'), 0)
-  assert.equal(parseDollarsToCents('12'), 1200)
-  assert.equal(parseDollarsToCents('12.5'), 1250)
-  assert.equal(parseDollarsToCents('12.345'), 1235)
-  assert.equal(parseDollarsToCents('1e3'), 100000)
-  assert.equal(parseDollarsToCents(' 45 '), 4500)
+test('parseDollarsToCents converts plain decimal amounts to cents', () => {
+  assert.deepEqual(parseDollarsToCents('0'), { cents: 0 })
+  assert.deepEqual(parseDollarsToCents('12'), { cents: 1200 })
+  assert.deepEqual(parseDollarsToCents('12.5'), { cents: 1250 })
+  assert.deepEqual(parseDollarsToCents('12.'), { cents: 1200 })
+  assert.deepEqual(parseDollarsToCents('.5'), { cents: 50 })
+  assert.deepEqual(parseDollarsToCents(' 45 '), { cents: 4500 })
+  assert.deepEqual(parseDollarsToCents('12.345'), { cents: 1235 })
 })
 
-test('parseDollarsToCents returns null for absent, negative and unparseable input', () => {
-  assert.equal(parseDollarsToCents(''), null)
-  assert.equal(parseDollarsToCents('   '), null)
-  assert.equal(parseDollarsToCents('-1'), null)
-  assert.equal(parseDollarsToCents('abc'), null)
-  assert.equal(parseDollarsToCents('Infinity'), null)
-  assert.equal(parseDollarsToCents('12,50'), null)
+test('parseDollarsToCents accepts amounts up to $1,000,000.00 after rounding', () => {
+  assert.deepEqual(parseDollarsToCents('1000000'), { cents: 100000000 })
+  assert.deepEqual(parseDollarsToCents('1000000.004'), { cents: 100000000 })
+  assert.equal(MAX_AMOUNT_CENTS, 100000000)
+  assert.equal(AMOUNT_TOO_LARGE_MESSAGE, 'Enter an amount up to $1,000,000.00.')
+})
+
+test('parseDollarsToCents refuses amounts over $1,000,000.00 as too large', () => {
+  assert.deepEqual(parseDollarsToCents('1000000.01'), { error: 'too_large' })
+  assert.deepEqual(parseDollarsToCents('1000000.005'), { error: 'too_large' })
+  assert.deepEqual(parseDollarsToCents('99999999'), { error: 'too_large' })
+})
+
+test('parseDollarsToCents refuses empty, signed, formatted and non-decimal input as invalid', () => {
+  for (const raw of ['', '   ', '.', '-1', '+5', 'abc', 'Infinity', 'NaN', '1e3', '0x10', '12,50', '$5']) {
+    assert.deepEqual(parseDollarsToCents(raw), { error: 'invalid' }, `input ${JSON.stringify(raw)}`)
+  }
+})
+
+test('parseDollarsToCents rejects a long non-decimal input as invalid', () => {
+  const hostile = '1'.repeat(100_000) + 'x'
+
+  assert.deepEqual(parseDollarsToCents(hostile), { error: 'invalid' })
 })
 
 test('formatCents renders whole dollars, cents and thousands separators', () => {
