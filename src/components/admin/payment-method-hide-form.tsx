@@ -6,8 +6,9 @@ import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
 
 import SubmitButton from "@/components/ui/submit-button";
-import { useInvalidateAppointments } from "@/hooks/use-invalidate-appointments";
+import { useAppointmentsCache } from "@/hooks/use-appointments-cache";
 import { setPaymentMethodHidden } from "@/lib/actions/invoices";
+import { appointmentsKeys } from "@/lib/appointments/appointments-keys";
 import type { PaymentMethod } from "@/lib/invoices/ledger";
 
 type PaymentMethodHideFormProps = {
@@ -39,7 +40,7 @@ export default function PaymentMethodHideForm({
   onFailedChange,
 }: PaymentMethodHideFormProps): React.ReactNode {
   const willHide = !method.is_hidden;
-  const invalidateAppointments = useInvalidateAppointments();
+  const appointmentsCache = useAppointmentsCache();
 
   async function handleSubmit(formData: FormData): Promise<void> {
     onFailedChange(false);
@@ -53,7 +54,7 @@ export default function PaymentMethodHideForm({
     }
 
     if (isOk) {
-      void invalidateAppointments();
+      void appointmentsCache.refresh([appointmentsKeys.paymentMethods]);
       toast.success(
         willHide
           ? `"${method.name}" is hidden from the payment picker.`

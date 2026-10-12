@@ -414,4 +414,16 @@ describe("renameInAppointments", () => {
       ["Regular clean", "Deep clean"],
     );
   });
+
+  it("leaves a week stale when the refresh comes after the rename", async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(appointmentsKeys.week(OCT_11), [
+      scheduleRow({ id: "a", date: "2026-10-12", jobId: "deep" }),
+    ]);
+
+    renameInAppointments(queryClient, { kind: "job", id: "deep", name: "Deep clean+" });
+    await refreshAppointments(queryClient);
+
+    assert.equal(queryClient.getQueryState(appointmentsKeys.week(OCT_11))?.isInvalidated, true);
+  });
 });

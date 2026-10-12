@@ -6,8 +6,9 @@ import { Eye, Pencil, RotateCcw, Search, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
+import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { archiveClient, restoreClient } from '@/lib/actions/clients'
+import { appointmentsKeys } from '@/lib/appointments/appointments-keys'
 
 export type ClientWithLocationCount = {
 	id: string
@@ -32,11 +33,11 @@ function shortNotes(notes: string | null) {
 }
 
 function ClientCard({ client, archived }: { client: ClientWithLocationCount; archived?: boolean }) {
-	const invalidateAppointments = useInvalidateAppointments()
+	const appointmentsCache = useAppointmentsCache()
 	const action = async (_formData: FormData) => {
 		const result = await (archived ? restoreClient(client.id) : archiveClient(client.id))
-		// The Client filter lists only active clients, so a change shows on the next view.
-		if (result.success) void invalidateAppointments()
+		// The Client filter lists only active clients, so it needs the new set.
+		if (result.success) void appointmentsCache.refresh([appointmentsKeys.filterOptions])
 	}
 	const locationCount = getLocationCount(client)
 	return (

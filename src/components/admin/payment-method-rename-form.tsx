@@ -15,8 +15,9 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import SubmitButton from "@/components/ui/submit-button";
-import { useInvalidateAppointments } from "@/hooks/use-invalidate-appointments";
+import { useAppointmentsCache } from "@/hooks/use-appointments-cache";
 import { renamePaymentMethod } from "@/lib/actions/invoices";
+import { appointmentsKeys } from "@/lib/appointments/appointments-keys";
 import type { PaymentMethod } from "@/lib/invoices/ledger";
 import {
   findDuplicateMethod,
@@ -83,7 +84,7 @@ export default function PaymentMethodRenameForm({
   onClose,
 }: PaymentMethodRenameFormProps): React.ReactNode {
   const inputRef = useRef<HTMLInputElement>(null);
-  const invalidateAppointments = useInvalidateAppointments();
+  const appointmentsCache = useAppointmentsCache();
   const [failure, setFailure] = useState<RenameFailure | null>(null);
   // Controlled: React resets an uncontrolled field after a form action, losing the typed text.
   const [value, setValue] = useState(method.name);
@@ -112,7 +113,7 @@ export default function PaymentMethodRenameForm({
     }
 
     if (result?.success) {
-      void invalidateAppointments();
+      void appointmentsCache.refresh([appointmentsKeys.paymentMethods]);
       toast.success(
         `Renamed to "${name}". Past payments still show "${method.name}".`,
       );
