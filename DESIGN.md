@@ -82,6 +82,12 @@ Mapping (single source of truth lives in one `status-badge.tsx`, §10):
 | clock `clocked_out` | neutral |
 | time sheet open shift ("still clocked in") | warning |
 | invoice `draft` | neutral; `issued` info; `overdue` warning; `paid` success; `void` danger |
+| Payment state `unbilled` | warning |
+| Payment state `billed` | info |
+| Payment state `paid` | success |
+| appointment Not clocked | danger |
+
+Appointment cards and list rows are tinted with their tone via `appointmentCardTone` (Not clocked wins over the Payment state; Cancelled and appointments with no Payment state stay untinted). The surface classes live in `CARD_TINT_CLASSES` in `status-badge.tsx`.
 
 ### 3.3 Dark mode
 

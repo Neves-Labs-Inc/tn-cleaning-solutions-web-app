@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import ResponsiveDialog from '@/components/ui/responsive-dialog'
+import { appointmentCardTone, CARD_TINT_CLASSES } from '@/components/ui/status-badge'
 import type { ScheduleAppointment } from '@/lib/appointments/overview'
 import { cn } from '@/lib/utils'
 
@@ -47,18 +48,23 @@ export default function AppointmentsDayDialog({
         <p className="text-sm text-muted-foreground">No appointments on this day.</p>
       ) : (
         <ul className="divide-y overflow-hidden rounded-lg border">
-          {appointments.map((appointment, index) => (
-            <li
-              key={appointment.id}
-              className={cn(
-                'flex items-stretch',
-                index < ANIMATED_ROWS && 'animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-backwards duration-base'
-              )}
-              style={index < ANIMATED_ROWS ? { animationDelay: `${index * ROW_STAGGER_MS}ms` } : undefined}
-            >
-              <AppointmentRowLink appointment={appointment} hasUnpricedTag={false} variant="stacked" />
-            </li>
-          ))}
+          {appointments.map((appointment, index) => {
+            const tone = appointmentCardTone(appointment)
+
+            return (
+              <li
+                key={appointment.id}
+                className={cn(
+                  'flex items-stretch transition-colors duration-base',
+                  tone && CARD_TINT_CLASSES[tone],
+                  index < ANIMATED_ROWS && 'animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-backwards duration-base'
+                )}
+                style={index < ANIMATED_ROWS ? { animationDelay: `${index * ROW_STAGGER_MS}ms` } : undefined}
+              >
+                <AppointmentRowLink appointment={appointment} hasUnpricedTag={false} variant="stacked" />
+              </li>
+            )
+          })}
         </ul>
       )}
       <div className="sticky bottom-0 -mx-4 mt-3 border-t bg-popover px-4 pt-3 pb-1">
