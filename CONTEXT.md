@@ -158,7 +158,7 @@ What clients owe: the total of every issued invoice. An issued invoice with no d
 _Avoid_: open (it hid overdue invoices), receivable balance
 
 **Unbilled appointment**:
-An appointment completed after launch that is not cancelled and has no Live claim. It includes Excluded appointments, shown like any other, and Unpriced appointments, shown with a tag so they aren't forgotten.
+A completed appointment that is not archived and has no Live claim. It includes Excluded appointments, shown like any other, and Unpriced appointments, shown with a tag so they aren't forgotten.
 _Avoid_: uninvoiced, missed appointment, visit
 
 **Payment state**:

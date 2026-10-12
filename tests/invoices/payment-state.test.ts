@@ -58,13 +58,13 @@ describe("paymentStateOf", () => {
     assert.equal(state, "unbilled");
   });
 
-  it("has no state when completed before launch with no Live claim", () => {
+  it("is unbilled when completed with a null completed_at and no Live claim", () => {
     const state = paymentStateOf({
       status: "completed",
       completed_at: null,
       claim: null,
     });
-    assert.equal(state, null);
+    assert.equal(state, "unbilled");
   });
 
   it("has no state when not completed and not claimed", () => {

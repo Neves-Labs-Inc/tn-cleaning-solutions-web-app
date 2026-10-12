@@ -22,14 +22,13 @@ type Db = SupabaseClient<Database>
 
 type MonthRow = PriceableAppointment & {
   status: AppointmentStatus
-  completed_at: string | null
   clients: { name: string } | null
   jobs: { name: string } | null
 }
 
 const MONTH_COLUMNS = `
   ${APPOINTMENT_PRICE_COLUMNS},
-  status, completed_at,
+  status,
   clients!inner ( name ),
   jobs!inner ( name )
 `
@@ -76,7 +75,7 @@ export async function listRangeAppointments(
       endTime: row.scheduled_end_time,
       status: row.status,
       priceCents: displayedCents(prices.get(row.id)?.display),
-      paymentState: paymentStateOf({ status: row.status, completed_at: row.completed_at, claim }),
+      paymentState: paymentStateOf({ status: row.status, claim }),
       claim,
       isNotClocked: isNotClocked(
         { status: row.status, scheduledDate: row.scheduled_date, endTime: row.scheduled_end_time },

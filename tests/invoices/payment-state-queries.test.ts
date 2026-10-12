@@ -186,14 +186,13 @@ describe("listNeedsBilling", () => {
     ]);
   });
 
-  it("leaves out claimed, unfinished, archived and pre-launch appointments", async () => {
+  it("leaves out claimed, unfinished, and archived appointments", async () => {
     const { db } = createFakeSupabase({
       appointments: [
         appointment({ id: "claimed", live: [{ is_archived: false, cancelled_at: null }] }),
         appointment({ id: "scheduled", status: "scheduled", completedAt: null }),
         appointment({ id: "cancelled", status: "cancelled" }),
         appointment({ id: "archived", isArchived: true }),
-        appointment({ id: "pre-launch", completedAt: null }),
         appointment({ id: "released", live: [{ is_archived: true, cancelled_at: null }] }),
         appointment({ id: "cancelled-line", live: [{ is_archived: false, cancelled_at: "2026-10-08T12:00:00Z" }] }),
       ],
@@ -204,6 +203,19 @@ describe("listNeedsBilling", () => {
     assert.deepEqual(
       rows.map((row) => row.id),
       ["cancelled-line", "released"],
+    );
+  });
+
+  it("includes a completed appointment whose completed_at is null", async () => {
+    const { db } = createFakeSupabase({
+      appointments: [appointment({ id: "pre-launch", completedAt: null })],
+    });
+
+    const rows = await listNeedsBilling(db);
+
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      ["pre-launch"],
     );
   });
 

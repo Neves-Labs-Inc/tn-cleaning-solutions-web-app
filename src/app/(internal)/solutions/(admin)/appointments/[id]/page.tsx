@@ -34,7 +34,6 @@ type AppointmentDetailPageProps = {
 
 type AppointmentDetailRow = PriceableAppointment & {
   status: AppointmentStatus
-  completed_at: string | null
   manually_completed: boolean
   notes: string
   is_archived: boolean
@@ -88,7 +87,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
     .select(
       `
         ${APPOINTMENT_PRICE_COLUMNS},
-        status, completed_at, manually_completed, notes, is_archived,
+        status, manually_completed, notes, is_archived,
         clients!inner ( id, name, phone, email ),
         jobs!inner ( id, name, estimated_duration_minutes, description ),
         client_locations ( id, label, address ),

@@ -63,7 +63,7 @@ describe('listMonthAppointments', () => {
     const { db } = createFakeSupabase({
       appointments: [
         appointment({ id: 'oct-9-paid', date: '2026-10-09' }),
-        appointment({ id: 'oct-7-afternoon', start: '13:00:00', end: '15:30:00' }),
+        appointment({ id: 'oct-7-afternoon', start: '13:00:00', end: '15:30:00', completedAt: null }),
         appointment({ id: 'oct-7-on-draft' }),
         appointment({ id: 'oct-20-upcoming', date: '2026-10-20', status: 'scheduled', completedAt: null, hourlyRateCents: null }),
       ],
