@@ -19,7 +19,9 @@ import { createClient } from '@/lib/supabase/server'
 // return. Every business rule lives in src/lib/invoices and the SQL functions behind it.
 
 export type InvoiceActionResult<T = null> =
-  | { success: true; data: T }
+  // appointmentIds: every appointment whose Payment state, claim or price the change may have moved,
+  // so the client can patch its appointments cache instead of discarding it.
+  | { success: true; data: T; appointmentIds: string[] }
   | { success: false; error: string; code: LedgerErrorCode }
 
 const INVOICES_PATH = '/solutions/invoices'
@@ -134,11 +136,25 @@ function revalidateInvoicing(invoiceId?: string) {
   }
 }
 
-function toActionResult<T>(result: LedgerResult<T>): InvoiceActionResult<T> {
-  if (result.ok) return { success: true, data: result.data }
+function toRefusal(failure: Extract<LedgerResult<unknown>, { ok: false }>): Refusal {
+  const error = failure.code === 'unknown' ? UNKNOWN_ERROR_MESSAGE : failure.message
+  return { success: false, error, code: failure.code }
+}
 
-  const error = result.code === 'unknown' ? UNKNOWN_ERROR_MESSAGE : result.message
-  return { success: false, error, code: result.code }
+function toActionResult<T>(result: LedgerResult<T>, appointmentIds: string[] = []): InvoiceActionResult<T> {
+  if (result.ok) return { success: true, data: result.data, appointmentIds }
+  return toRefusal(result)
+}
+
+// The appointments on these invoices, read before the change: a line can leave the invoice with it.
+// A failed read refuses here, before anything is written.
+async function readTouched(
+  ledger: InvoiceLedger,
+  invoiceIds: string[]
+): Promise<{ appointmentIds: string[] } | { refusal: Refusal }> {
+  const result = await ledger.appointmentIdsOn(invoiceIds)
+  if (!result.ok) return { refusal: toRefusal(result) }
+  return { appointmentIds: result.data }
 }
 
 // Returns the new id instead of redirecting, so the page can toast "Draft created" before it navigates.
@@ -156,7 +172,7 @@ export async function createInvoice(_previous: unknown, formData: FormData): Pro
   if (!result.ok) return toActionResult(result)
 
   revalidateInvoicing()
-  return toActionResult(result)
+  return toActionResult(result, appointmentIds)
 }
 
 // Takes the visits added and removed against what the page loaded, and the due date and notes only
@@ -181,7 +197,7 @@ export async function updateDraft(
   // pages are dynamic, so they read fresh when navigated to.
   const isDeleted = result.ok && result.data.isDeleted
   if (!isDeleted) revalidateInvoicing(invoiceId)
-  return toActionResult(result)
+  return toActionResult(result, [...addAppointmentIds, ...removeAppointmentIds])
 }
 
 // Posts invoice_id, appointment_id and either amount (dollars; $0 is valid) or clear=1, which
@@ -209,7 +225,7 @@ export async function setDraftLinePrice(_previous: unknown, formData: FormData):
     revalidateInvoicing(invoiceId)
     revalidatePath(`${APPOINTMENTS_PATH}/${appointmentId}`)
   }
-  return toActionResult(result)
+  return toActionResult(result, [appointmentId])
 }
 
 export async function issueInvoice(
@@ -223,9 +239,12 @@ export async function issueInvoice(
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
 
+  const touched = await readTouched(admin.ledger, [invoiceId])
+  if ('refusal' in touched) return touched.refusal
+
   const result = await admin.ledger.issue(invoiceId, dueDate)
   revalidateInvoicing(invoiceId)
-  return toActionResult(result)
+  return toActionResult(result, touched.appointmentIds)
 }
 
 export async function bulkIssueInvoices(_previous: unknown, formData: FormData): Promise<InvoiceActionResult<BulkIssueOutcome>> {
@@ -236,9 +255,13 @@ export async function bulkIssueInvoices(_previous: unknown, formData: FormData):
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
 
+  // Every requested draft, not only the ones that issue: re-reading a skipped draft's rows is harmless.
+  const touched = await readTouched(admin.ledger, invoiceIds)
+  if ('refusal' in touched) return touched.refusal
+
   const result = await admin.ledger.bulkIssue(invoiceIds, dueDate)
   revalidateInvoicing()
-  return toActionResult(result)
+  return toActionResult(result, touched.appointmentIds)
 }
 
 export async function voidInvoice(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
@@ -248,9 +271,12 @@ export async function voidInvoice(_previous: unknown, formData: FormData): Promi
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
 
+  const touched = await readTouched(admin.ledger, [invoiceId])
+  if ('refusal' in touched) return touched.refusal
+
   const result = await admin.ledger.voidInvoice(invoiceId)
   revalidateInvoicing(invoiceId)
-  return toActionResult(result)
+  return toActionResult(result, touched.appointmentIds)
 }
 
 export async function recordPayment(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
@@ -261,9 +287,12 @@ export async function recordPayment(_previous: unknown, formData: FormData): Pro
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
 
+  const touched = await readTouched(admin.ledger, [invoiceId])
+  if ('refusal' in touched) return touched.refusal
+
   const result = await admin.ledger.recordPayment(invoiceId, input)
   revalidateInvoicing(invoiceId)
-  return toActionResult(result)
+  return toActionResult(result, touched.appointmentIds)
 }
 
 // Mark paid: the appointments' new invoice is created issued and paid. Posts client_id,
@@ -294,7 +323,7 @@ export async function markAppointmentsPaid(
   for (const appointmentId of appointmentIds) {
     revalidatePath(`${APPOINTMENTS_PATH}/${appointmentId}`)
   }
-  return toActionResult(result)
+  return toActionResult(result, appointmentIds)
 }
 
 export async function updatePayment(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
@@ -305,9 +334,12 @@ export async function updatePayment(_previous: unknown, formData: FormData): Pro
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
 
+  const touched = await readTouched(admin.ledger, [invoiceId])
+  if ('refusal' in touched) return touched.refusal
+
   const result = await admin.ledger.updatePayment(invoiceId, input)
   revalidateInvoicing(invoiceId)
-  return toActionResult(result)
+  return toActionResult(result, touched.appointmentIds)
 }
 
 export async function undoPayment(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
@@ -317,9 +349,12 @@ export async function undoPayment(_previous: unknown, formData: FormData): Promi
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
 
+  const touched = await readTouched(admin.ledger, [invoiceId])
+  if ('refusal' in touched) return touched.refusal
+
   const result = await admin.ledger.undoPayment(invoiceId)
   revalidateInvoicing(invoiceId)
-  return toActionResult(result)
+  return toActionResult(result, touched.appointmentIds)
 }
 
 export async function archiveInvoice(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
@@ -329,9 +364,12 @@ export async function archiveInvoice(_previous: unknown, formData: FormData): Pr
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
 
+  const touched = await readTouched(admin.ledger, [invoiceId])
+  if ('refusal' in touched) return touched.refusal
+
   const result = await admin.ledger.archive(invoiceId)
   revalidateInvoicing(invoiceId)
-  return toActionResult(result)
+  return toActionResult(result, touched.appointmentIds)
 }
 
 export async function unarchiveInvoice(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
@@ -341,9 +379,12 @@ export async function unarchiveInvoice(_previous: unknown, formData: FormData): 
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
 
+  const touched = await readTouched(admin.ledger, [invoiceId])
+  if ('refusal' in touched) return touched.refusal
+
   const result = await admin.ledger.unarchive(invoiceId)
   revalidateInvoicing(invoiceId)
-  return toActionResult(result)
+  return toActionResult(result, touched.appointmentIds)
 }
 
 export async function setClientAutomaticInvoicing(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {

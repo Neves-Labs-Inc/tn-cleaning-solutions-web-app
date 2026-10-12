@@ -1,7 +1,7 @@
 import { useOptimistic, useState } from 'react'
 import { toast } from 'sonner'
 
-import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
+import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { bulkIssueInvoices } from '@/lib/actions/invoices'
 import type { LedgerListRow } from '@/lib/invoices/view'
 
@@ -35,7 +35,7 @@ export function useBulkIssue(rows: LedgerListRow[], onDone: () => void): BulkIss
   // back until it finishes, so the controls would never disable while the call is in flight.
   const [isPending, setOptimisticPending] = useOptimistic(false)
   const [skips, setSkips] = useState<BulkIssueSkips | null>(null)
-  const invalidateAppointments = useInvalidateAppointments()
+  const { applyChanges } = useAppointmentsCache()
 
   function changeDueDate(value: string): void {
     setDueDate(value)
@@ -61,7 +61,7 @@ export function useBulkIssue(rows: LedgerListRow[], onDone: () => void): BulkIss
         return
       }
 
-      void invalidateAppointments()
+      void applyChanges(result.appointmentIds)
       const { issued, skipped } = result.data
       if (issued.length > 0) {
         toast.success(`Issued ${issued.length} ${pluralInvoices(issued.length)}`)
