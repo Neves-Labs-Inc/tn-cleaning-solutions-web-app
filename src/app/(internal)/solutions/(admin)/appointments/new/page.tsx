@@ -1,8 +1,11 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
+import { AppointmentFormLoadError } from '@/components/admin/appointment-form-load-error'
 import { AppointmentForm } from '@/components/admin/appointment-form'
 import { AppointmentScheduleContext } from '@/components/admin/new-appointment-schedule-context'
+import { Button } from '@/components/ui/button'
+import PageHeader from '@/components/ui/page-header'
 import { toBusinessWallClock } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 
@@ -69,31 +72,26 @@ export default async function NewAppointmentPage({ searchParams }: NewAppointmen
   const loadError = clientsError ?? jobsError ?? employeesError
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
-      <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-        <div className="space-y-3">
-          <Link
-            href="/solutions/appointments"
-            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
-          >
-            <ArrowLeft className="size-3.5" aria-hidden="true" />
-            Back to Appointments
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-neutral-950">New Appointment</h1>
-            <p className="mt-2 text-sm text-neutral-600">Create a one-time or recurring appointment.</p>
-          </div>
-        </div>
-      </section>
+    <div className="mx-auto max-w-7xl space-y-6 lg:space-y-8">
+      <div className="space-y-3">
+        <Button
+          variant="ghost"
+          className="-ml-3 transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] active:bg-muted"
+          nativeButton={false}
+          render={<Link href="/solutions/appointments" />}
+        >
+          <ArrowLeft aria-hidden="true" />
+          Appointments
+        </Button>
+        <PageHeader title="New appointment" description="Create a one-time or recurring appointment." />
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)] lg:items-stretch">
         <AppointmentScheduleContext initialMonth={selectedMonth} initialYear={selectedYear} />
 
-        <div className="lg:[&>section]:h-full">
+        <div>
           {loadError ? (
-            <section className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {loadError.message}
-            </section>
+            <AppointmentFormLoadError title="Couldn't load the appointment form" description={loadError.message} />
           ) : (
             <AppointmentForm
               clients={(clients ?? []).map((client) => ({

@@ -3,9 +3,12 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, TriangleAlert } from 'lucide-react'
 import type { PostgrestError } from '@supabase/supabase-js'
 
+import { AppointmentFormLoadError } from '@/components/admin/appointment-form-load-error'
 import { AppointmentForm, type InvoiceClaim } from '@/components/admin/appointment-form'
 import { AppointmentScheduleContext } from '@/components/admin/new-appointment-schedule-context'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import PageHeader from '@/components/ui/page-header'
 import {
   APPOINTMENT_PRICE_COLUMNS,
   priceAppointments,
@@ -177,31 +180,31 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
   const scheduledYear = Number(scheduledYearValue)
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
-      <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-        <div className="space-y-3">
-          <Link
-            href={`/solutions/appointments/${id}`}
-            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
-          >
-            <ArrowLeft className="size-3.5" aria-hidden="true" />
-            Back to Appointment
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-neutral-950">Edit Appointments</h1>
-            <p className="mt-2 text-sm text-neutral-600">Update schedule details and team assignments.</p>
-            {price ? (
-              <p className="mt-1 text-sm text-neutral-600">
-                Current price:{' '}
-                <span className="font-semibold text-neutral-900">{formatDisplayPrice(price.display)}</span>
-              </p>
-            ) : null}
-          </div>
+    <div className="mx-auto max-w-7xl space-y-6 lg:space-y-8">
+      <div className="space-y-3">
+        <Button
+          variant="ghost"
+          className="-ml-3 transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] active:bg-muted"
+          nativeButton={false}
+          render={<Link href={`/solutions/appointments/${id}`} />}
+        >
+          <ArrowLeft aria-hidden="true" />
+          Appointment
+        </Button>
+        <div className="space-y-1">
+          <PageHeader title="Edit appointment" description="Update schedule details and team assignments." />
+          {price ? (
+            <p className="text-sm text-muted-foreground">
+              Current price:{' '}
+              <span className="font-semibold tabular-nums text-foreground">{formatDisplayPrice(price.display)}</span>
+            </p>
+          ) : null}
         </div>
-      </section>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(20rem,24rem)_minmax(0,1fr)] lg:items-start">
         <AppointmentScheduleContext
+          key={id}
           initialMonth={scheduledMonth}
           initialYear={scheduledYear}
           currentAppointmentId={id}
@@ -209,9 +212,7 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
         />
 
         {loadErrorMessage ? (
-          <section className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {loadErrorMessage}
-          </section>
+          <AppointmentFormLoadError title="Couldn't load this appointment" description={loadErrorMessage} />
         ) : !canEdit(typedAppointment.status) ? (
           <Alert role="status" className={WARNING_ALERT_CLASSES}>
             <TriangleAlert aria-hidden="true" />
@@ -246,7 +247,7 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
   )
 }
 
-const CREW_CLOCKS_ERROR_MESSAGE = "Couldn't load this appointment's clocks. Refresh the page to try again."
+const CREW_CLOCKS_ERROR_MESSAGE = "Couldn't load this appointment's clocks. Try again."
 
 const WARNING_ALERT_CLASSES = 'border-status-warning-border bg-status-warning text-status-warning-foreground'
 
