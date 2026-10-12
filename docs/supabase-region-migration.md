@@ -1,8 +1,9 @@
 # Supabase region migration runbook (Oregon to Montreal)
 
 Moves production from the Oregon Supabase project (old) to the empty Montreal
-(ca-central-1) project (new). Both are on the Free plan, hosting is Vercel, and
-the business is in Toronto (Eastern time). Written to be followed alone.
+(ca-central-1) project (new). Both are on the Free plan, hosting is Vercel
+(deployed by a GitHub Actions workflow, see `docs/deployment.md`), and the
+business is in Toronto (Eastern time). Written to be followed alone.
 
 Terms: **old** = Oregon, **new** = Montreal. The cutover is a hard switch with
 read-only downtime; nothing is written to Oregon after step 1.
@@ -20,10 +21,15 @@ read-only downtime; nothing is written to Oregon after step 1.
 | Dump | ~5 min |
 | Restore | ~5 min |
 | Verify + auth-diff | ~3 min |
-| Vercel env + merge + build | ~5-8 min |
+| Vercel env + GitHub secrets | ~3 min |
+| Merge, CI (app + db), deploy job | ~10-15 min |
 | Smoke test | ~5 min |
 
-Total about 25-30 minutes. Abort if the clock passes 45 minutes (section 5).
+Total about 35-40 minutes. The merge step is a GitHub Actions run: CI
+(`app` and `db` jobs) then the `deploy` job (link, `db push`, Vercel build and
+deploy); re-time it from your last merge to main. Abort if the clock passes 45
+minutes **before you merge** (section 5); once merged, follow the deploy run
+and use Rollback only if it fails or the smoke test does.
 
 - The day before, re-time the dump by running `npm run migration:dump` **without**
   read-only (it only reads). Adjust the estimates and the window. Delete that
@@ -46,6 +52,9 @@ Install before the night:
 - The **Vercel CLI** (`npm i -g vercel`), `vercel login`, and the checkout
   linked to the project (`vercel link`) so `vercel env` knows which project to
   change.
+- Admin access to the GitHub repo's **Production environment** secrets
+  (Settings > Environments > Production); you will change two of them.
+  Have the Montreal project ref and DB password handy.
 - A Supabase **personal access token** (dashboard > Account > Access Tokens).
 - The **Session pooler** connection string for both projects (dashboard >
   Connect). Reset the database password in Project Settings > Database if you
@@ -119,28 +128,46 @@ Any `FAIL` exits 1 and must be resolved before the night:
   dashboard on Montreal. Drop the extension on Oregon if it is unused, or
   contact Supabase support.
 
-### Vercel
+### Vercel and GitHub
 
-ADD the new keys now with Montreal values, for Production, Preview and
-Development. Leave the old variables and `NEXT_PUBLIC_SUPABASE_URL` alone;
-existing deployments keep their snapshot of the environment.
+Vercel Git deploys are off (`vercel.json`), so there are no preview builds;
+production is deployed only by the `deploy` job on a push to main, which runs
+`vercel pull --environment=production`. Only the **Production** environment
+matters.
+
+ADD the new keys now with Montreal values. Leave the old variables and
+`NEXT_PUBLIC_SUPABASE_URL` alone; the live deployment keeps its snapshot of
+the environment and nothing rebuilds until the merge.
 
 ```bash
 vercel env add NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY production
-vercel env add NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY preview
-vercel env add NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY development
 vercel env add SUPABASE_SECRET_KEY production
-vercel env add SUPABASE_SECRET_KEY preview
-vercel env add SUPABASE_SECRET_KEY development
 ```
 
 (Paste the Montreal publishable / secret key when prompted.)
 
 Finally:
 
-- Make the feature PR green (lint, test, build) but **do not merge it**.
+- Update the PR branch with main and make it green (CI `app` and `db`), but
+  **do not merge it**.
+- Check Oregon already has every migration in the repo. From the PR checkout:
+
+  ```bash
+  npx supabase@2.120.0 migration list --db-url "$OLD_DB_URL"
+  ```
+
+  Every row must have both a `Local` and a `Remote` version. A row with only
+  `Local` is a migration main ships that Oregon never got: the deploy job would
+  apply it to Montreal unattended on the night. Bring Oregon up to date first
+  (`docs/deployment.md`, One-time setup step 1), then re-check. Re-run this
+  after any later merge to main.
 - Note the **current production deployment ID** in Vercel (Deployments). It is
   the rollback target.
+- Read the `deploy` job in `.github/workflows/ci.yml`: it uses the GitHub
+  `Production` secrets `SUPABASE_PROJECT_ID`, `SUPABASE_DB_PASSWORD`,
+  `SUPABASE_ACCESS_TOKEN`, then `supabase db push --linked --yes`. Write down
+  the **Oregon** values of `SUPABASE_PROJECT_ID` and `SUPABASE_DB_PASSWORD`
+  (you need them for Rollback; GitHub never shows secrets again).
 
 ## 4. Cutover
 
@@ -238,33 +265,60 @@ npm run migration:auth-diff
 Re-run now that nothing should have changed: exit 0 plus the manual-check list
 you already verified.
 
-### 4.6 Point the app at Montreal (Vercel)
+### 4.6 Point the app at Montreal (Vercel and GitHub)
 
-Replace `NEXT_PUBLIC_SUPABASE_URL` with the Montreal URL in all three
-environments:
+Do both, before merging.
+
+**Vercel:** replace `NEXT_PUBLIC_SUPABASE_URL` for Production with the Montreal
+URL:
 
 ```bash
-for env in production preview development; do
-  vercel env update NEXT_PUBLIC_SUPABASE_URL "$env" --yes   # paste the Montreal URL
-done
+vercel env update NEXT_PUBLIC_SUPABASE_URL production --yes   # paste the Montreal URL
+vercel env ls production
 ```
 
-`vercel env update <name> <environment>` replaces the value in place. If it
-errors because the variable doesn't exist for an environment, use
-`vercel env add NEXT_PUBLIC_SUPABASE_URL <environment>` instead. (If you
-prefer `vercel env rm <name> <environment> --yes` then `add`: a variable
-created in the dashboard with all three targets is one record, so a "not
-found" from `rm` on preview/development after production's `rm` is fine.)
-Check with `vercel env ls`.
-
-The publishable and secret keys were added in section 3. This branch's code
-reads `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and
+(`vercel env update <name> <environment>` replaces the value in place. If it
+says the variable doesn't exist for production, use
+`vercel env add NEXT_PUBLIC_SUPABASE_URL production`, or `vercel env rm
+NEXT_PUBLIC_SUPABASE_URL production --yes` then `add`.) The publishable and
+secret keys were added in section 3. This branch's code reads
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and
 `SUPABASE_SECRET_KEY`; the old anon/service-role names are no longer used.
+
+**GitHub:** Settings > Environments > Production > update the secrets
+`SUPABASE_PROJECT_ID` (Montreal ref, same as `NEW_PROJECT_REF`) and
+`SUPABASE_DB_PASSWORD` (Montreal DB password). **Do this before merging**:
+otherwise the deploy job links Oregon, its `db push` no-ops green (nothing
+pending, so read-only doesn't stop it), the cutover looks fine, and every later
+migration silently targets Oregon. `SUPABASE_ACCESS_TOKEN` is account-wide and
+needs no change.
+
+**Check the push will be a no-op.** From the PR checkout, up to date with main:
+
+```bash
+npx supabase@2.120.0 db push --dry-run --db-url "$NEW_DB_URL"
+```
+
+It must report the remote database is up to date. Montreal got Oregon's
+migration history (verify compared it), so anything listed here is a migration
+main ships that Oregon never had. If it lists any, **do not merge**: abort
+(section 5, PR not merged). Once merged, the deploy job applies them with
+`--yes` and nothing can stop it.
 
 ### 4.7 Merge and deploy
 
-Merge the PR. That triggers the Vercel production build. Wait for **Ready**.
-(Merging and deploying happen inside the window: it is part of the hard switch.)
+Merge the PR. That starts a main run: CI (`app`, `db`), then the `deploy` job.
+Watch it in the Actions tab; the deploy is live when the job finishes green and
+Vercel shows the new production deployment as Ready. Merging and deploying
+happen inside the window: it is part of the hard switch.
+
+In the job log, check the **Link the prod Supabase project** step names the
+Montreal ref (`NEW_PROJECT_REF`), not Oregon's. The **Migrate the prod
+database** step (`supabase db push --linked --yes`) should report the remote
+database is up to date: a no-op, as the 4.6 dry run showed. If the link or
+push step fails, the job stops before the Vercel deploy, so the app is still on
+Oregon: read the error, then either re-run the failed job after fixing the
+secret, or Rollback (section 6, secrets and Oregon read-only handling).
 
 ### 4.8 Smoke test
 
@@ -285,22 +339,25 @@ There is no rehearsal, so decide in advance. **Abort** if:
 
 - restore fails twice, or
 - verify shows any `MISMATCHES:` line (or a drift line you can't explain), or
-- the clock passes 45 minutes.
+- the clock passes 45 minutes before you merge.
 
 **If the PR is not merged yet:** run `npm run migration:readonly-off` (Oregon
 is writable again; it ends read-only sessions and probes a write). If you
-already changed `NEXT_PUBLIC_SUPABASE_URL`, set it back to the Oregon URL in
-all three environments. The app is back on Oregon and you are done.
+already changed Vercel's `NEXT_PUBLIC_SUPABASE_URL` or the GitHub
+`SUPABASE_PROJECT_ID` / `SUPABASE_DB_PASSWORD` secrets, set them back to the
+Oregon values. The app is back on Oregon and you are done (nothing deployed).
 
 **If the PR is merged:** follow section 6, Rollback.
 
 **Retrying a restore:** the single transaction rolls back, so Montreal is
 empty. Re-run `npm run migration:preflight` (its empty check) before retrying.
 
-**If Montreal is not empty after any abort past 4.3** (fully restored, or somehow partly populated; preflight and restore refuse a non-empty target): delete the project in the
-dashboard, create a new empty one in Canada Central, update `NEW_DB_URL` and
-`NEW_PROJECT_REF`, the Vercel publishable/secret (and URL) values, and redo the
-Montreal checklist in section 3.
+**If Montreal is not empty after any abort past 4.3** (fully restored, or
+somehow partly populated; preflight and restore refuse a non-empty target):
+delete the project in the dashboard, create a new empty one in Canada Central,
+update `NEW_DB_URL` and `NEW_PROJECT_REF`, the Vercel publishable/secret (and
+URL) values, the GitHub `SUPABASE_PROJECT_ID` and `SUPABASE_DB_PASSWORD`
+secrets, and redo the Montreal checklist in section 3.
 
 Known restore errors and fixes are in the Supabase guide:
 <https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore>
@@ -311,37 +368,56 @@ and retry (empty check first).
 
 ## 6. Rollback (any time within 7 days)
 
+Know this first: a `git revert` pushed to main runs the same workflow, so its
+`deploy` job does `supabase db push --linked` against whatever
+`SUPABASE_PROJECT_ID` holds, and `vercel pull --environment=production` builds
+with whatever Vercel production variables are set then. Both must point at
+Oregon (and Oregon must be writable) **before the revert lands**.
+
 Vercel facts (from the Vercel docs, Instant Rollback page): Hobby can roll back
 only to the *immediately previous* production deployment; Pro/Enterprise can
 pick any previously production-aliased one. Instant Rollback restores the old
 deployment as built and does not change environment variables. After a
-rollback, Vercel turns off auto-assignment of production domains, so new
-pushes do not go live until you undo the rollback by promoting a deployment
-(dashboard **Undo Rollback**, or `vercel promote <deployment-id-or-url>`).
+rollback, Vercel turns off auto-assignment of production domains, so a later
+production deployment, including the Action's, may not go live until you
+undo the rollback by promoting a deployment (dashboard **Undo Rollback**, or
+`vercel promote <deployment-id-or-url>`).
 
-1. Vercel **Instant Rollback** to the pre-cutover production deployment noted
-   in section 3. If Vercel doesn't offer it (Hobby, or anything else reached
-   production since), skip it: steps 2 and 4 do the same job with one build.
-2. Set `NEXT_PUBLIC_SUPABASE_URL` back to the Oregon URL in all environments
-   (`vercel env update NEXT_PUBLIC_SUPABASE_URL <environment> --yes`). The old
+1. If you need the old app back immediately: Vercel **Instant Rollback** to the
+   pre-cutover production deployment noted in section 3. **Skip this if that
+   deployment is still the current production one** (the deploy job failed
+   before its Vercel step); on Hobby, Instant Rollback would then go to an even
+   older deployment. Also skip it if Vercel doesn't offer it (Hobby, or another
+   production deployment since); the revert build in step 5 does the same job.
+2. GitHub > Settings > Environments > Production: set `SUPABASE_PROJECT_ID` and
+   `SUPABASE_DB_PASSWORD` back to the Oregon values you wrote down.
+3. Vercel Production: set `NEXT_PUBLIC_SUPABASE_URL` back to the Oregon URL
+   (`vercel env update NEXT_PUBLIC_SUPABASE_URL production --yes`). The old
    `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` still hold
    Oregon values until day 7; nothing to do for them.
-3. `npm run migration:readonly-off` against Oregon (same exports as section 2).
+4. `npm run migration:readonly-off` against Oregon (same exports as section 2).
    If Free auto-pause paused the project, restore it from the dashboard first.
-4. `git revert` the merge on main. When that build is Ready, **promote** it to
-   production (`vercel promote <deployment-id-or-url>` or **Undo Rollback**),
-   because after an Instant Rollback new production builds are not
-   auto-assigned. This also re-enables normal deploys for any later attempt.
-5. Rows written in Montreal since cutover must be re-entered by hand.
+5. `git revert` the merge on main and push (via PR; the main ruleset requires
+   one). The Action redeploys the old code against Oregon. When its deployment
+   is Ready, check it is the live production deployment; if not (after an
+   Instant Rollback), **promote** it (`vercel promote <deployment-id-or-url>`
+   or **Undo Rollback**). This also re-enables normal deploys for any later
+   attempt.
+6. Rows written in Montreal since cutover must be re-entered by hand.
 
 ## 7. Day 7 decommission
 
 Only after a week with no rollback:
 
+- Confirm the GitHub `Production` secrets `SUPABASE_PROJECT_ID` and
+  `SUPABASE_DB_PASSWORD` point at Montreal (they must: every deploy runs
+  `db push` against them), before deleting Oregon.
 - Delete the Oregon project in the dashboard.
 - `vercel env rm` the old `NEXT_PUBLIC_SUPABASE_ANON_KEY` and
-  `SUPABASE_SERVICE_ROLE_KEY` (all environments).
+  `SUPABASE_SERVICE_ROLE_KEY` (Production).
 - Securely delete `MIGRATION_DIR` (it holds password hashes and PII), e.g.
   `rm -rf "$MIGRATION_DIR"`.
-- Revoke the personal access token.
+- Revoke the migration personal access token, **unless** it is also the
+  GitHub `SUPABASE_ACCESS_TOKEN` secret (the deploy job needs it); in that case
+  keep it, or create a new one and update the secret first.
 - Update `.env.local` on dev machines (`docs/local-setup.md`).
