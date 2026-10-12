@@ -6,7 +6,12 @@ import { format, parseISO } from 'date-fns'
 
 import { Checkbox } from '@/components/ui/checkbox'
 import PaymentStatePill from '@/components/ui/payment-state-pill'
-import StatusBadge, { appointmentDisplayBadge, lineStateBadge } from '@/components/ui/status-badge'
+import StatusBadge, {
+  appointmentCardTone,
+  appointmentDisplayBadge,
+  CARD_TINT_CLASSES,
+  lineStateBadge,
+} from '@/components/ui/status-badge'
 import { isLockedRow, type ScheduleAppointment } from '@/lib/appointments/overview'
 import { formatCents, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { cn } from '@/lib/utils'
@@ -77,23 +82,27 @@ export function AppointmentRowLink({ appointment, hasUnpricedTag, variant = 'res
   const isStacked = variant === 'stacked'
   const status = appointmentDisplayBadge(appointment.status, appointment.isNotClocked)
   const isUnpriced = appointment.priceCents === null
+  const isTinted = appointmentCardTone(appointment) !== null
+  // On a tint the link is a translucent layer, so hover and press darken the tone instead of replacing it.
+  const secondaryTextClass = isTinted ? 'text-foreground/70' : 'text-muted-foreground'
 
   return (
     <Link
       href={`/solutions/appointments/${appointment.id}`}
       className={cn(
-        'flex min-h-16 min-w-0 flex-1 flex-col gap-1.5 px-4 py-3 outline-none transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:bg-muted md:hover:bg-muted/60',
+        'flex min-h-16 min-w-0 flex-1 flex-col gap-1.5 px-4 py-3 outline-none transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+        isTinted ? 'active:bg-foreground/10 md:hover:bg-foreground/5' : 'active:bg-muted md:hover:bg-muted/60',
         !isStacked && 'md:flex-row md:items-center md:justify-between md:gap-3'
       )}
     >
       <div className="min-w-0 space-y-1">
         <div className="flex items-start justify-between gap-3">
           <p className="min-w-0 text-sm font-medium break-words">
-            {appointment.clientName} <span className="font-normal text-muted-foreground">· {appointment.jobName}</span>
+            {appointment.clientName} <span className={cn('font-normal', secondaryTextClass)}>· {appointment.jobName}</span>
           </p>
           <Price cents={appointment.priceCents} className={cn('shrink-0', !isStacked && 'md:hidden')} />
         </div>
-        <p className="font-mono text-xs text-muted-foreground tabular-nums">{timeRange(appointment)}</p>
+        <p className={cn('font-mono text-xs tabular-nums', secondaryTextClass)}>{timeRange(appointment)}</p>
       </div>
       <div className={cn('flex min-w-0 flex-wrap items-center gap-1.5', !isStacked && 'md:shrink-0 md:flex-nowrap')}>
         <StatusBadge tone={status.tone} icon={status.icon}>{status.label}</StatusBadge>
@@ -141,12 +150,14 @@ export default function AppointmentsList({
               const index = rowIndex.get(appointment.id) ?? 0
               const isAnimated = index < ANIMATED_ROWS
               const isLocked = selection !== undefined && isLockedRow(appointment.clientId, selection.lockedClientId)
+              const tone = appointmentCardTone(appointment)
 
               return (
                 <li
                   key={appointment.id}
                   className={cn(
-                    'flex items-stretch',
+                    'flex items-stretch transition-colors duration-base',
+                    tone && CARD_TINT_CLASSES[tone],
                     isAnimated && 'animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-backwards duration-base',
                     isLocked && 'opacity-60'
                   )}
