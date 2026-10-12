@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { listMonthAppointments } from '../../src/lib/appointments/month-appointments.ts'
+import { listMonthAppointments, listRangeAppointments } from '../../src/lib/appointments/month-appointments.ts'
 import { createFakeSupabase } from '../invoices/fake-supabase.ts'
 
 const JOB_RATE_CENTS = 4000
@@ -159,6 +159,52 @@ describe('listMonthAppointments', () => {
     })
 
     const appointments = await listMonthAppointments(db, OCTOBER_2026, NOW)
+
+    assert.equal(appointments.length, ids.length)
+    assert.ok(appointments.every((row) => row.paymentState === 'paid'))
+  })
+})
+
+describe('listRangeAppointments', () => {
+  const SEEDS = [
+    appointment({ id: 'oct-10', date: '2026-10-10' }),
+    appointment({ id: 'oct-11', date: '2026-10-11' }),
+    appointment({ id: 'oct-17', date: '2026-10-17' }),
+    appointment({ id: 'oct-18', date: '2026-10-18' }),
+    appointment({ id: 'jan-2', date: '2027-01-02' }),
+    appointment({ id: 'archived', date: '2026-10-12', isArchived: true }),
+  ]
+
+  it('lists every appointment from the start onward when the range is open-ended', async () => {
+    const { db } = createFakeSupabase({ appointments: SEEDS })
+
+    const appointments = await listRangeAppointments(db, { from: '2026-10-11', to: null }, NOW)
+
+    assert.deepEqual(
+      appointments.map((row) => row.id),
+      ['oct-11', 'oct-17', 'oct-18', 'jan-2']
+    )
+  })
+
+  it('stops at the last day of a bounded range', async () => {
+    const { db } = createFakeSupabase({ appointments: SEEDS })
+
+    const appointments = await listRangeAppointments(db, { from: '2026-10-11', to: '2026-10-17' }, NOW)
+
+    assert.deepEqual(
+      appointments.map((row) => row.id),
+      ['oct-11', 'oct-17']
+    )
+  })
+
+  it("reads a long range's prices and claims in batches", async () => {
+    const ids = Array.from({ length: 600 }, (_, index) => `appt-${String(index).padStart(4, '0')}`)
+    const { db } = createFakeSupabase({
+      appointments: ids.map((id) => appointment({ id, date: '2027-03-01' })),
+      invoice_appointments: ids.map((id) => line(id, PAID, 12000)),
+    })
+
+    const appointments = await listRangeAppointments(db, { from: '2026-10-11', to: null }, NOW)
 
     assert.equal(appointments.length, ids.length)
     assert.ok(appointments.every((row) => row.paymentState === 'paid'))

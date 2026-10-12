@@ -19,6 +19,9 @@ const BUSINESS_DATE = '2026-10-11'
 
 const OCTOBER: AppointmentsQuery = {
   view: 'schedule',
+  layout: 'week',
+  from: null,
+  weeks: 8,
   month: 10,
   year: 2026,
   showCancelled: false,
@@ -60,6 +63,9 @@ describe('appointment filters in the URL', () => {
   it('round-trips every filter through the href', () => {
     const query: AppointmentsQuery = {
       view: 'billed',
+      layout: 'month',
+      from: null,
+      weeks: 8,
       month: 3,
       year: 2025,
       showCancelled: true,
@@ -73,10 +79,10 @@ describe('appointment filters in the URL', () => {
   })
 
   it('leaves the defaults out of the href', () => {
-    assert.equal(appointmentsHref(OCTOBER), '/solutions/appointments?month=10&year=2026')
+    assert.equal(appointmentsHref(OCTOBER), '/solutions/appointments')
     assert.equal(
       appointmentsHref({ ...OCTOBER, clientId: 'smith', status: 'cancelled' }),
-      '/solutions/appointments?month=10&year=2026&client=smith&status=cancelled'
+      '/solutions/appointments?client=smith&status=cancelled'
     )
   })
 

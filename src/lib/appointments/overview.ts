@@ -10,11 +10,12 @@ import {
   type AppointmentsFilterParams,
 } from './filters.ts'
 import type { AppointmentStatus } from './lifecycle.ts'
+import { LAYOUTS, LIST_WEEKS_STEP, MAX_YEAR, MIN_YEAR, parseFrom, parseWeeks, type Layout } from './range.ts'
 
 // The appointments screen: its URL state, overview tiles and views. Pure, so node:test, the server
 // page and client components can all load it.
 
-// One of the selected month's appointments.
+// One of the visible range's appointments.
 export type ScheduleAppointment = {
   id: string
   clientId: string
@@ -57,6 +58,12 @@ export type AppointmentsView = 'schedule' | 'needs-completion' | 'needs-billing'
 
 export type AppointmentsQuery = AppointmentsFilter & {
   view: AppointmentsView
+  layout: Layout
+  // The Sunday starting the Week and List range; null for the business week.
+  from: string | null
+  // How many weeks the list shows from `from`; Show more extends it.
+  weeks: number
+  // The Month layout's month.
   month: number
   year: number
   showCancelled: boolean
@@ -66,6 +73,9 @@ type SearchParam = string | string[] | undefined
 
 type AppointmentsSearchParams = AppointmentsFilterParams & {
   view?: SearchParam
+  layout?: SearchParam
+  from?: SearchParam
+  weeks?: SearchParam
   month?: SearchParam
   year?: SearchParam
   showCancelled?: SearchParam
@@ -73,8 +83,6 @@ type AppointmentsSearchParams = AppointmentsFilterParams & {
 
 const APPOINTMENTS_PATH = '/solutions/appointments'
 const FILTERED_VIEWS: AppointmentsView[] = ['needs-completion', 'needs-billing', 'billed', 'paid']
-const MIN_YEAR = 2000
-const MAX_YEAR = 2100
 const MONTHS_IN_YEAR = 12
 
 // A repeated param is ambiguous, so it counts as absent.
@@ -91,7 +99,11 @@ function parseView(value: string | undefined): AppointmentsView {
   return FILTERED_VIEWS.find((view) => view === value) ?? 'schedule'
 }
 
-// businessDate (yyyy-MM-dd) picks the month when the URL names none.
+function parseLayout(value: string | undefined): Layout {
+  return LAYOUTS.find((layout) => layout === value) ?? 'week'
+}
+
+// businessDate (yyyy-MM-dd) picks the week and the month when the URL names none.
 export function parseAppointmentsQuery(
   params: AppointmentsSearchParams,
   businessDate: string
@@ -99,6 +111,9 @@ export function parseAppointmentsQuery(
   const [businessYear, businessMonth] = businessDate.split('-').map(Number)
   return {
     view: parseView(single(params.view)),
+    layout: parseLayout(single(params.layout)),
+    from: parseFrom(single(params.from), businessDate),
+    weeks: parseWeeks(single(params.weeks)),
     month: parseIntegerIn(single(params.month), 1, MONTHS_IN_YEAR, businessMonth),
     year: parseIntegerIn(single(params.year), MIN_YEAR, MAX_YEAR, businessYear),
     showCancelled: single(params.showCancelled) === 'true',
@@ -106,14 +121,23 @@ export function parseAppointmentsQuery(
   }
 }
 
+// Defaults are left out: the schedule, the week layout, the business week and the first 8 weeks. Each
+// layout keeps only its own range: the week start and extent, or the month.
 export function appointmentsHref(query: AppointmentsQuery): string {
   const params = new URLSearchParams()
   if (query.view !== 'schedule') params.set('view', query.view)
-  params.set('month', String(query.month))
-  params.set('year', String(query.year))
+  if (query.layout !== 'week') params.set('layout', query.layout)
+  if (query.layout === 'month') {
+    params.set('month', String(query.month))
+    params.set('year', String(query.year))
+  } else {
+    if (query.from !== null) params.set('from', query.from)
+    if (query.weeks !== LIST_WEEKS_STEP) params.set('weeks', String(query.weeks))
+  }
   if (query.showCancelled) params.set('showCancelled', 'true')
   for (const [name, value] of appointmentsFilterEntries(query)) params.set(name, value)
-  return `${APPOINTMENTS_PATH}?${params.toString()}`
+  const search = params.toString()
+  return search === '' ? APPOINTMENTS_PATH : `${APPOINTMENTS_PATH}?${search}`
 }
 
 // A tile's target: its view, or the full schedule when that view is already showing.
@@ -140,7 +164,8 @@ function totalInState(appointments: ScheduleAppointment[], state: PaymentState):
   )
 }
 
-// Needs billing and Needs completion cover every month; Billed and Paid cover the selected month.
+// Needs billing and Needs completion cover every month; Billed and Paid cover the business month,
+// whatever range the screen shows.
 export function summarizeOverview(
   needsBilling: NeedsBillingAppointment[],
   monthAppointments: ScheduleAppointment[],
@@ -163,16 +188,16 @@ export function tileCaption(count: number, scope: TileScope, unpricedCount: numb
   return `${count} ${noun} · ${scope}${unpriced}`
 }
 
-// The month's appointments a schedule view shows, narrowed by the filters. Needs billing and Needs
+// The range's appointments a schedule view shows, narrowed by the filters. Needs billing and Needs
 // completion list every month instead, so they show none of these.
 export function appointmentsInView(
-  monthAppointments: ScheduleAppointment[],
+  rangeAppointments: ScheduleAppointment[],
   query: AppointmentsQuery
 ): ScheduleAppointment[] {
   const { view, showCancelled } = query
   if (view === 'needs-billing' || view === 'needs-completion') return []
 
-  return monthAppointments.filter(
+  return rangeAppointments.filter(
     (appointment) =>
       matchesFilters(appointment, query, showCancelled) &&
       (view === 'schedule' || appointment.paymentState === view)
@@ -195,7 +220,7 @@ export function syncPendingTile(pending: PendingTile, query: AppointmentsQuery):
   return { seenHref: href, target: null }
 }
 
-// What Prev, Next and Show cancelled build on: a pending tile's view, so a push made before the tile's
+// What Prev, Next, This week, the layout toggle and Show cancelled build on: a pending tile's view, so a push made before the tile's
 // navigation lands keeps its ?view=; otherwise the URL.
 export function getNavQuery(pending: PendingTile, query: AppointmentsQuery): AppointmentsQuery {
   return syncPendingTile(pending, query).target ?? query

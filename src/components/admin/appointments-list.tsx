@@ -24,7 +24,7 @@ type AppointmentsListProps = {
   // Already in date and start-time order.
   appointments: ScheduleAppointment[]
   businessDate: string
-  // The all-months views only: a checkbox per row, the year in date bands and the Unpriced tag.
+  // The all-months views only: a checkbox per row, the year in every date band and the Unpriced tag.
   selection?: ListSelection
 }
 
@@ -109,6 +109,7 @@ export default function AppointmentsList({
 }: AppointmentsListProps): React.ReactNode {
   const lockedHintId = useId()
   const isSelectable = selection !== undefined
+  const businessYear = businessDate.slice(0, 4)
   const byDate = [...Map.groupBy(appointments, (appointment) => appointment.scheduledDate)]
   // Each row's position in the whole list, for the entrance stagger.
   const rowIndex = new Map(appointments.map((appointment, index) => [appointment.id, index]))
@@ -123,7 +124,12 @@ export default function AppointmentsList({
       ) : null}
       {byDate.map(([date, items]) => (
         <section key={date}>
-          <AppointmentDateBand date={date} isToday={date === businessDate} hasYear={isSelectable} />
+          <AppointmentDateBand
+            date={date}
+            isToday={date === businessDate}
+            // The open-ended list can run past December.
+            hasYear={isSelectable || !date.startsWith(businessYear)}
+          />
           <ul className="divide-y">
             {items.map((appointment) => {
               const index = rowIndex.get(appointment.id) ?? 0

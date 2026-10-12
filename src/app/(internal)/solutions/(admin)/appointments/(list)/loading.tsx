@@ -4,10 +4,10 @@ import { StatTileSkeleton } from '@/components/ui/stat-tile'
 const TILES = 4
 const PHONE_BANDS = 2
 const ROWS_PER_BAND = 3
-const CALENDAR_CELLS = 35
+const WEEK_DAYS = 7
 
-// Mirrors the loaded page (header, tiles, the filter bar, then the list on phones or the calendar
-// from md) so nothing jumps when data arrives.
+// Mirrors the loaded page (header, tiles, the filter bar, then the list on phones or the default Week
+// layout from md) so nothing jumps when data arrives. The layout isn't visible here, so Week it is.
 export default function AppointmentsLoading() {
   return (
     <div className="space-y-6" aria-busy="true">
@@ -33,7 +33,7 @@ export default function AppointmentsLoading() {
         </div>
         <div className="overflow-hidden rounded-lg bg-card ring-1 ring-foreground/10">
           <div className="flex h-14 items-center border-b px-4">
-            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-5 w-48 md:w-56" />
           </div>
           <div className="md:hidden">
             {Array.from({ length: PHONE_BANDS }, (_, band) => (
@@ -45,12 +45,13 @@ export default function AppointmentsLoading() {
               </div>
             ))}
           </div>
-          <div className="hidden p-4 md:block">
-            <div className="hidden grid-cols-7 gap-px md:grid">
-              {Array.from({ length: CALENDAR_CELLS }, (_, cell) => (
-                <Skeleton key={cell} className="h-32 rounded-none" />
-              ))}
-            </div>
+          <div className="hidden grid-cols-7 gap-px md:grid">
+            {Array.from({ length: WEEK_DAYS }, (_, day) => (
+              <div key={day} className="space-y-px">
+                <Skeleton className="h-10 rounded-none" />
+                <Skeleton className="h-64 rounded-none" />
+              </div>
+            ))}
           </div>
         </div>
       </div>

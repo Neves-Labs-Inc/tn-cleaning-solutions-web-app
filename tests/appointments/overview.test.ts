@@ -23,6 +23,9 @@ const BUSINESS_DATE = '2026-10-11'
 
 const OCTOBER: AppointmentsQuery = {
   view: 'schedule',
+  layout: 'month',
+  from: null,
+  weeks: 8,
   month: 10,
   year: 2026,
   showCancelled: false,
@@ -33,12 +36,15 @@ const OCTOBER: AppointmentsQuery = {
 
 describe('parseAppointmentsQuery', () => {
   it('opens on the schedule for the Business date month when no params are given', () => {
-    assert.deepEqual(parseAppointmentsQuery({}, BUSINESS_DATE), OCTOBER)
+    assert.deepEqual(parseAppointmentsQuery({ layout: 'month' }, BUSINESS_DATE), OCTOBER)
   })
 
   it('reads every view, the month, the year and Show cancelled', () => {
     assert.deepEqual(
-      parseAppointmentsQuery({ view: 'paid', month: '3', year: '2025', showCancelled: 'true' }, BUSINESS_DATE),
+      parseAppointmentsQuery(
+        { view: 'paid', layout: 'month', month: '3', year: '2025', showCancelled: 'true' },
+        BUSINESS_DATE
+      ),
       { ...OCTOBER, view: 'paid', month: 3, year: 2025, showCancelled: true }
     )
     assert.equal(parseAppointmentsQuery({ view: 'needs-billing' }, BUSINESS_DATE).view, 'needs-billing')
@@ -48,7 +54,10 @@ describe('parseAppointmentsQuery', () => {
 
   it('falls back to the schedule and the current month for unknown or repeated values', () => {
     assert.deepEqual(
-      parseAppointmentsQuery({ view: 'unbilled', month: '13', year: '1999', showCancelled: 'yes' }, BUSINESS_DATE),
+      parseAppointmentsQuery(
+        { view: 'unbilled', layout: 'month', month: '13', year: '1999', showCancelled: 'yes' },
+        BUSINESS_DATE
+      ),
       OCTOBER
     )
     assert.equal(parseAppointmentsQuery({ view: ['paid', 'billed'] }, BUSINESS_DATE).view, 'schedule')
@@ -57,13 +66,13 @@ describe('parseAppointmentsQuery', () => {
 
 describe('appointmentsHref', () => {
   it('leaves out the view on the schedule and Show cancelled when off', () => {
-    assert.equal(appointmentsHref(OCTOBER), '/solutions/appointments?month=10&year=2026')
+    assert.equal(appointmentsHref(OCTOBER), '/solutions/appointments?layout=month&month=10&year=2026')
   })
 
   it('keeps the view, month, year and Show cancelled', () => {
     assert.equal(
       appointmentsHref({ ...OCTOBER, view: 'needs-billing', month: 3, year: 2025, showCancelled: true }),
-      '/solutions/appointments?view=needs-billing&month=3&year=2025&showCancelled=true'
+      '/solutions/appointments?view=needs-billing&layout=month&month=3&year=2025&showCancelled=true'
     )
   })
 })
