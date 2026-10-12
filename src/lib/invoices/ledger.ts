@@ -101,6 +101,45 @@ export class InvoiceLedger {
     return this.settle('updateDraft', { invoiceId }, readError, { isDeleted: data === null })
   }
 
+  // The line's total lives on the appointment as its override, so the appointment and the draft
+  // always agree; null clears it and the line goes back to the Live price. Two reads then a write,
+  // not one SQL transaction: the checks keep a stale page from repricing an issued invoice's visit.
+  async setDraftLinePrice(
+    invoiceId: string,
+    appointmentId: string,
+    overrideCents: number | null
+  ): Promise<LedgerResult<null>> {
+    const context = { invoiceId, appointmentId }
+
+    const { data: invoice, error: invoiceError } = await this.db
+      .from('invoices')
+      .select('status, is_archived')
+      .eq('id', invoiceId)
+      .maybeSingle()
+    if (invoiceError) return this.fail('setDraftLinePrice', context, toLedgerError(invoiceError))
+    if (!invoice) return this.fail('setDraftLinePrice', context, refusal('invoice_not_found'))
+    if (invoice.is_archived) return this.fail('setDraftLinePrice', context, refusal('archived_invoice'))
+    if (invoice.status !== 'draft') return this.fail('setDraftLinePrice', context, refusal('not_draft'))
+
+    const { data: line, error: lineError } = await this.db
+      .from('invoice_appointments')
+      .select('appointment_id')
+      .eq('invoice_id', invoiceId)
+      .eq('appointment_id', appointmentId)
+      .eq('is_archived', false)
+      .is('cancelled_at', null)
+      .maybeSingle()
+    if (lineError) return this.fail('setDraftLinePrice', context, toLedgerError(lineError))
+    if (!line) return this.fail('setDraftLinePrice', context, refusal('line_not_on_draft'))
+
+    const { data, error } = await this.db
+      .from('appointments')
+      .update({ price_override_cents: overrideCents })
+      .eq('id', appointmentId)
+      .select('id')
+    return this.settleRowWrite('setDraftLinePrice', context, error, data)
+  }
+
   async issue(invoiceId: string, dueDate: string | null): Promise<LedgerResult<{ invoiceNumber: string }>> {
     const first = await this.issueOnce(invoiceId, dueDate)
     if (first.ok || first.code !== 'draft_changed') return first

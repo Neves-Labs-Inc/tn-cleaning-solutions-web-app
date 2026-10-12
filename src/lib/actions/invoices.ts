@@ -35,6 +35,11 @@ const UNKNOWN_ERROR_MESSAGE = 'Something went wrong. Try again.'
 
 type Refusal = { success: false; error: string; code: LedgerErrorCode }
 
+// The inline total editor shows a bad amount under its input, not as a page-level error.
+export type DraftLinePriceResult = InvoiceActionResult | (Refusal & { fieldErrors: { amount: string } })
+
+const INVALID_AMOUNT_MESSAGE = 'Enter a valid dollar amount.'
+
 function refuse(code: Exclude<LedgerErrorCode, 'unknown'>): Refusal {
   return { success: false, error: messageFor(code), code }
 }
@@ -176,6 +181,31 @@ export async function updateDraft(
   // pages are dynamic, so they read fresh when navigated to.
   const isDeleted = result.ok && result.data.isDeleted
   if (!isDeleted) revalidateInvoicing(invoiceId)
+  return toActionResult(result)
+}
+
+// Posts invoice_id, appointment_id and either amount (dollars; $0 is valid) or clear=1, which
+// drops the override so the line goes back to the Live price. A blank amount is not a clear.
+export async function setDraftLinePrice(_previous: unknown, formData: FormData): Promise<DraftLinePriceResult> {
+  const invoiceId = id(formData, 'invoice_id')
+  const appointmentId = id(formData, 'appointment_id')
+  if (!invoiceId || !appointmentId) return refuse('invalid_input')
+
+  const isClear = String(formData.get('clear') ?? '') === '1'
+  const amountCents = isClear ? null : parseDollarsToCents(String(formData.get('amount') ?? ''))
+  if (!isClear && amountCents === null) {
+    return { ...refuse('invalid_input'), error: INVALID_AMOUNT_MESSAGE, fieldErrors: { amount: INVALID_AMOUNT_MESSAGE } }
+  }
+
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
+
+  const result = await admin.ledger.setDraftLinePrice(invoiceId, appointmentId, amountCents)
+  if (result.ok) {
+    // Both ids passed the UUID parser, so the paths are never free text.
+    revalidateInvoicing(invoiceId)
+    revalidatePath(`${APPOINTMENTS_PATH}/${appointmentId}`)
+  }
   return toActionResult(result)
 }
 
