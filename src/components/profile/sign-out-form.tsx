@@ -10,13 +10,14 @@ type SignOutFormProps = {
 };
 
 export function SignOutForm({ signOut }: SignOutFormProps): React.ReactNode {
-  async function handleSignOut(): Promise<void> {
+  // The server action stays the form action so submit works before hydration;
+  // onSubmit only clears the cache and does not preventDefault.
+  function handleSubmit(): void {
     clearBrowserQueryCache();
-    await signOut();
   }
 
   return (
-    <form action={handleSignOut}>
+    <form action={signOut} onSubmit={handleSubmit}>
       <SubmitButton
         label="Sign out"
         pendingLabel="Signing out…"
