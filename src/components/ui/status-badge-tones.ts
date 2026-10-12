@@ -27,7 +27,7 @@ const LINE_STATE_BADGES: Record<LineState, StatusBadgeSpec | null> = {
 
 const APPOINTMENT_STATUS_BADGES: Record<AppointmentStatus, StatusBadgeSpec> = {
   scheduled: { tone: 'info', label: 'Scheduled' },
-  in_progress: { tone: 'success', label: 'In Progress' },
+  in_progress: { tone: 'progress', label: 'In Progress' },
   completed: { tone: 'neutral', label: 'Completed' },
   cancelled: { tone: 'danger', label: 'Cancelled' },
 }
@@ -64,13 +64,14 @@ export function appointmentDisplayBadge(status: AppointmentStatus, isNotClocked:
   return isNotClocked ? NOT_CLOCKED_BADGE : appointmentStatusBadge(status)
 }
 
-// The one place that decides an appointment card's tint (DESIGN.md §3.2). Not clocked wins over the
-// Payment state; Cancelled is never tinted.
+// The one place that decides an appointment card's tint (DESIGN.md §3.2). Not clocked wins, then In progress,
+// then the Payment state; Cancelled is never tinted.
 export function appointmentCardTone(
   appointment: Pick<ScheduleAppointment, 'status' | 'isNotClocked' | 'paymentState'>,
 ): StatusTone | null {
   if (appointment.status === 'cancelled') return null
   if (appointment.isNotClocked) return 'danger'
+  if (appointment.status === 'in_progress') return 'progress'
   if (appointment.paymentState === null) return null
   return PAYMENT_STATE_BADGES[appointment.paymentState].tone
 }
@@ -174,7 +175,7 @@ function timeSheetFlagBadge(flag: FlagKind, oddRatioPercent: number | null): Sta
 export function timeSheetFlagBadges(view: TimeSheetBadgeView): StatusBadgeSpec[] {
   const liveBadges: Array<StatusBadgeSpec | null> = [
     ...view.flags.map((flag) => timeSheetFlagBadge(flag, view.oddRatioPercent)),
-    view.state === "in_progress" ? { tone: "success", label: "In progress" } : null,
+    view.state === "in_progress" ? { tone: "progress", label: "In progress" } : null,
     upcomingBadge(view),
   ];
   const badges: Array<StatusBadgeSpec | null> = [

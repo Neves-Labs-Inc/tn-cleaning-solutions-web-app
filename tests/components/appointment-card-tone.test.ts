@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { appointmentCardTone, NOT_CLOCKED_BADGE } from '../../src/components/ui/status-badge-tones.ts'
+import { appointmentCardTone, appointmentStatusBadge, NOT_CLOCKED_BADGE } from '../../src/components/ui/status-badge-tones.ts'
 
 type ToneInput = Parameters<typeof appointmentCardTone>[0]
 
@@ -27,10 +27,21 @@ describe('appointmentCardTone', () => {
     assert.equal(appointmentCardTone({ status: 'cancelled', isNotClocked: false, paymentState: null }), null)
   })
 
-  it('leaves Completed with no Payment state, Scheduled and In Progress untinted', () => {
+  it('tints In Progress progress, with or without a Payment state', () => {
+    const inProgress: ToneInput = { status: 'in_progress', isNotClocked: false, paymentState: null }
+    assert.equal(appointmentCardTone(inProgress), 'progress')
+    for (const paymentState of ['unbilled', 'billed', 'paid'] as const) {
+      assert.equal(appointmentCardTone({ ...inProgress, paymentState }), 'progress')
+    }
+  })
+
+  it('keeps the In Progress badge label and gives it the progress tone', () => {
+    assert.deepEqual(appointmentStatusBadge('in_progress'), { tone: 'progress', label: 'In Progress' })
+  })
+
+  it('leaves Completed with no Payment state and Scheduled untinted', () => {
     assert.equal(appointmentCardTone(COMPLETED), null)
     assert.equal(appointmentCardTone({ status: 'scheduled', isNotClocked: false, paymentState: null }), null)
-    assert.equal(appointmentCardTone({ status: 'in_progress', isNotClocked: false, paymentState: null }), null)
   })
 })
 

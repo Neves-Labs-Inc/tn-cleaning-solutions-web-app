@@ -58,6 +58,9 @@
   --color-status-danger: var(--status-danger);
   --color-status-danger-foreground: var(--status-danger-foreground);
   --color-status-danger-border: var(--status-danger-border);
+  --color-status-progress: var(--status-progress);
+  --color-status-progress-foreground: var(--status-progress-foreground);
+  --color-status-progress-border: var(--status-progress-border);
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   --ease-in-quart: cubic-bezier(0.5, 0, 0.75, 0);
 }
@@ -125,6 +128,9 @@
   --status-danger: oklch(0.97 0.02 20);
   --status-danger-foreground: oklch(0.50 0.19 27);
   --status-danger-border: oklch(0.88 0.06 20);
+  --status-progress: oklch(0.97 0.02 295);
+  --status-progress-foreground: oklch(0.45 0.17 295);
+  --status-progress-border: oklch(0.88 0.06 295);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --duration-fast: 120ms;
@@ -194,6 +200,9 @@
   --status-danger: oklch(0.64 0.21 25 / 0.15);
   --status-danger-foreground: oklch(0.82 0.10 20);
   --status-danger-border: oklch(0.64 0.21 25 / 0.35);
+  --status-progress: oklch(0.62 0.18 295 / 0.15);
+  --status-progress-foreground: oklch(0.82 0.10 295);
+  --status-progress-border: oklch(0.62 0.18 295 / 0.35);
 }
 
 /* vaul ships 0.5s; DESIGN §13: 200ms in / 140ms out */
