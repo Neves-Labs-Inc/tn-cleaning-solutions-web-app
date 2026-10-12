@@ -9,7 +9,7 @@ import {
   planFutureVisitCleanup,
   preservedSeriesDates,
 } from '@/lib/appointments/crew'
-import { toAppointmentErrorMessage } from '@/lib/appointments/errors'
+import { toAppointmentErrorMessage, type DatabaseLikeError } from '@/lib/appointments/errors'
 import {
   canCancel,
   canEdit,
@@ -19,6 +19,7 @@ import {
   completedDateError,
   type AppointmentStatus,
 } from '@/lib/appointments/lifecycle'
+import { completeAppointments } from '@/lib/appointments/needs-completion'
 import { parseDollarsToCents } from '@/lib/pricing/money'
 import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -1202,6 +1203,45 @@ export async function markAppointmentComplete(id: string): Promise<AppointmentAc
 
 export async function undoAppointmentComplete(id: string): Promise<AppointmentActionResult> {
   return setManuallyCompleted(id, false)
+}
+
+export type BulkCompleteResult =
+  // failedIds: never reached because a later batch failed; the rest of the call committed.
+  | { success: true; completedCount: number; skippedCount: number; failedIds: string[] }
+  | { success: false; error: string }
+
+// Needs completion's bulk Mark complete. Visits that changed since the list loaded are skipped,
+// not refused, so the rest still complete.
+export async function markAppointmentsComplete(ids: string[]): Promise<BulkCompleteResult> {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { success: false, error: 'Pick at least one appointment.' }
+  }
+
+  const authResult = await requireAdminRole()
+  if (!authResult.success) {
+    return { success: false, error: authResult.error }
+  }
+
+  let result: BulkCompleteResult
+  try {
+    const { completed, skipped, failed } = await completeAppointments(createAdminClient(), ids.map(String))
+    result = { success: true, completedCount: completed.length, skippedCount: skipped.length, failedIds: failed }
+  } catch (thrown) {
+    // A PostgREST error or a network Error: both carry the message (and maybe code) it reads.
+    result = {
+      success: false,
+      error: toAppointmentErrorMessage(thrown as DatabaseLikeError, 'markAppointmentsComplete'),
+    }
+  }
+
+  // Success covers a partial run too. Skipped rows changed elsewhere, so the screen is stale even
+  // when none completed.
+  if (result.success) {
+    revalidatePath('/solutions/appointments')
+    revalidatePath('/solutions/appointments/[id]', 'page')
+  }
+
+  return result
 }
 
 export async function updateAppointmentEmployeeAdminNotes(

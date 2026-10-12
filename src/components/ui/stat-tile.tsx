@@ -41,7 +41,8 @@ export default function StatTile({
   const content = (
     <>
       <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 truncate text-xs font-medium tracking-wider text-muted-foreground uppercase">
+        {/* Wraps rather than truncates: a long label in a narrow grid tile must stay readable. */}
+        <p className="min-w-0 text-balance break-words text-xs font-medium tracking-wider text-muted-foreground uppercase">
           {label}
         </p>
         {icon ? <span className="shrink-0 text-muted-foreground">{icon}</span> : null}

@@ -38,6 +38,9 @@ const PAYMENT_STATE_BADGES: Record<PaymentState, StatusBadgeSpec> = {
   paid: { tone: 'success', label: 'Paid', icon: CheckCircle2 },
 }
 
+// A scheduled appointment an hour past its end. Same icon as Not started / Open shift: time passed.
+export const NOT_CLOCKED_BADGE: StatusBadgeSpec = { tone: 'warning', label: 'Not clocked', icon: Clock }
+
 export const ARCHIVED_BADGE: StatusBadgeSpec = { tone: 'neutral', label: 'Archived' }
 
 export function invoiceStatusBadge(status: InvoiceEffectiveStatus): StatusBadgeSpec {
@@ -50,6 +53,11 @@ export function lineStateBadge(state: LineState): StatusBadgeSpec | null {
 
 export function appointmentStatusBadge(status: AppointmentStatus): StatusBadgeSpec {
   return APPOINTMENT_STATUS_BADGES[status]
+}
+
+// The status pill every appointment surface paints; nothing else picks the label.
+export function appointmentDisplayBadge(status: AppointmentStatus, isNotClocked: boolean): StatusBadgeSpec {
+  return isNotClocked ? NOT_CLOCKED_BADGE : appointmentStatusBadge(status)
 }
 
 export function paymentStateBadge(state: PaymentState): StatusBadgeSpec {

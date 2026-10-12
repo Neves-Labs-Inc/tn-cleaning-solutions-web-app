@@ -37,6 +37,8 @@ type ConfirmDialogProps = {
   // Where focus goes on close; defaults to the element focused when the dialog opened. Pass it when
   // that element is gone by then (a More item).
   returnFocusRef?: React.RefObject<HTMLElement | null>;
+  // Destructive unless the confirmed action isn't (a bulk Mark complete).
+  confirmVariant?: "destructive" | "default";
 };
 
 type KeepButtonProps = {
@@ -67,7 +69,7 @@ function KeepButton({ label, isMobile, keepRef }: KeepButtonProps): React.ReactN
 }
 
 // DESIGN.md §9 / §10: a centered AlertDialog from md up, a bottom Drawer on phones.
-// Destructive-only by design; Keep takes initial focus so Enter never confirms by accident.
+// Destructive by default; Keep takes initial focus so Enter never confirms by accident.
 export default function ConfirmDialog({
   open,
   onOpenChange,
@@ -78,6 +80,7 @@ export default function ConfirmDialog({
   keepLabel,
   onConfirm,
   returnFocusRef,
+  confirmVariant = "destructive",
 }: ConfirmDialogProps): React.ReactNode {
   const isMobile = useIsMobile();
   const keepRef = useRef<HTMLButtonElement>(null);
@@ -111,7 +114,7 @@ export default function ConfirmDialog({
           <form action={onConfirm}>
             <DrawerFooter className="pb-[calc(1rem+var(--safe-bottom))]">
               <SubmitButton
-                variant="destructive"
+                variant={confirmVariant}
                 size="lg"
                 label={confirmLabel}
                 pendingLabel={pendingLabel}
@@ -138,7 +141,7 @@ export default function ConfirmDialog({
         <form action={onConfirm}>
           <AlertDialogFooter>
             <KeepButton label={keepLabel} isMobile={false} keepRef={keepRef} />
-            <SubmitButton variant="destructive" label={confirmLabel} pendingLabel={pendingLabel} />
+            <SubmitButton variant={confirmVariant} label={confirmLabel} pendingLabel={pendingLabel} />
           </AlertDialogFooter>
         </form>
       </AlertDialogContent>

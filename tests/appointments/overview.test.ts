@@ -9,6 +9,7 @@ import {
   isLockedRow,
   parseAppointmentsQuery,
   resolveBillingSelection,
+  splitDayEvents,
   syncPendingTile,
   summarizeOverview,
   tileCaption,
@@ -16,29 +17,48 @@ import {
   type AppointmentsQuery,
   type ScheduleAppointment,
 } from '../../src/lib/appointments/overview.ts'
+import type { NeedsCompletionAppointment } from '../../src/lib/appointments/needs-completion.ts'
 import type { NeedsBillingAppointment } from '../../src/lib/invoices/payment-state-queries.ts'
 
 const BUSINESS_DATE = '2026-10-11'
 
-const OCTOBER: AppointmentsQuery = { view: 'schedule', month: 10, year: 2026, showCancelled: false }
+const OCTOBER: AppointmentsQuery = {
+  view: 'schedule',
+  layout: 'month',
+  from: null,
+  weeks: 8,
+  month: 10,
+  year: 2026,
+  showCancelled: false,
+  clientId: '',
+  jobId: '',
+  status: 'all',
+}
 
 describe('parseAppointmentsQuery', () => {
   it('opens on the schedule for the Business date month when no params are given', () => {
-    assert.deepEqual(parseAppointmentsQuery({}, BUSINESS_DATE), OCTOBER)
+    assert.deepEqual(parseAppointmentsQuery({ layout: 'month' }, BUSINESS_DATE), OCTOBER)
   })
 
   it('reads every view, the month, the year and Show cancelled', () => {
     assert.deepEqual(
-      parseAppointmentsQuery({ view: 'paid', month: '3', year: '2025', showCancelled: 'true' }, BUSINESS_DATE),
-      { view: 'paid', month: 3, year: 2025, showCancelled: true }
+      parseAppointmentsQuery(
+        { view: 'paid', layout: 'month', month: '3', year: '2025', showCancelled: 'true' },
+        BUSINESS_DATE
+      ),
+      { ...OCTOBER, view: 'paid', month: 3, year: 2025, showCancelled: true }
     )
     assert.equal(parseAppointmentsQuery({ view: 'needs-billing' }, BUSINESS_DATE).view, 'needs-billing')
+    assert.equal(parseAppointmentsQuery({ view: 'needs-completion' }, BUSINESS_DATE).view, 'needs-completion')
     assert.equal(parseAppointmentsQuery({ view: 'billed' }, BUSINESS_DATE).view, 'billed')
   })
 
   it('falls back to the schedule and the current month for unknown or repeated values', () => {
     assert.deepEqual(
-      parseAppointmentsQuery({ view: 'unbilled', month: '13', year: '1999', showCancelled: 'yes' }, BUSINESS_DATE),
+      parseAppointmentsQuery(
+        { view: 'unbilled', layout: 'month', month: '13', year: '1999', showCancelled: 'yes' },
+        BUSINESS_DATE
+      ),
       OCTOBER
     )
     assert.equal(parseAppointmentsQuery({ view: ['paid', 'billed'] }, BUSINESS_DATE).view, 'schedule')
@@ -47,13 +67,13 @@ describe('parseAppointmentsQuery', () => {
 
 describe('appointmentsHref', () => {
   it('leaves out the view on the schedule and Show cancelled when off', () => {
-    assert.equal(appointmentsHref(OCTOBER), '/solutions/appointments?month=10&year=2026')
+    assert.equal(appointmentsHref(OCTOBER), '/solutions/appointments?layout=month&month=10&year=2026')
   })
 
   it('keeps the view, month, year and Show cancelled', () => {
     assert.equal(
-      appointmentsHref({ view: 'needs-billing', month: 3, year: 2025, showCancelled: true }),
-      '/solutions/appointments?view=needs-billing&month=3&year=2025&showCancelled=true'
+      appointmentsHref({ ...OCTOBER, view: 'needs-billing', month: 3, year: 2025, showCancelled: true }),
+      '/solutions/appointments?view=needs-billing&layout=month&month=3&year=2025&showCancelled=true'
     )
   })
 })
@@ -67,6 +87,7 @@ describe('toggleView', () => {
 
   it('switches from one view to another', () => {
     assert.equal(toggleView({ ...OCTOBER, view: 'paid' }, 'needs-billing').view, 'needs-billing')
+    assert.equal(toggleView({ ...OCTOBER, view: 'needs-billing' }, 'needs-completion').view, 'needs-completion')
   })
 
   it('returns to the schedule when the active view is chosen again', () => {
@@ -82,8 +103,23 @@ function needsBilling(id: string, livePriceCents: number | null): NeedsBillingAp
     scheduledDate: '2025-09-15',
     startTime: '09:00:00',
     endTime: '12:00:00',
+    jobId: 'standard',
     jobName: 'Standard clean',
     livePriceCents,
+  }
+}
+
+function needsCompletion(id: string, priceCents: number | null): NeedsCompletionAppointment {
+  return {
+    id,
+    clientId: 'smith',
+    clientName: 'Maria Silva',
+    jobId: 'standard',
+    jobName: 'Standard clean',
+    scheduledDate: '2026-09-30',
+    startTime: '09:00:00',
+    endTime: '12:00:00',
+    priceCents,
   }
 }
 
@@ -95,6 +131,7 @@ function scheduled(
     id,
     clientId: 'smith',
     clientName: 'Maria Silva',
+    jobId: 'standard',
     jobName: 'Standard clean',
     scheduledDate: '2026-10-07',
     startTime: '09:00:00',
@@ -103,6 +140,7 @@ function scheduled(
     priceCents: 12000,
     paymentState: null,
     claim: null,
+    isNotClocked: false,
     ...overrides,
   }
 }
@@ -111,6 +149,7 @@ describe('summarizeOverview', () => {
   it('sums the Live prices of priced Needs billing appointments and counts the Unpriced ones', () => {
     const overview = summarizeOverview(
       [needsBilling('a', 12000), needsBilling('b', null), needsBilling('c', 8050)],
+      [],
       []
     )
 
@@ -127,17 +166,29 @@ describe('summarizeOverview', () => {
         scheduled('paid', { paymentState: 'paid', priceCents: 15000 }),
         scheduled('unbilled', { paymentState: 'unbilled' }),
         scheduled('upcoming', { status: 'scheduled' }),
-      ]
+      ],
+      []
     )
 
     assert.deepEqual(overview.billed, { totalCents: 20000, count: 3, unpricedCount: 1 })
     assert.deepEqual(overview.paid, { totalCents: 15000, count: 1, unpricedCount: 0 })
   })
 
+  it('sums the displayed prices of Not clocked appointments and counts the Unpriced ones', () => {
+    const overview = summarizeOverview(
+      [],
+      [],
+      [needsCompletion('a', 18000), needsCompletion('b', null), needsCompletion('c', 6000)]
+    )
+
+    assert.deepEqual(overview.needsCompletion, { totalCents: 24000, count: 3, unpricedCount: 1 })
+  })
+
   it('shows zero totals when nothing is in a state', () => {
-    const overview = summarizeOverview([], [])
+    const overview = summarizeOverview([], [], [])
 
     assert.deepEqual(overview, {
+      needsCompletion: { totalCents: 0, count: 0, unpricedCount: 0 },
       needsBilling: { totalCents: 0, count: 0, unpricedCount: 0 },
       billed: { totalCents: 0, count: 0, unpricedCount: 0 },
       paid: { totalCents: 0, count: 0, unpricedCount: 0 },
@@ -177,6 +228,11 @@ describe('appointmentsInView', () => {
       'upcoming',
       'cancelled',
     ])
+  })
+
+  it('shows none of the month in the views that list every month', () => {
+    assert.deepEqual(appointmentsInView(month, { ...OCTOBER, view: 'needs-billing' }), [])
+    assert.deepEqual(appointmentsInView(month, { ...OCTOBER, view: 'needs-completion' }), [])
   })
 
   it('keeps only the Billed or Paid appointments in those views', () => {
@@ -254,5 +310,25 @@ describe('resolveBillingSelection', () => {
       ['a2']
     )
     assert.equal(resolveBillingSelection(refreshed, ['a1']).lockedClientId, null)
+  })
+})
+
+describe('splitDayEvents', () => {
+  const eventsOf = (count: number): number[] => Array.from({ length: count }, (_, index) => index + 1)
+
+  it('shows nothing and counts nothing for an empty day', () => {
+    assert.deepEqual(splitDayEvents(eventsOf(0)), { visible: [], moreCount: 0 })
+  })
+
+  it('shows all three events of a day at the cap', () => {
+    assert.deepEqual(splitDayEvents(eventsOf(3)), { visible: [1, 2, 3], moreCount: 0 })
+  })
+
+  it('shows the first three events and counts the one beyond the cap', () => {
+    assert.deepEqual(splitDayEvents(eventsOf(4)), { visible: [1, 2, 3], moreCount: 1 })
+  })
+
+  it('counts every event beyond the first three on a busy day', () => {
+    assert.deepEqual(splitDayEvents(eventsOf(12)), { visible: [1, 2, 3], moreCount: 9 })
   })
 })

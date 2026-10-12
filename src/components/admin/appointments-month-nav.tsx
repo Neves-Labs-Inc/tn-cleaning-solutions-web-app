@@ -4,12 +4,12 @@ import { addMonths, format } from 'date-fns'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { appointmentsHref, type AppointmentsQuery } from '@/lib/appointments/overview'
+import type { AppointmentsQuery } from '@/lib/appointments/overview'
 
 type AppointmentsMonthNavProps = {
   query: AppointmentsQuery
   // The caller navigates, so it can show the pending month.
-  onNavigate: (href: string) => void
+  onNavigate: (target: AppointmentsQuery) => void
 }
 
 const BUTTON_CLASS = 'transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]'
@@ -19,7 +19,7 @@ export default function AppointmentsMonthNav({ query, onNavigate }: Appointments
 
   function handleStep(offset: number): void {
     const target = addMonths(monthDate, offset)
-    onNavigate(appointmentsHref({ ...query, month: target.getMonth() + 1, year: target.getFullYear() }))
+    onNavigate({ ...query, month: target.getMonth() + 1, year: target.getFullYear() })
   }
 
   return (

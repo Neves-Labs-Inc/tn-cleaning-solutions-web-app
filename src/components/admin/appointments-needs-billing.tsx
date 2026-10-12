@@ -19,6 +19,8 @@ type AppointmentsNeedsBillingProps = {
   appointments: NeedsBillingAppointment[]
   methods: PaymentMethod[]
   businessDate: string
+  // Shown instead of the view's own empty state when the filters leave nothing.
+  filteredEmpty: React.ReactNode
 }
 
 type MarkPaidSelection = { appointments: MarkPaidAppointment[]; clientId: string; clientName: string }
@@ -31,6 +33,7 @@ function toListRow(appointment: NeedsBillingAppointment): ScheduleAppointment {
     id: appointment.id,
     clientId: appointment.clientId,
     clientName: appointment.clientName,
+    jobId: appointment.jobId,
     jobName: appointment.jobName,
     scheduledDate: appointment.scheduledDate,
     startTime: appointment.startTime,
@@ -39,6 +42,7 @@ function toListRow(appointment: NeedsBillingAppointment): ScheduleAppointment {
     priceCents: appointment.livePriceCents,
     paymentState: 'unbilled',
     claim: null,
+    isNotClocked: false,
   }
 }
 
@@ -60,11 +64,17 @@ export default function AppointmentsNeedsBilling({
   appointments,
   methods,
   businessDate,
+  filteredEmpty,
 }: AppointmentsNeedsBillingProps): React.ReactNode {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   // The client is kept with the dialog's appointments, so it still reads right while the dialog
   // closes after the selection has cleared.
   const [dialog, setDialog] = useState<MarkPaidSelection>(CLOSED_DIALOG)
+
+  // `appointments` is already filtered, so a row the filter hides drops out for good, and the
+  // client lock and the bar follow what is visible.
+  const visibleSelectedIds = selectedIds.filter((id) => appointments.some((appointment) => appointment.id === id))
+  if (visibleSelectedIds.length !== selectedIds.length) setSelectedIds(visibleSelectedIds)
 
   const { selected, lockedClientId } = resolveBillingSelection(appointments, selectedIds)
   const isBarOpen = selected.length > 0
@@ -82,7 +92,9 @@ export default function AppointmentsNeedsBilling({
         <p className="text-sm text-muted-foreground">All months, oldest first. Pick appointments of one client.</p>
       </div>
 
-      {appointments.length === 0 ? (
+      {appointments.length === 0 && filteredEmpty ? (
+        filteredEmpty
+      ) : appointments.length === 0 ? (
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">

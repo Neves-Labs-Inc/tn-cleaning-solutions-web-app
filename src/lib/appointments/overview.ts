@@ -1,15 +1,26 @@
 import type { NeedsBillingAppointment } from '../invoices/payment-state-queries.ts'
 import type { PaymentClaim, PaymentState } from '../invoices/payment-state.ts'
+import type { NeedsCompletionAppointment } from './needs-completion.ts'
+import { getGraceEnd } from '../time-sheets/session-view.ts'
+import {
+  appointmentsFilterEntries,
+  matchesFilters,
+  parseAppointmentsFilter,
+  type AppointmentsFilter,
+  type AppointmentsFilterParams,
+} from './filters.ts'
 import type { AppointmentStatus } from './lifecycle.ts'
+import { LAYOUTS, LIST_WEEKS_STEP, MAX_YEAR, MIN_YEAR, parseFrom, parseWeeks, type Layout } from './range.ts'
 
 // The appointments screen: its URL state, overview tiles and views. Pure, so node:test, the server
 // page and client components can all load it.
 
-// One of the selected month's appointments.
+// One of the visible range's appointments.
 export type ScheduleAppointment = {
   id: string
   clientId: string
   clientName: string
+  jobId: string
   jobName: string
   scheduledDate: string
   startTime: string
@@ -19,17 +30,40 @@ export type ScheduleAppointment = {
   priceCents: number | null
   paymentState: PaymentState | null
   claim: PaymentClaim | null
+  // Still scheduled an hour past its end; computed on the server so every render agrees.
+  isNotClocked: boolean
+}
+
+// Scheduled means nobody has a counted clock-in, so no clock read is needed. Display only.
+export function isNotClocked(
+  appointment: Pick<ScheduleAppointment, 'status' | 'scheduledDate' | 'endTime'>,
+  now: Date
+): boolean {
+  if (appointment.status !== 'scheduled') return false
+
+  // An unreadable date or time reads as "not flagged": a render must never throw over a label.
+  try {
+    return now.getTime() > getGraceEnd(appointment.scheduledDate, appointment.endTime).getTime()
+  } catch {
+    return false
+  }
 }
 
 // Unpriced appointments count toward count and unpricedCount, never the money.
 export type TileTotal = { totalCents: number; count: number; unpricedCount: number }
 
-export type Overview = { needsBilling: TileTotal; billed: TileTotal; paid: TileTotal }
+export type Overview = { needsCompletion: TileTotal; needsBilling: TileTotal; billed: TileTotal; paid: TileTotal }
 
-export type AppointmentsView = 'schedule' | 'needs-billing' | 'billed' | 'paid'
+export type AppointmentsView = 'schedule' | 'needs-completion' | 'needs-billing' | 'billed' | 'paid'
 
-export type AppointmentsQuery = {
+export type AppointmentsQuery = AppointmentsFilter & {
   view: AppointmentsView
+  layout: Layout
+  // The Sunday starting the Week and List range; null for the business week.
+  from: string | null
+  // How many weeks the list shows from `from`; Show more extends it.
+  weeks: number
+  // The Month layout's month.
   month: number
   year: number
   showCancelled: boolean
@@ -37,17 +71,18 @@ export type AppointmentsQuery = {
 
 type SearchParam = string | string[] | undefined
 
-type AppointmentsSearchParams = {
+type AppointmentsSearchParams = AppointmentsFilterParams & {
   view?: SearchParam
+  layout?: SearchParam
+  from?: SearchParam
+  weeks?: SearchParam
   month?: SearchParam
   year?: SearchParam
   showCancelled?: SearchParam
 }
 
 const APPOINTMENTS_PATH = '/solutions/appointments'
-const FILTERED_VIEWS: AppointmentsView[] = ['needs-billing', 'billed', 'paid']
-const MIN_YEAR = 2000
-const MAX_YEAR = 2100
+const FILTERED_VIEWS: AppointmentsView[] = ['needs-completion', 'needs-billing', 'billed', 'paid']
 const MONTHS_IN_YEAR = 12
 
 // A repeated param is ambiguous, so it counts as absent.
@@ -64,7 +99,11 @@ function parseView(value: string | undefined): AppointmentsView {
   return FILTERED_VIEWS.find((view) => view === value) ?? 'schedule'
 }
 
-// businessDate (yyyy-MM-dd) picks the month when the URL names none.
+function parseLayout(value: string | undefined): Layout {
+  return LAYOUTS.find((layout) => layout === value) ?? 'week'
+}
+
+// businessDate (yyyy-MM-dd) picks the week and the month when the URL names none.
 export function parseAppointmentsQuery(
   params: AppointmentsSearchParams,
   businessDate: string
@@ -72,19 +111,33 @@ export function parseAppointmentsQuery(
   const [businessYear, businessMonth] = businessDate.split('-').map(Number)
   return {
     view: parseView(single(params.view)),
+    layout: parseLayout(single(params.layout)),
+    from: parseFrom(single(params.from), businessDate),
+    weeks: parseWeeks(single(params.weeks)),
     month: parseIntegerIn(single(params.month), 1, MONTHS_IN_YEAR, businessMonth),
     year: parseIntegerIn(single(params.year), MIN_YEAR, MAX_YEAR, businessYear),
     showCancelled: single(params.showCancelled) === 'true',
+    ...parseAppointmentsFilter(params),
   }
 }
 
+// Defaults are left out: the schedule, the week layout, the business week and the first 8 weeks. Each
+// layout keeps only its own range: the week start and extent, or the month.
 export function appointmentsHref(query: AppointmentsQuery): string {
   const params = new URLSearchParams()
   if (query.view !== 'schedule') params.set('view', query.view)
-  params.set('month', String(query.month))
-  params.set('year', String(query.year))
+  if (query.layout !== 'week') params.set('layout', query.layout)
+  if (query.layout === 'month') {
+    params.set('month', String(query.month))
+    params.set('year', String(query.year))
+  } else {
+    if (query.from !== null) params.set('from', query.from)
+    if (query.weeks !== LIST_WEEKS_STEP) params.set('weeks', String(query.weeks))
+  }
   if (query.showCancelled) params.set('showCancelled', 'true')
-  return `${APPOINTMENTS_PATH}?${params.toString()}`
+  for (const [name, value] of appointmentsFilterEntries(query)) params.set(name, value)
+  const search = params.toString()
+  return search === '' ? APPOINTMENTS_PATH : `${APPOINTMENTS_PATH}?${search}`
 }
 
 // A tile's target: its view, or the full schedule when that view is already showing.
@@ -111,12 +164,15 @@ function totalInState(appointments: ScheduleAppointment[], state: PaymentState):
   )
 }
 
-// Needs billing covers every month; Billed and Paid cover the selected month.
+// Needs billing and Needs completion cover every month; Billed and Paid cover the business month,
+// whatever range the screen shows.
 export function summarizeOverview(
   needsBilling: NeedsBillingAppointment[],
-  monthAppointments: ScheduleAppointment[]
+  monthAppointments: ScheduleAppointment[],
+  needsCompletion: NeedsCompletionAppointment[]
 ): Overview {
   return {
+    needsCompletion: totalPrices(needsCompletion.map((appointment) => appointment.priceCents)),
     needsBilling: totalPrices(needsBilling.map((appointment) => appointment.livePriceCents)),
     billed: totalInState(monthAppointments, 'billed'),
     paid: totalInState(monthAppointments, 'paid'),
@@ -125,26 +181,27 @@ export function summarizeOverview(
 
 export type TileScope = 'all months' | 'this month'
 
-// "14 appointments · all months · 2 Unpriced". Only Needs billing names its Unpriced ones.
+// "14 appointments · all months · 2 Unpriced". Only the all-months tiles name their Unpriced ones.
 export function tileCaption(count: number, scope: TileScope, unpricedCount: number = 0): string {
   const noun = count === 1 ? 'appointment' : 'appointments'
   const unpriced = unpricedCount > 0 ? ` · ${unpricedCount} Unpriced` : ''
   return `${count} ${noun} · ${scope}${unpriced}`
 }
 
-// The month's appointments a schedule view shows. Needs billing lists every month instead, so it
-// shows none of these.
+// The range's appointments a schedule view shows, narrowed by the filters. Needs billing and Needs
+// completion list every month instead, so they show none of these.
 export function appointmentsInView(
-  monthAppointments: ScheduleAppointment[],
+  rangeAppointments: ScheduleAppointment[],
   query: AppointmentsQuery
 ): ScheduleAppointment[] {
   const { view, showCancelled } = query
-  if (view === 'needs-billing') return []
+  if (view === 'needs-billing' || view === 'needs-completion') return []
 
-  return monthAppointments.filter((appointment) => {
-    const isShown = showCancelled || appointment.status !== 'cancelled'
-    return isShown && (view === 'schedule' || appointment.paymentState === view)
-  })
+  return rangeAppointments.filter(
+    (appointment) =>
+      matchesFilters(appointment, query, showCancelled) &&
+      (view === 'schedule' || appointment.paymentState === view)
+  )
 }
 
 // A tile click whose navigation may still be in flight, and the URL showing when this was last synced.
@@ -163,7 +220,7 @@ export function syncPendingTile(pending: PendingTile, query: AppointmentsQuery):
   return { seenHref: href, target: null }
 }
 
-// What Prev, Next and Show cancelled build on: a pending tile's view, so a push made before the tile's
+// What Prev, Next, This week, the layout toggle and Show cancelled build on: a pending tile's view, so a push made before the tile's
 // navigation lands keeps its ?view=; otherwise the URL.
 export function getNavQuery(pending: PendingTile, query: AppointmentsQuery): AppointmentsQuery {
   return syncPendingTile(pending, query).target ?? query
@@ -183,4 +240,14 @@ export function resolveBillingSelection(
 
 export function isLockedRow(clientId: string, lockedClientId: string | null): boolean {
   return lockedClientId !== null && clientId !== lockedClientId
+}
+
+export const MONTH_CELL_EVENT_CAP = 3
+
+// A month cell shows its first events and counts the rest, so busy days don't stretch the grid.
+export function splitDayEvents<T>(
+  events: T[],
+  cap: number = MONTH_CELL_EVENT_CAP
+): { visible: T[]; moreCount: number } {
+  return { visible: events.slice(0, cap), moreCount: Math.max(events.length - cap, 0) }
 }
