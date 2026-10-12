@@ -3,21 +3,27 @@ const cadFormatter = new Intl.NumberFormat('en-CA', {
   currency: 'CAD',
 })
 
-// Deliberate contract change from the three parsers this replaces: the appointments variant
-// returned 'invalid' for unparseable input and null for an absent one. This returns null for
-// both. A caller that must tell them apart checks whether the raw string was empty first.
-export function parseDollarsToCents(raw: string): number | null {
+// Every money column is a Postgres integer (max $21,474,836.47), so typed amounts are capped well
+// below it. Inclusive.
+export const MAX_AMOUNT_CENTS = 100_000_000
+export const AMOUNT_TOO_LARGE_MESSAGE = 'Enter an amount up to $1,000,000.00.'
+
+// Digits with an optional point and decimals, or a point and digits. Rules out signs, $, commas,
+// exponents, hex, Infinity and NaN, all of which Number() would otherwise accept or mangle.
+// Each digit run splits only one way, so matching stays linear on hostile input (no ReDoS).
+const PLAIN_DECIMAL = /^(?:\d+(?:\.\d*)?|\.\d+)$/
+
+export type ParsedDollars = { cents: number } | { error: 'invalid' | 'too_large' }
+
+// Says why input was refused so each caller can show its own invalid message, or the shared cap
+// message. Empty input is 'invalid'; a caller where empty means "no amount" checks that first.
+// The cap is checked after rounding, so 1000000.004 still fits.
+export function parseDollarsToCents(raw: string): ParsedDollars {
   const trimmed = raw.trim()
-  const parsed = Number(trimmed)
-  let cents: number | null
+  if (!PLAIN_DECIMAL.test(trimmed)) return { error: 'invalid' }
 
-  if (!trimmed || !Number.isFinite(parsed) || parsed < 0) {
-    cents = null
-  } else {
-    cents = Math.round(parsed * 100)
-  }
-
-  return cents
+  const cents = Math.round(Number(trimmed) * 100)
+  return cents > MAX_AMOUNT_CENTS ? { error: 'too_large' } : { cents }
 }
 
 // Shown in place of an amount for an Unpriced visit, so it is never mistaken for $0.
@@ -29,6 +35,19 @@ export function formatCents(cents: number): string {
 
 export function formatRate(cents: number): string {
   return `${formatCents(cents)}/h`
+}
+
+const MINUTES_PER_HOUR = 60
+
+// 150 -> "2.5h", 180 -> "3h", 105 -> "1.75h"; 100 -> "1h 40m", 40 -> "40m" (1.67h would not multiply
+// back to the amount, which pricing computes from exact minutes).
+export function formatHours(minutes: number): string {
+  const isExactAtTwoDecimals = (minutes * 100) % MINUTES_PER_HOUR === 0
+  if (isExactAtTwoDecimals) return `${minutes / MINUTES_PER_HOUR}h`
+
+  const whole = Math.floor(minutes / MINUTES_PER_HOUR)
+  const rest = minutes % MINUTES_PER_HOUR
+  return whole === 0 ? `${rest}m` : `${whole}h ${rest}m`
 }
 
 export function durationMinutes(startTime: string, endTime: string): number {

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
-import { parseDollarsToCents } from '@/lib/pricing/money'
+import { AMOUNT_TOO_LARGE_MESSAGE, parseDollarsToCents } from '@/lib/pricing/money'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createSupabaseClient } from '@/lib/supabase/server'
 
@@ -197,7 +197,7 @@ function parseClientJobPricingFormData(formData: FormData):
   | { success: true; data: ParsedClientJobPricingInput }
   | { success: false; error: string; fieldErrors: ClientJobPricingFieldErrors } {
   const jobId = String(formData.get('job_id') ?? '').trim()
-  const rateCents = parseDollarsToCents(String(formData.get('hourly_rate_cents') ?? ''))
+  const rate = parseDollarsToCents(String(formData.get('hourly_rate_cents') ?? ''))
   const effectiveFrom = String(formData.get('effective_from') ?? '').trim()
   const notesRaw = String(formData.get('notes') ?? '').trim()
 
@@ -207,8 +207,9 @@ function parseClientJobPricingFormData(formData: FormData):
     fieldErrors.job_id = 'Job is required.'
   }
 
-  if (rateCents === null) {
-    fieldErrors.hourly_rate_cents = 'Enter a valid hourly rate in dollars.'
+  if ('error' in rate) {
+    fieldErrors.hourly_rate_cents =
+      rate.error === 'too_large' ? AMOUNT_TOO_LARGE_MESSAGE : 'Enter a valid hourly rate in dollars.'
   }
 
   if (!isValidDate(effectiveFrom)) {
@@ -219,7 +220,7 @@ function parseClientJobPricingFormData(formData: FormData):
     | { success: true; data: ParsedClientJobPricingInput }
     | { success: false; error: string; fieldErrors: ClientJobPricingFieldErrors }
 
-  if (rateCents === null || Object.keys(fieldErrors).length > 0) {
+  if ('error' in rate || Object.keys(fieldErrors).length > 0) {
     result = {
       success: false,
       error: 'Please correct the highlighted fields.',
@@ -230,7 +231,7 @@ function parseClientJobPricingFormData(formData: FormData):
       success: true,
       data: {
         job_id: jobId,
-        hourly_rate_cents: rateCents,
+        hourly_rate_cents: rate.cents,
         effective_from: effectiveFrom,
         notes: notesRaw || null,
       },

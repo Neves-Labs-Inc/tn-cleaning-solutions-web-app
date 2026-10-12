@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ArrowUpRight, TriangleAlert } from 'lucide-react'
 
-import StatusBadge, { lineStateBadge } from '@/components/ui/status-badge'
+import StatusBadge, { lineStateBadge, OVERRIDDEN_BADGE } from '@/components/ui/status-badge'
 import type { LineState } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
 import { formatTimeRange } from '@/lib/schedule/time-range'
@@ -74,10 +74,10 @@ type VisitLineSummaryProps = {
   // 'inline' puts the Set price link where the amount would be; 'none' leaves it to the caller (a checkbox row
   // keeps it outside its label via SetPriceLink).
   setPriceLink?: 'inline' | 'none'
-  // The price math under the amount (draft detail lines); null or absent renders nothing.
-  priceBreakdown?: string | null
   // The Live price of a line in a Billing mismatch; null or absent renders no note.
   mismatchLiveLabel?: string | null
+  // The line's total was set by hand: a tag under the amount.
+  isOverridden?: boolean
   className?: string
 }
 
@@ -95,8 +95,8 @@ export function VisitLineSummary({
   struck = false,
   billedAmountCents = null,
   setPriceLink = 'inline',
-  priceBreakdown = null,
   mismatchLiveLabel = null,
+  isOverridden = false,
   className,
 }: VisitLineSummaryProps) {
   const badges = states.flatMap((state) => {
@@ -125,18 +125,30 @@ export function VisitLineSummary({
         {isSetPriceInline ? (
           <SetPriceLink appointmentId={appointmentId} jobName={jobName} date={date} className="shrink-0" />
         ) : (
-          <p className="shrink-0 text-right text-sm font-semibold tabular-nums">
-            {hasBilledAmount ? (
-              <span className="mr-2 font-normal text-muted-foreground line-through">{formatCents(billedAmountCents)}</span>
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <p className="text-right text-sm font-semibold tabular-nums">
+              {hasBilledAmount ? (
+                <span className="mr-2 font-normal text-muted-foreground line-through">
+                  {formatCents(billedAmountCents)}
+                </span>
+              ) : null}
+              {/* Keyed so a changed amount fades in as an update. */}
+              <span key={amountCents} className="animate-in fade-in-0 duration-base">
+                {formatCents(amountCents)}
+              </span>
+            </p>
+            {isOverridden ? (
+              <StatusBadge
+                tone={OVERRIDDEN_BADGE.tone}
+                icon={OVERRIDDEN_BADGE.icon}
+                className="animate-in fade-in-0 zoom-in-95 duration-base ease-out-quart"
+              >
+                {OVERRIDDEN_BADGE.label}
+              </StatusBadge>
             ) : null}
-            {formatCents(amountCents)}
-          </p>
+          </div>
         )}
       </div>
-
-      {priceBreakdown ? (
-        <p className="mt-0.5 text-right text-xs break-words text-muted-foreground tabular-nums">{priceBreakdown}</p>
-      ) : null}
 
       {badges.length > 0 ? (
         <div className="mt-1 flex flex-wrap gap-1">

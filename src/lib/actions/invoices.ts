@@ -12,7 +12,7 @@ import {
   type MarkPaidInput,
   type PaymentInput,
 } from '@/lib/invoices/ledger'
-import { parseDollarsToCents } from '@/lib/pricing/money'
+import { AMOUNT_TOO_LARGE_MESSAGE, parseDollarsToCents } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
 
 // Thin by design: parse the form, check the session is an admin, call the ledger, revalidate,
@@ -34,6 +34,11 @@ const MAX_SHORT_TEXT_LENGTH = 200
 const UNKNOWN_ERROR_MESSAGE = 'Something went wrong. Try again.'
 
 type Refusal = { success: false; error: string; code: LedgerErrorCode }
+
+// The inline total editor shows a bad amount under its input, not as a page-level error.
+export type DraftLinePriceResult = InvoiceActionResult | (Refusal & { fieldErrors: { amount: string } })
+
+const INVALID_AMOUNT_MESSAGE = 'Enter a valid dollar amount.'
 
 function refuse(code: Exclude<LedgerErrorCode, 'unknown'>): Refusal {
   return { success: false, error: messageFor(code), code }
@@ -95,12 +100,12 @@ function payment(formData: FormData): PaymentInput | undefined {
   return { paidDate, method, reference }
 }
 
-// Each appointment's amount is posted as amount_<appointment id>, in dollars. One that is blank or
-// not a valid amount makes every line undefined: the caller refuses it as unpriced_line.
+// Each appointment's amount is posted as amount_<appointment id>, in dollars. One that is blank,
+// not a valid amount or over the cap makes every line undefined: the caller refuses it as unpriced_line.
 function markPaidLines(formData: FormData, appointmentIds: string[]): MarkPaidInput['lines'] | undefined {
   const lines = appointmentIds.flatMap((appointmentId) => {
-    const amountCents = parseDollarsToCents(String(formData.get(`amount_${appointmentId}`) ?? ''))
-    return amountCents === null ? [] : [{ appointmentId, amountCents }]
+    const amount = parseDollarsToCents(String(formData.get(`amount_${appointmentId}`) ?? ''))
+    return 'error' in amount ? [] : [{ appointmentId, amountCents: amount.cents }]
   })
   return lines.length === appointmentIds.length ? lines : undefined
 }
@@ -179,6 +184,34 @@ export async function updateDraft(
   return toActionResult(result)
 }
 
+// Posts invoice_id, appointment_id and either amount (dollars; $0 is valid) or clear=1, which
+// drops the override so the line goes back to the Live price. A blank amount is not a clear.
+export async function setDraftLinePrice(_previous: unknown, formData: FormData): Promise<DraftLinePriceResult> {
+  const invoiceId = id(formData, 'invoice_id')
+  const appointmentId = id(formData, 'appointment_id')
+  if (!invoiceId || !appointmentId) return refuse('invalid_input')
+
+  // Auth before parsing the amount, so an anonymous caller can't probe its validation messages.
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
+
+  const isClear = String(formData.get('clear') ?? '') === '1'
+  const amount = isClear ? null : parseDollarsToCents(String(formData.get('amount') ?? ''))
+  if (amount && 'error' in amount) {
+    const message = amount.error === 'too_large' ? AMOUNT_TOO_LARGE_MESSAGE : INVALID_AMOUNT_MESSAGE
+    return { ...refuse('invalid_input'), error: message, fieldErrors: { amount: message } }
+  }
+  const amountCents = amount ? amount.cents : null
+
+  const result = await admin.ledger.setDraftLinePrice(invoiceId, appointmentId, amountCents)
+  if (result.ok) {
+    // Both ids passed the UUID parser, so the paths are never free text.
+    revalidateInvoicing(invoiceId)
+    revalidatePath(`${APPOINTMENTS_PATH}/${appointmentId}`)
+  }
+  return toActionResult(result)
+}
+
 export async function issueInvoice(
   _previous: unknown,
   formData: FormData
@@ -245,11 +278,12 @@ export async function markAppointmentsPaid(
   if (!clientId || !appointmentIds || !input) return refuse('invalid_input')
   if (appointmentIds.length === 0) return refuse('empty_lines')
 
-  const lines = markPaidLines(formData, appointmentIds)
-  if (!lines) return refuse('unpriced_line')
-
+  // Auth before parsing amounts, so an anonymous caller can't make the server do that work.
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
+
+  const lines = markPaidLines(formData, appointmentIds)
+  if (!lines) return refuse('unpriced_line')
 
   const result = await admin.ledger.markPaid({ clientId, lines, ...input })
   if (!result.ok) return toActionResult(result)

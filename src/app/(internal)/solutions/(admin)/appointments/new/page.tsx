@@ -6,6 +6,7 @@ import { AppointmentForm } from '@/components/admin/appointment-form'
 import { AppointmentScheduleContext } from '@/components/admin/new-appointment-schedule-context'
 import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/ui/page-header'
+import { fetchClientJobRules } from '@/lib/pricing/lookup'
 import { toBusinessWallClock } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
 
@@ -71,6 +72,17 @@ export default async function NewAppointmentPage({ searchParams }: NewAppointmen
 
   const loadError = clientsError ?? jobsError ?? employeesError
 
+  // Every client × Job pair the form offers, so the calculated total is exact for any pick. A failed
+  // read throws to error.tsx: falling back to Job rates would show a wrong number.
+  const clientJobRules = loadError
+    ? {}
+    : Object.fromEntries(
+        await fetchClientJobRules(
+          supabase,
+          (clients ?? []).flatMap((client) => (jobs ?? []).map((job) => ({ clientId: client.id, jobId: job.id })))
+        )
+      )
+
   return (
     <div className="mx-auto max-w-7xl space-y-6 lg:space-y-8">
       <div className="space-y-3">
@@ -105,15 +117,10 @@ export default async function NewAppointmentPage({ searchParams }: NewAppointmen
                     address: location.address,
                   })),
               }))}
-              // The client is picked in the browser, so no client rule can be resolved at render
-              // time. A browser-side lookup is impossible by design: client_job_pricing is
-              // admin-only and RLS would return an empty set silently (REQ-008).
-              jobs={(jobs ?? []).map((job) => ({
-                id: job.id,
-                name: job.name,
-                hourly_rate_cents: job.hourly_rate_cents,
-                client_rate_cents: null,
-              }))}
+              jobs={jobs ?? []}
+              // Loaded here, not in the browser: client_job_pricing is admin-only and RLS would return
+              // an empty set silently (REQ-008).
+              clientJobRules={clientJobRules}
               employees={employees ?? []}
               defaultDate={isDateValue(defaultDate) ? defaultDate : undefined}
             />

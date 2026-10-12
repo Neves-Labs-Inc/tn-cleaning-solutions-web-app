@@ -7,7 +7,8 @@ import type { PaymentState } from '../../lib/invoices/payment-state'
 import type { InvoiceEffectiveStatus, LineState } from '../../lib/invoices/view'
 import { formatBusinessTime } from '../../lib/schedule/business-time.ts'
 import type { FlagKind, SessionView } from "../../lib/time-sheets/session-view";
-import type { ClockStatus, StatusBadgeSpec } from './status-badge'
+import type { ScheduleAppointment } from '../../lib/appointments/overview'
+import type { ClockStatus, StatusBadgeSpec, StatusTone } from './status-badge'
 
 const INVOICE_STATUS_BADGES: Record<InvoiceEffectiveStatus, StatusBadgeSpec> = {
   draft: { tone: 'neutral', label: 'Draft' },
@@ -39,9 +40,12 @@ const PAYMENT_STATE_BADGES: Record<PaymentState, StatusBadgeSpec> = {
 }
 
 // A scheduled appointment an hour past its end. Same icon as Not started / Open shift: time passed.
-export const NOT_CLOCKED_BADGE: StatusBadgeSpec = { tone: 'warning', label: 'Not clocked', icon: Clock }
+export const NOT_CLOCKED_BADGE: StatusBadgeSpec = { tone: 'danger', label: 'Not clocked', icon: Clock }
 
 export const ARCHIVED_BADGE: StatusBadgeSpec = { tone: 'neutral', label: 'Archived' }
+
+// A draft line whose total was set by hand. Informational, like the time sheets' Edited pill.
+export const OVERRIDDEN_BADGE: StatusBadgeSpec = { tone: 'neutral', label: 'Overridden', icon: Pencil }
 
 export function invoiceStatusBadge(status: InvoiceEffectiveStatus): StatusBadgeSpec {
   return INVOICE_STATUS_BADGES[status]
@@ -58,6 +62,17 @@ export function appointmentStatusBadge(status: AppointmentStatus): StatusBadgeSp
 // The status pill every appointment surface paints; nothing else picks the label.
 export function appointmentDisplayBadge(status: AppointmentStatus, isNotClocked: boolean): StatusBadgeSpec {
   return isNotClocked ? NOT_CLOCKED_BADGE : appointmentStatusBadge(status)
+}
+
+// The one place that decides an appointment card's tint (DESIGN.md §3.2). Not clocked wins over the
+// Payment state; Cancelled is never tinted.
+export function appointmentCardTone(
+  appointment: Pick<ScheduleAppointment, 'status' | 'isNotClocked' | 'paymentState'>,
+): StatusTone | null {
+  if (appointment.status === 'cancelled') return null
+  if (appointment.isNotClocked) return 'danger'
+  if (appointment.paymentState === null) return null
+  return PAYMENT_STATE_BADGES[appointment.paymentState].tone
 }
 
 export function paymentStateBadge(state: PaymentState): StatusBadgeSpec {

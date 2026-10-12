@@ -11,7 +11,6 @@ import { Card } from '@/components/ui/card'
 import ConfirmDialog from '@/components/ui/confirm-dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { claimableStates, lineMismatchLiveLabel } from '@/lib/invoices/lines'
-import { formatPriceBreakdown } from '@/lib/invoices/price-breakdown'
 import type { ClaimableVisit, InvoiceDetailLine } from '@/lib/invoices/queries'
 import { formatDateOnly, type InvoiceStatus, type LineState } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
@@ -20,7 +19,8 @@ import { cn } from '@/lib/utils'
 import AddVisitsPicker from './add-visits-picker'
 import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail } from './invoice-detail-context'
 import { useSubmitDraftUpdate } from './submit-draft-update'
-import { formatVisitDate, SetPriceLink, VisitLineSummary } from './visit-line-summary'
+import LineTotalEditor from './line-total-editor'
+import { formatVisitDate, VisitLineSummary } from './visit-line-summary'
 
 type InvoiceVisitsCardProps = {
   invoiceId: string
@@ -28,7 +28,7 @@ type InvoiceVisitsCardProps = {
   clientName: string
   lines: InvoiceDetailLine[]
   totalCents: number
-  // An open draft: lines can be removed and added, Unpriced lines link to Set price.
+  // An open draft: lines can be removed and added, Unpriced lines open the total editor.
   isEditable: boolean
   isAutomatic: boolean
   unpricedCount: number
@@ -53,17 +53,37 @@ type LineRowProps = {
   isEditable: boolean
   isPending: boolean
   isBusy: boolean
+  // Saving or clearing this line's total.
+  isEditPending: boolean
+  isEditing: boolean
+  onEditingChange: (isEditing: boolean) => void
+  onEditPendingChange: (isPending: boolean) => void
+  invoiceId: string
   onRemove: (line: InvoiceDetailLine, trigger: HTMLButtonElement) => void
 }
 
-function LineRow({ line, status, isEditable, isPending, isBusy, onRemove }: LineRowProps) {
+function LineRow({
+  line,
+  status,
+  isEditable,
+  isPending,
+  isBusy,
+  isEditPending,
+  isEditing,
+  onEditingChange,
+  onEditPendingChange,
+  invoiceId,
+  onRemove,
+}: LineRowProps) {
   const { visit } = line
   const isCancelled = line.state === 'cancelled'
   const isUnpriced = line.state === 'unpriced'
+  const isOverridden = visit.price_override_cents !== null
+  const canEditTotal = isEditable && !isCancelled
 
   return (
     <li
-      aria-busy={isPending || undefined}
+      aria-busy={isPending || isEditPending || undefined}
       className={cn('flex items-start gap-3 py-3 transition-opacity duration-fast', isPending && 'opacity-50')}
     >
       <div className="min-w-0 flex-1">
@@ -79,11 +99,22 @@ function LineRow({ line, status, isEditable, isPending, isBusy, onRemove }: Line
           struck={isCancelled}
           billedAmountCents={line.billed_amount_cents}
           setPriceLink="none"
-          priceBreakdown={formatPriceBreakdown(line, status)}
           mismatchLiveLabel={lineMismatchLiveLabel(line, status)}
+          isOverridden={canEditTotal && isOverridden}
         />
-        {isUnpriced && isEditable ? (
-          <SetPriceLink appointmentId={visit.id} jobName={visit.job_name} date={visit.scheduled_date} />
+        {canEditTotal ? (
+          <LineTotalEditor
+            invoiceId={invoiceId}
+            appointmentId={visit.id}
+            jobName={visit.job_name}
+            date={visit.scheduled_date}
+            amountCents={isUnpriced ? null : line.amount_cents}
+            isOverridden={isOverridden}
+            isOpen={isEditing}
+            onOpenChange={onEditingChange}
+            isBusy={isBusy}
+            onPendingChange={onEditPendingChange}
+          />
         ) : null}
       </div>
       {isEditable ? (
@@ -150,6 +181,9 @@ export default function InvoiceVisitsCard({
   const submitDraftUpdate = useSubmitDraftUpdate()
   const { runPageAction, showPageError } = useInvoiceDetail()
   const [pendingId, setPendingId] = useState<string | null>(null)
+  // The one line whose total editor is open, and the one saving it.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editPendingId, setEditPendingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastLine, setLastLine] = useState<InvoiceDetailLine | null>(null)
   // The remove button that opened the Delete draft confirm, for focus to return to on Keep.
@@ -238,7 +272,12 @@ export default function InvoiceVisitsCard({
             status={status}
             isEditable={isEditable}
             isPending={pendingId === line.visit.id}
-            isBusy={pendingId !== null}
+            isBusy={pendingId !== null || editPendingId !== null}
+            isEditPending={editPendingId === line.visit.id}
+            isEditing={editingId === line.visit.id}
+            onEditingChange={(isEditing) => setEditingId(isEditing ? line.visit.id : null)}
+            onEditPendingChange={(isPending) => setEditPendingId(isPending ? line.visit.id : null)}
+            invoiceId={invoiceId}
             onRemove={handleRemove}
           />
         ))}

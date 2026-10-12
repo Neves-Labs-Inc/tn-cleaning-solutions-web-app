@@ -19,8 +19,15 @@ export const INVOICE_ERROR_CODES = [
 ] as const
 
 // Refusals with no SQL function behind them: form input the actions reject, and the plain table
-// writes the ledger makes itself (clients, payment_methods).
-export const LEDGER_ONLY_CODES = ['invalid_input', 'not_found', 'method_name_required', 'method_name_taken'] as const
+// writes the ledger makes itself (clients, payment_methods, a draft line's price).
+export const LEDGER_ONLY_CODES = [
+  'invalid_input',
+  'not_found',
+  'method_name_required',
+  'method_name_taken',
+  'not_draft',
+  'line_not_on_draft',
+] as const
 
 export type InvoiceErrorCode = (typeof INVOICE_ERROR_CODES)[number]
 export type LedgerErrorCode = InvoiceErrorCode | (typeof LEDGER_ONLY_CODES)[number] | 'unknown'
@@ -49,6 +56,8 @@ const MESSAGES: Record<Exclude<LedgerErrorCode, 'unknown'>, string> = {
   not_found: 'Not found.',
   method_name_required: 'Enter a name for the payment method.',
   method_name_taken: 'A payment method with that name already exists.',
+  not_draft: 'This invoice is no longer a draft. Refresh and try again.',
+  line_not_on_draft: 'This appointment is no longer on this draft. Refresh and try again.',
 }
 
 export function messageFor(code: Exclude<LedgerErrorCode, 'unknown'>): string {

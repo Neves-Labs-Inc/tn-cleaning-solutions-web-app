@@ -16,6 +16,7 @@ import {
   type PriceableAppointment,
   type PricedAppointment,
 } from '@/lib/pricing'
+import { fetchClientJobRules } from '@/lib/pricing/lookup'
 import { formatCents, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
 import { canEdit, type AppointmentStatus } from '@/lib/appointments/lifecycle'
@@ -144,15 +145,18 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
   const loadErrorMessage =
     loadError?.message ?? (crewClocksError ? CREW_CLOCKS_ERROR_MESSAGE : null) ?? priceErrorMessage
 
-  // Only the appointment's own Job is priced, so only it can show this client's negotiated rate;
-  // the form says the rate applies on save for any other Job.
-  const clientRateCents = price?.live.source === 'client_job_pricing' ? price.live.rate_cents : null
-  const formJobs = jobRows.map((job) => ({
-    id: job.id,
-    name: job.name,
-    hourly_rate_cents: job.hourly_rate_cents,
-    client_rate_cents: job.id === typedAppointment.job_id ? clientRateCents : null,
-  }))
+  // Every client × Job pair the form offers (plus the saved client, which may be inactive now), so the
+  // calculated total is exact for any pick. A failed read throws to error.tsx: falling back to Job
+  // rates would show a wrong number.
+  const formClientIds = Array.from(new Set([typedAppointment.client_id, ...(clients ?? []).map((client) => client.id)]))
+  const clientJobRules = loadErrorMessage
+    ? {}
+    : Object.fromEntries(
+        await fetchClientJobRules(
+          supabase,
+          formClientIds.flatMap((clientId) => jobRows.map((job) => ({ clientId, jobId: job.id })))
+        )
+      )
 
   const appointmentFormAppointment = {
     id: typedAppointment.id,
@@ -235,7 +239,8 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
                   address: location.address,
                 })),
             }))}
-            jobs={formJobs}
+            jobs={jobRows}
+            clientJobRules={clientJobRules}
             employees={employees ?? []}
             appointment={appointmentFormAppointment}
             recurrenceSeries={recurrenceSeries ?? null}

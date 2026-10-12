@@ -19,7 +19,7 @@ import {
   type AppointmentStatus,
 } from '@/lib/appointments/lifecycle'
 import { completeAppointments } from '@/lib/appointments/needs-completion'
-import { parseDollarsToCents } from '@/lib/pricing/money'
+import { AMOUNT_TOO_LARGE_MESSAGE, parseDollarsToCents } from '@/lib/pricing/money'
 import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -244,10 +244,13 @@ function parseCreateAppointmentFormData(formData: FormData):
     fieldErrors.scheduled_end_time = 'End time must be after start time.'
   }
 
-  const priceOverrideCents = priceOverride ? parseDollarsToCents(priceOverride) : null
-  if (priceOverride && priceOverrideCents === null) {
-    fieldErrors.price_override = 'Enter a valid dollar amount.'
+  // An empty override means no override, so it is never parsed.
+  const parsedOverride = priceOverride ? parseDollarsToCents(priceOverride) : null
+  if (parsedOverride && 'error' in parsedOverride) {
+    fieldErrors.price_override =
+      parsedOverride.error === 'too_large' ? AMOUNT_TOO_LARGE_MESSAGE : 'Enter a valid dollar amount.'
   }
+  const priceOverrideCents = parsedOverride && 'cents' in parsedOverride ? parsedOverride.cents : null
 
   let recurrenceFrequency: RecurrenceFrequency | null = null
   if (isRecurring) {
@@ -359,10 +362,13 @@ function parseUpdateAppointmentFormData(formData: FormData):
     fieldErrors.scheduled_end_time = 'End time must be after start time.'
   }
 
-  const priceOverrideCents = priceOverride ? parseDollarsToCents(priceOverride) : null
-  if (priceOverride && priceOverrideCents === null) {
-    fieldErrors.price_override = 'Enter a valid dollar amount.'
+  // An empty override means no override, so it is never parsed.
+  const parsedOverride = priceOverride ? parseDollarsToCents(priceOverride) : null
+  if (parsedOverride && 'error' in parsedOverride) {
+    fieldErrors.price_override =
+      parsedOverride.error === 'too_large' ? AMOUNT_TOO_LARGE_MESSAGE : 'Enter a valid dollar amount.'
   }
+  const priceOverrideCents = parsedOverride && 'cents' in parsedOverride ? parsedOverride.cents : null
 
   if (Object.keys(fieldErrors).length > 0) {
     return {

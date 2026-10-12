@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   activeStateBadge,
+  appointmentCardTone,
   appointmentDisplayBadge,
   appointmentStatusBadge,
   ARCHIVED_BADGE,
@@ -10,12 +11,14 @@ import {
   invoiceStatusBadge,
   lineStateBadge,
   NOT_CLOCKED_BADGE,
+  OVERRIDDEN_BADGE,
   paymentStateBadge,
 } from "./status-badge-tones";
 import { cn } from "@/lib/utils";
 
 export {
   activeStateBadge,
+  appointmentCardTone,
   appointmentDisplayBadge,
   appointmentStatusBadge,
   ARCHIVED_BADGE,
@@ -23,6 +26,7 @@ export {
   invoiceStatusBadge,
   lineStateBadge,
   NOT_CLOCKED_BADGE,
+  OVERRIDDEN_BADGE,
   paymentStateBadge,
 };
 
@@ -54,6 +58,15 @@ const TONE_CLASSES: Record<StatusTone, string> = {
   danger:
     "border-status-danger-border bg-status-danger text-status-danger-foreground dark:bg-status-danger",
   neutral: "border-border bg-muted text-muted-foreground dark:bg-muted",
+};
+
+// Appointment card / list row surface for a tone (DESIGN.md §3.2). Cards never write status-* classes.
+export const CARD_TINT_CLASSES: Record<StatusTone, string> = {
+  info: "border-status-info-border bg-status-info dark:bg-status-info",
+  success: "border-status-success-border bg-status-success dark:bg-status-success",
+  warning: "border-status-warning-border bg-status-warning dark:bg-status-warning",
+  danger: "border-status-danger-border bg-status-danger dark:bg-status-danger",
+  neutral: "border-border bg-muted dark:bg-muted", // never returned by appointmentCardTone; kept for a total Record
 };
 
 export default function StatusBadge({

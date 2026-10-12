@@ -28,7 +28,11 @@ import {
   markPaidNotes,
   type MarkPaidAppointment,
 } from "@/lib/invoices/mark-paid";
-import { formatCents, parseDollarsToCents } from "@/lib/pricing/money";
+import {
+  AMOUNT_TOO_LARGE_MESSAGE,
+  formatCents,
+  parseDollarsToCents,
+} from "@/lib/pricing/money";
 
 import PaymentFields from "./payment-fields";
 import type { PaymentMethodFieldHandle } from "./payment-method-field";
@@ -75,18 +79,21 @@ export default function MarkPaidForm({
     ),
   );
 
-  // Blank or invalid rows count as $0 until they're fixed.
-  const totalCents = appointments.reduce(
-    (sum, appointment) =>
-      sum + (parseDollarsToCents(amounts[appointment.id] ?? "") ?? 0),
-    0,
-  );
+  // Blank, invalid or over-cap rows count as $0 until they're fixed.
+  const totalCents = appointments.reduce((sum, appointment) => {
+    const amount = parseDollarsToCents(amounts[appointment.id] ?? "");
+    return sum + ("cents" in amount ? amount.cents : 0);
+  }, 0);
 
   function validate(formData: FormData): SheetFieldErrors {
     const errors: SheetFieldErrors = {};
     for (const appointment of appointments) {
-      if (parseDollarsToCents(amounts[appointment.id] ?? "") === null) {
-        errors[amountKey(appointment.id)] = AMOUNT_MESSAGE;
+      const amount = parseDollarsToCents(amounts[appointment.id] ?? "");
+      if ("error" in amount) {
+        errors[amountKey(appointment.id)] =
+          amount.error === "too_large"
+            ? AMOUNT_TOO_LARGE_MESSAGE
+            : AMOUNT_MESSAGE;
       }
     }
     if (!String(formData.get("payment_method") ?? "")) {

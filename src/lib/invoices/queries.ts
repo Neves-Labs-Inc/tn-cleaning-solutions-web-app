@@ -40,6 +40,8 @@ export type VisitDetails = {
   scheduled_end_time: string
   job_name: string
   location_label: string | null
+  // The appointment's own price; null when it follows the calculated price.
+  price_override_cents: number | null
   live: LivePrice
 }
 
@@ -136,6 +138,7 @@ async function priceVisits(db: Db, rows: VisitRow[]): Promise<VisitDetails[]> {
     scheduled_end_time: row.scheduled_end_time,
     job_name: row.jobs?.name ?? 'Unknown job',
     location_label: row.client_locations?.label ?? null,
+    price_override_cents: row.price_override_cents,
     live: prices.get(row.id)?.live ?? UNPRICED,
   }))
 }
