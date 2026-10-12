@@ -37,7 +37,8 @@ import type { NeedsBillingAppointment } from "@/lib/invoices/payment-state-queri
 
 // How the range body stands. Show more keeps the rows already shown while the new weeks load.
 export type RangeState =
-  | { status: "ready" }
+  // updatedAt: when the range's newest week data landed, so work keyed on it reruns after a refresh.
+  | { status: "ready"; updatedAt: number }
   // The target range has no cached data, so the body is a skeleton and `appointments` is empty.
   | { status: "loading" }
   | { status: "loading-more" }
@@ -192,7 +193,11 @@ export function useAppointmentsScreen(
   // While Show more loads, its new weeks failing only fails the extra rows, not the screen.
   const failedMoreReads = isMore ? targetReads.filter(hasFailed) : [];
 
-  let rangeState: RangeState = { status: "ready" };
+  const rangeUpdatedAt = Math.max(
+    0,
+    ...targetWeeks.map((week) => resultsByWeek.get(week)?.dataUpdatedAt ?? 0),
+  );
+  let rangeState: RangeState = { status: "ready", updatedAt: rangeUpdatedAt };
   if (isMore && failedMoreReads.some((read) => !read.isFetching)) {
     rangeState = {
       status: "more-error",

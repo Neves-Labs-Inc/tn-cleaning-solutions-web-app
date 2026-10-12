@@ -1,20 +1,13 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import { loadAppointmentWeeks } from "@/lib/actions/appointments-screen";
+import { appointmentsKeys } from "@/lib/appointments/appointments-keys";
 import { WeeksBatcher } from "@/lib/appointments/weeks-batcher";
 
 // The appointments screen's client cache: its query keys, and the batcher wired to its server
-// action. Every key sits under APPOINTMENTS_KEY, so one invalidation drops them all.
+// action.
 
-export const APPOINTMENTS_KEY = ["appointments"] as const;
-
-export const appointmentsKeys = {
-  week: (weekStart: string) => [...APPOINTMENTS_KEY, "week", weekStart] as const,
-  needsBilling: [...APPOINTMENTS_KEY, "needs-billing"] as const,
-  needsCompletion: [...APPOINTMENTS_KEY, "needs-completion"] as const,
-  filterOptions: [...APPOINTMENTS_KEY, "filter-options"] as const,
-  paymentMethods: [...APPOINTMENTS_KEY, "payment-methods"] as const,
-};
+export { APPOINTMENTS_KEY, appointmentsKeys } from "@/lib/appointments/appointments-keys";
 
 const batchers = new WeakMap<QueryClient, WeeksBatcher>();
 

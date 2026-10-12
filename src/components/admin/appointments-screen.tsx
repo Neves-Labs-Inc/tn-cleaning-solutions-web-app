@@ -30,7 +30,9 @@ export default function AppointmentsScreen({
   useNeighbourPrefetch(
     query,
     businessDate,
-    screen.status === "ready" && screen.rangeState.status === "ready",
+    screen.status === "ready" && screen.rangeState.status === "ready"
+      ? screen.rangeState.updatedAt
+      : null,
   );
 
   function handleNavigate(next: AppointmentsQuery): void {
