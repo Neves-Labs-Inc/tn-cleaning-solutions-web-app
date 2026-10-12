@@ -1,12 +1,16 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
+import { getSupabasePublicEnv } from '@/lib/env'
+
 export async function createClient() {
+  // cookies() first: it opts the route out of prerendering, so the build never reads env here.
   const cookieStore = await cookies()
+  const { url, publishableKey } = getSupabasePublicEnv()
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    url,
+    publishableKey,
     {
       cookies: {
         getAll() {

@@ -9,7 +9,14 @@
     "lint": "eslint",
     "test": "node --test \"tests/**/*.test.ts\"",
     "seed:admin": "tsx scripts/seed-admin-users.ts",
-    "db:check-types": "tsx scripts/check-database-types.ts"
+    "db:check-types": "tsx scripts/check-database-types.ts",
+    "migration:preflight": "bash scripts/region-migration/preflight.sh",
+    "migration:readonly-on": "bash scripts/region-migration/readonly-on.sh",
+    "migration:readonly-off": "bash scripts/region-migration/readonly-off.sh",
+    "migration:dump": "bash scripts/region-migration/dump.sh",
+    "migration:restore": "bash scripts/region-migration/restore.sh",
+    "migration:verify": "bash scripts/region-migration/verify.sh",
+    "migration:auth-diff": "bash scripts/region-migration/auth-diff.sh"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
