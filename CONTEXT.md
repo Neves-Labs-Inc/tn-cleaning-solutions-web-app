@@ -69,7 +69,7 @@ An extra on a Cleaner's next Pay run, positive or negative, that fixes a mistake
 ### Appointments
 
 **Appointment status**:
-Follows the Cleaners' clocks: scheduled until someone clocks in, in progress while anyone who clocked in has not yet clocked out, completed once every Cleaner who clocked in has clocked out (a Cleaner who never clocks in does not hold it open). Cancelled is set by an admin and ignores the clocks. A completed or cancelled appointment refuses further clocks until an admin reopens it.
+Follows the Cleaners' clocks: scheduled until someone clocks in, in progress until every Cleaner on the crew has clocked in and out, then completed. A Cleaner who never clocks in holds it open until an admin enters her clocks (Clock correction), removes her from the crew, or uses Manual completion; a Removed session never counts. Cancelled is set by an admin and ignores the clocks. A completed or cancelled appointment refuses further clocks until an admin reopens it.
 
 **Manual completion**:
 An admin marking an appointment completed regardless of its clocks. It holds until undone. Hours on it are only what was clocked. Taking the last Cleaner with clocks off a completed appointment turns it on, so the appointment stays completed.
