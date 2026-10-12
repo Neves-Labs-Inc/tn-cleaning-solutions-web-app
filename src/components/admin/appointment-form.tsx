@@ -22,7 +22,7 @@ import {
   type AppointmentActionResult,
   updateAppointment,
 } from '@/lib/actions/appointments'
-import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
+import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { formatMinutes } from '@/components/admin/time-sheets/format-minutes'
 import CalculatedTotal from '@/components/admin/calculated-total'
 import { estimateAppointmentTotal } from '@/lib/pricing/estimate'
@@ -168,7 +168,7 @@ export function AppointmentForm({
 }: AppointmentFormProps) {
   const serverAction = appointment ? updateAppointment.bind(null, appointment.id) : createAppointment
   const router = useRouter()
-  const invalidateAppointments = useInvalidateAppointments()
+  const appointmentsCache = useAppointmentsCache()
   const [hasSaved, setHasSaved] = useState(false)
   const [state, formAction, isPending] = useActionState(
     async (previous: AppointmentActionResult, formData: FormData): Promise<AppointmentActionResult> => {
@@ -177,8 +177,8 @@ export function AppointmentForm({
         if (result.success) {
           // Stays locked until the route unmounts, so a second tap can't create a duplicate.
           setHasSaved(true)
-          // Discard before pushing so the destination never renders cached rows.
-          void invalidateAppointments()
+          // Patched before pushing so the list shows the change at once; the form stays locked meanwhile.
+          await appointmentsCache.applyChanges(result.data?.ids ?? [])
           const destination = appointment
             ? `/solutions/appointments/${appointment.id}`
             : '/solutions/appointments'
