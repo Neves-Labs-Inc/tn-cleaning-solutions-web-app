@@ -6,6 +6,8 @@
 - Supabase CLI installed (`brew install supabase/tap/supabase` on macOS)
 - Node.js 18+ and npm
 
+Moving production between Supabase projects: see [supabase-region-migration.md](supabase-region-migration.md).
+
 ## Local Supabase Setup
 
 ### 1. Start Supabase Services

@@ -77,7 +77,7 @@ fi
 if [[ "$vault_count" == "0" ]]; then
   echo "OK  0 vault.secrets on source"
 else
-  fail "source has $vault_count vault.secrets; the dump does not copy vault. Recreate them in the target by hand, then re-run."
+  fail "source has $vault_count vault.secrets; the dump does not copy vault. Remove unneeded secrets from the source, or stop and rethink the plan."
 fi
 
 echo "== Extensions"
