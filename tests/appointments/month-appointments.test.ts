@@ -87,6 +87,7 @@ describe('listMonthAppointments', () => {
         paymentState: 'billed',
         claim: { id: 'inv-draft', number: null, status: 'draft' },
         isNotClocked: false,
+        isMissedClock: false,
       },
       {
         id: 'oct-7-afternoon',
@@ -102,6 +103,7 @@ describe('listMonthAppointments', () => {
         paymentState: 'unbilled',
         claim: null,
         isNotClocked: false,
+        isMissedClock: false,
       },
       {
         id: 'oct-9-paid',
@@ -117,6 +119,7 @@ describe('listMonthAppointments', () => {
         paymentState: 'paid',
         claim: { id: 'inv-paid', number: 'INV-002-SMI2026', status: 'paid' },
         isNotClocked: false,
+        isMissedClock: false,
       },
       {
         id: 'oct-20-upcoming',
@@ -132,6 +135,7 @@ describe('listMonthAppointments', () => {
         paymentState: null,
         claim: null,
         isNotClocked: false,
+        isMissedClock: false,
       },
     ])
   })

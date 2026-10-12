@@ -80,7 +80,7 @@ type RowProps = {
 
 export function AppointmentRowLink({ appointment, hasUnpricedTag, variant = 'responsive' }: RowProps): React.ReactNode {
   const isStacked = variant === 'stacked'
-  const status = appointmentDisplayBadge(appointment.status, appointment.isNotClocked)
+  const status = appointmentDisplayBadge(appointment)
   const isUnpriced = appointment.priceCents === null
   const isTinted = appointmentCardTone(appointment) !== null
   // On a tint the link is a translucent layer, so hover and press darken the tone instead of replacing it.

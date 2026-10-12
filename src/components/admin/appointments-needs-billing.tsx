@@ -45,6 +45,7 @@ function toListRow(appointment: NeedsBillingAppointment): ScheduleAppointment {
     paymentState: 'unbilled',
     claim: null,
     isNotClocked: false,
+    isMissedClock: false,
   }
 }
 

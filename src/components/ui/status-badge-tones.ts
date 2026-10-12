@@ -41,6 +41,7 @@ const PAYMENT_STATE_BADGES: Record<PaymentState, StatusBadgeSpec> = {
 
 // A scheduled appointment an hour past its end. Same icon as Not started / Open shift: time passed.
 export const NOT_CLOCKED_BADGE: StatusBadgeSpec = { tone: 'danger', label: 'Not clocked', icon: Clock }
+export const MISSED_CLOCK_BADGE: StatusBadgeSpec = { tone: 'danger', label: 'Missed clock', icon: CircleDashed }
 
 export const ARCHIVED_BADGE: StatusBadgeSpec = { tone: 'neutral', label: 'Archived' }
 
@@ -60,16 +61,21 @@ export function appointmentStatusBadge(status: AppointmentStatus): StatusBadgeSp
 }
 
 // The status pill every appointment surface paints; nothing else picks the label.
-export function appointmentDisplayBadge(status: AppointmentStatus, isNotClocked: boolean): StatusBadgeSpec {
-  return isNotClocked ? NOT_CLOCKED_BADGE : appointmentStatusBadge(status)
+export function appointmentDisplayBadge(
+  appointment: Pick<ScheduleAppointment, 'status' | 'isNotClocked' | 'isMissedClock'>
+): StatusBadgeSpec {
+  if (appointment.isNotClocked) return NOT_CLOCKED_BADGE
+  if (appointment.isMissedClock) return MISSED_CLOCK_BADGE
+  return appointmentStatusBadge(appointment.status)
 }
 
-// The one place that decides an appointment card's tint (DESIGN.md §3.2). Not clocked wins, then In progress,
+// The one place that decides an appointment card's tint (DESIGN.md §3.2). Missed clock and Not clocked win, then In progress,
 // then the Payment state; Cancelled is never tinted.
 export function appointmentCardTone(
-  appointment: Pick<ScheduleAppointment, 'status' | 'isNotClocked' | 'paymentState'>,
+  appointment: Pick<ScheduleAppointment, 'status' | 'isNotClocked' | 'isMissedClock' | 'paymentState'>,
 ): StatusTone | null {
   if (appointment.status === 'cancelled') return null
+  if (appointment.isMissedClock) return 'danger'
   if (appointment.isNotClocked) return 'danger'
   if (appointment.status === 'in_progress') return 'progress'
   if (appointment.paymentState === null) return null

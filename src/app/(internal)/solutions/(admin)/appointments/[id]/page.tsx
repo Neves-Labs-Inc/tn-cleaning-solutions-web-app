@@ -12,7 +12,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/ca
 import PageHeader from '@/components/ui/page-header'
 import StatusBadge, { appointmentDisplayBadge } from '@/components/ui/status-badge'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
-import { isNotClocked } from '@/lib/appointments/overview'
+import { isMissedClock, isNotClocked } from '@/lib/appointments/overview'
 import { loadAppointmentBilling } from '@/lib/invoices/appointment-billing'
 import {
   APPOINTMENT_PRICE_COLUMNS,
@@ -110,17 +110,17 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
     loadAppointmentBilling(supabase, appointment),
   ])
 
-  const statusBadge = appointmentDisplayBadge(
-    appointment.status,
-    isNotClocked(
-      {
-        status: appointment.status,
-        scheduledDate: appointment.scheduled_date,
-        endTime: appointment.scheduled_end_time,
-      },
-      new Date()
-    )
-  )
+  const now = new Date()
+  const clockCheck = {
+    status: appointment.status,
+    scheduledDate: appointment.scheduled_date,
+    endTime: appointment.scheduled_end_time,
+  }
+  const statusBadge = appointmentDisplayBadge({
+    status: appointment.status,
+    isNotClocked: isNotClocked(clockCheck, now),
+    isMissedClock: isMissedClock(clockCheck, now),
+  })
 
   return (
     <div className="space-y-6">

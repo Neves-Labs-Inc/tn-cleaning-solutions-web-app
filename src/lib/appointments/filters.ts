@@ -8,6 +8,7 @@ export const APPOINTMENT_STATUS_FILTERS = [
   'scheduled',
   'not_clocked',
   'in_progress',
+  'missed_clock',
   'completed',
   'cancelled',
 ] as const
@@ -30,6 +31,7 @@ export type FilterableAppointment = {
   jobId: string
   status: AppointmentStatus
   isNotClocked: boolean
+  isMissedClock: boolean
 }
 
 type SearchParam = string | string[] | undefined
@@ -84,11 +86,15 @@ export function resolveFilterOptions<T extends AppointmentsFilter>(filter: T, op
   }
 }
 
-// Matched on the status a row shows: Not clocked stands in for Scheduled once the grace has passed.
+// Matched on the status a row shows: Not clocked stands in for Scheduled, and Missed clock for In progress,
+// once the grace has passed.
 function matchesStatus(appointment: FilterableAppointment, status: AppointmentStatusFilter): boolean {
   if (status === 'all') return true
   if (status === 'not_clocked') return appointment.isNotClocked
   if (status === 'scheduled') return appointment.status === 'scheduled' && !appointment.isNotClocked
+
+  if (status === 'missed_clock') return appointment.isMissedClock
+  if (status === 'in_progress') return appointment.status === 'in_progress' && !appointment.isMissedClock
 
   return appointment.status === status
 }
@@ -117,6 +123,6 @@ export function filterNeedsRows<T extends { clientId: string; jobId: string }>(
 ): T[] {
   const clientAndJob: AppointmentsFilter = { ...filter, status: 'all' }
   return rows.filter((row) =>
-    matchesFilters({ clientId: row.clientId, jobId: row.jobId, status: 'completed', isNotClocked: false }, clientAndJob, true)
+    matchesFilters({ clientId: row.clientId, jobId: row.jobId, status: 'completed', isNotClocked: false, isMissedClock: false }, clientAndJob, true)
   )
 }

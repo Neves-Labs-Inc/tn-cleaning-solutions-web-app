@@ -138,6 +138,7 @@ function scheduled(
     paymentState: null,
     claim: null,
     isNotClocked: false,
+    isMissedClock: false,
     ...overrides,
   }
 }

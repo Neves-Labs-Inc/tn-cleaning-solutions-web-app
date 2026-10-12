@@ -88,8 +88,9 @@ Mapping (single source of truth lives in one `status-badge.tsx`, §10):
 | Payment state `billed` | info |
 | Payment state `paid` | success |
 | appointment Not clocked | danger |
+| appointment Missed clock | danger |
 
-Appointment cards and list rows are tinted with their tone via `appointmentCardTone` (Not clocked wins, then In progress, then the Payment state; Cancelled and appointments with neither stay untinted). The surface classes live in `CARD_TINT_CLASSES` in `status-badge.tsx`.
+Appointment cards and list rows are tinted with their tone via `appointmentCardTone` (Missed clock wins, then Not clocked, then In progress, then the Payment state; Cancelled and appointments with neither stay untinted). The surface classes live in `CARD_TINT_CLASSES` in `status-badge.tsx`.
 
 ### 3.3 Dark mode
 
