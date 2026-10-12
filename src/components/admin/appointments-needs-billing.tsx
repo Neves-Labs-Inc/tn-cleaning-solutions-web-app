@@ -17,7 +17,8 @@ import NeedsBillingBar from './needs-billing-bar'
 type AppointmentsNeedsBillingProps = {
   // Every Unbilled appointment, oldest first.
   appointments: NeedsBillingAppointment[]
-  methods: PaymentMethod[]
+  // null while they load; Mark paid waits for them.
+  methods: PaymentMethod[] | null
   businessDate: string
   // Shown instead of the view's own empty state when the filters leave nothing.
   filteredEmpty: React.ReactNode
@@ -118,6 +119,7 @@ export default function AppointmentsNeedsBilling({
       <NeedsBillingBar
         selected={selected}
         onClear={() => setSelectedIds([])}
+        isMarkPaidLoading={methods === null}
         onMarkPaid={() =>
           setDialog({
             appointments: selected.map(toMarkPaidAppointment),
@@ -131,7 +133,7 @@ export default function AppointmentsNeedsBilling({
         appointments={dialog.appointments}
         clientId={dialog.clientId}
         clientName={dialog.clientName}
-        methods={methods}
+        methods={methods ?? []}
         businessDate={businessDate}
         onSuccess={() => setSelectedIds([])}
         onClose={() => setDialog(CLOSED_DIALOG)}

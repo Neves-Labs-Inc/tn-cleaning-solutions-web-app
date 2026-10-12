@@ -9,6 +9,8 @@ import { getReadRange } from "../../src/lib/appointments/range.ts";
 import {
   bucketByWeek,
   getWeeksSpan,
+  groupWeekReads,
+  MAX_SPAN_WEEKS,
   mergeWeeks,
   missingWeeks,
   parseWeeksSpan,
@@ -293,5 +295,49 @@ describe("parseWeeksSpan", () => {
     // The 110th week from 2026-10-11 starts 2028-11-12; the 111th, 2028-11-19.
     assert.notEqual(parseWeeksSpan("2026-10-11", "2028-11-12"), null);
     assert.equal(parseWeeksSpan("2026-10-11", "2028-11-19"), null);
+  });
+});
+
+describe("groupWeekReads", () => {
+  it("reads a run of weeks in one go, in order and without repeats", () => {
+    assert.deepEqual(
+      groupWeekReads(["2026-10-25", "2026-10-11", "2026-10-18", "2026-10-11"]),
+      [["2026-10-11", "2026-10-18", "2026-10-25"]],
+    );
+  });
+
+  it("reads across a short run of cached weeks rather than splitting", () => {
+    // Show more after the middle weeks were cached: one read re-reads the gap.
+    assert.deepEqual(groupWeekReads(["2026-10-11", "2026-11-15"]), [
+      ["2026-10-11", "2026-11-15"],
+    ]);
+  });
+
+  it("splits weeks far apart into separate reads", () => {
+    // A range a year back and the business month: reading the year between is waste.
+    assert.deepEqual(
+      groupWeekReads(["2025-10-12", "2025-10-19", "2026-10-04", "2026-10-11"]),
+      [
+        ["2025-10-12", "2025-10-19"],
+        ["2026-10-04", "2026-10-11"],
+      ],
+    );
+  });
+
+  it("keeps every read within the span the loader accepts", () => {
+    // 120 weeks, more than one read may span.
+    const contiguous = weeksForRange({ from: "2026-10-11", to: "2029-01-27" });
+
+    const reads = groupWeekReads(contiguous);
+
+    assert.deepEqual(
+      reads.map((read) => read.length),
+      [MAX_SPAN_WEEKS, 120 - MAX_SPAN_WEEKS],
+    );
+    assert.deepEqual(reads.flat(), contiguous);
+  });
+
+  it("reads nothing for no weeks", () => {
+    assert.deepEqual(groupWeekReads([]), []);
   });
 });

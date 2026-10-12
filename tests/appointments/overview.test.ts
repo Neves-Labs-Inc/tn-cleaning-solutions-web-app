@@ -4,13 +4,10 @@ import { describe, it } from 'node:test'
 import {
   appointmentsHref,
   appointmentsInView,
-  createPendingTile,
-  getNavQuery,
   isLockedRow,
   parseAppointmentsQuery,
   resolveBillingSelection,
   splitDayEvents,
-  syncPendingTile,
   summarizeOverview,
   tileCaption,
   toggleView,
@@ -238,44 +235,6 @@ describe('appointmentsInView', () => {
   it('keeps only the Billed or Paid appointments in those views', () => {
     assert.deepEqual(ids(appointmentsInView(month, { ...OCTOBER, view: 'billed' })), ['billed'])
     assert.deepEqual(ids(appointmentsInView(month, { ...OCTOBER, view: 'paid' })), ['paid'])
-  })
-})
-
-describe('getNavQuery', () => {
-  const BILLED = { ...OCTOBER, view: 'billed' as const }
-
-  it('builds on the URL when no tile navigation is pending', () => {
-    assert.deepEqual(getNavQuery(createPendingTile(OCTOBER), OCTOBER), OCTOBER)
-  })
-
-  it("builds on a pending tile's view while its navigation is still in flight", () => {
-    const pending = createPendingTile(OCTOBER, BILLED)
-
-    assert.deepEqual(getNavQuery(pending, OCTOBER), BILLED)
-  })
-
-  it('builds on the URL once the tile navigation lands', () => {
-    const pending = createPendingTile(OCTOBER, BILLED)
-
-    assert.deepEqual(getNavQuery(pending, BILLED), BILLED)
-  })
-
-  // The component keeps each render's synced state, as these steps do.
-  it('never revives a landed tile when the URL returns to where it was clicked (Back or "Show all")', () => {
-    let pending = createPendingTile(OCTOBER, BILLED)
-    pending = syncPendingTile(pending, BILLED)
-    pending = syncPendingTile(pending, OCTOBER)
-
-    assert.deepEqual(getNavQuery(pending, OCTOBER), OCTOBER)
-  })
-
-  it('drops a tile navigation that was abandoned for another URL', () => {
-    const november = { ...OCTOBER, month: 11 }
-    let pending = createPendingTile(OCTOBER, BILLED)
-    pending = syncPendingTile(pending, november)
-
-    assert.deepEqual(getNavQuery(pending, november), november)
-    assert.deepEqual(getNavQuery(syncPendingTile(pending, OCTOBER), OCTOBER), OCTOBER)
   })
 })
 

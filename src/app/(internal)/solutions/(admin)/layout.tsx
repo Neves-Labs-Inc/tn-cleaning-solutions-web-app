@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
+import AdminQueryProvider from '@/components/admin/admin-query-provider'
+
 export default async function AdminLayout({
 	children,
 }: {
@@ -22,5 +24,5 @@ export default async function AdminLayout({
 		redirect('/solutions/schedule')
 	}
 
-	return <>{children}</>
+	return <AdminQueryProvider>{children}</AdminQueryProvider>
 }

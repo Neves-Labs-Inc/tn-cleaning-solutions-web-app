@@ -9,6 +9,7 @@ import type { ScheduleAppointment } from "./overview.ts";
 import {
   getWeekEnd,
   getWeekStart,
+  LIST_WEEKS_STEP,
   MAX_LIST_WEEKS,
   parseDate,
   type DateRange,
@@ -24,6 +25,8 @@ const DATE_FORMAT = "yyyy-MM-dd";
 const MAX_MONTH_WEEKS = 6;
 // The longest List read, plus room for a month's edge weeks.
 export const MAX_SPAN_WEEKS = MAX_LIST_WEEKS + MAX_MONTH_WEEKS;
+// Cached weeks between two wanted ones are re-read up to this many; past it two reads are cheaper.
+const MAX_REREAD_WEEKS = LIST_WEEKS_STEP;
 
 // A run of whole weeks: a Sunday to the Saturday that ends the last week.
 export type WeeksSpan = { from: string; to: string };
@@ -101,6 +104,28 @@ export function getWeeksSpan(weeks: string[]): WeeksSpan {
   }
 
   return { from: firstWeek, to: getWeekEnd(lastWeek) };
+}
+
+function weeksBetween(firstWeek: string, lastWeek: string): number {
+  return differenceInCalendarWeeks(toDay(lastWeek), toDay(firstWeek));
+}
+
+// The weeks to fetch, grouped into reads: one per run of nearby weeks, each within
+// MAX_SPAN_WEEKS. Server actions run one at a time, so fewer reads beat narrower ones.
+export function groupWeekReads(weeks: string[]): string[][] {
+  const sorted = [...new Set(weeks)].sort(compareText);
+  return sorted.reduce<string[][]>((reads, week) => {
+    const current = reads.at(-1);
+    const previous = current?.at(-1);
+    const isNearby =
+      current !== undefined &&
+      previous !== undefined &&
+      weeksBetween(previous, week) <= MAX_REREAD_WEEKS + 1 &&
+      weeksBetween(current[0], week) < MAX_SPAN_WEEKS;
+    return isNearby
+      ? [...reads.slice(0, -1), [...current, week]]
+      : [...reads, [week]];
+  }, []);
 }
 
 // Splits one span read into its weeks. A week with no appointments maps to an empty list, so
