@@ -1,8 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { startTransition, useActionState, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Info, TriangleAlert } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -71,6 +73,8 @@ type AppointmentFormProps = {
   } | null
   invoiceClaim?: InvoiceClaim | null
 }
+
+const SAVE_FAILED_MESSAGE = "Couldn't save the appointment. Try again."
 
 const initialState: AppointmentActionResult = {
   success: false,
@@ -158,9 +162,35 @@ export function AppointmentForm({
   invoiceClaim = null,
 }: AppointmentFormProps) {
   const serverAction = appointment ? updateAppointment.bind(null, appointment.id) : createAppointment
-  const [state, formAction, isPending] = useActionState(serverAction, initialState)
-  const scheduledDateRef = useRef<HTMLInputElement>(null)
+  const router = useRouter()
   const invalidateAppointments = useInvalidateAppointments()
+  const [hasSaved, setHasSaved] = useState(false)
+  const [state, formAction, isPending] = useActionState(
+    async (previous: AppointmentActionResult, formData: FormData): Promise<AppointmentActionResult> => {
+      try {
+        const result = await serverAction(previous, formData)
+        if (result.success) {
+          // Stays locked until the route unmounts, so a second tap can't create a duplicate.
+          setHasSaved(true)
+          // Discard before pushing so the destination never renders cached rows.
+          void invalidateAppointments()
+          const destination = appointment
+            ? `/solutions/appointments/${appointment.id}`
+            : '/solutions/appointments'
+          toast.success(appointment ? 'Appointment saved' : 'Appointment created')
+          router.push(destination)
+        }
+        return result
+      } catch (thrown) {
+        // A network or server failure: keep what the admin typed.
+        console.error('Appointment save failed', thrown)
+        return { success: false, error: SAVE_FAILED_MESSAGE }
+      }
+    },
+    initialState
+  )
+  const isLocked = isPending || hasSaved
+  const scheduledDateRef = useRef<HTMLInputElement>(null)
   const fieldErrors = 'fieldErrors' in state ? state.fieldErrors : undefined
   const scheduledDateError = fieldErrors?.scheduled_date
   const formError = 'error' in state ? state.error : ''
@@ -187,9 +217,7 @@ export function AppointmentForm({
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
-    // A saved form never gets a state back: the action redirects to the list. So discard now,
-    // before it runs, so the list never renders cached rows. A refused save costs one skeleton.
-    void invalidateAppointments()
+    if (isLocked) return
     startTransition(() => formAction(formData))
   }
 
@@ -296,6 +324,7 @@ export function AppointmentForm({
   return (
     <section className="rounded-lg bg-card p-4 text-card-foreground shadow-sm ring-1 ring-foreground/10 sm:p-5">
       <form onSubmit={handleSubmit} className="space-y-5">
+        <fieldset disabled={isLocked} className="contents">
         {invoiceClaim ? <InvoiceClaimBanner claim={invoiceClaim} /> : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -632,8 +661,10 @@ export function AppointmentForm({
             <Button
               variant="outline"
               size="lg"
-              className={`active:bg-muted ${PRESS_CLASSES}`}
+              className={`active:bg-muted ${PRESS_CLASSES} aria-disabled:pointer-events-none aria-disabled:opacity-50`}
               nativeButton={false}
+              aria-disabled={isLocked || undefined}
+              tabIndex={isLocked ? -1 : undefined}
               render={<Link href={appointment ? `/solutions/appointments/${appointment.id}` : '/solutions/appointments'} />}
             >
               Cancel
@@ -641,12 +672,13 @@ export function AppointmentForm({
             <SubmitButton
               label={appointment ? 'Save Changes' : 'Create Appointment'}
               pendingLabel="Saving…"
-              isPending={isPending}
+              isPending={isLocked}
               size="lg"
               className={`w-full md:w-auto ${PRESS_CLASSES}`}
             />
           </div>
         </div>
+        </fieldset>
       </form>
     </section>
   )

@@ -1,7 +1,6 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 
 import {
   hasSessionHistory,
@@ -588,8 +587,6 @@ export async function createAppointment(
   }
 
   revalidatePath('/solutions/appointments')
-  redirect('/solutions/appointments')
-
   return {
     success: true,
     data: {
@@ -1045,8 +1042,6 @@ export async function updateAppointment(
   if (claimingInvoiceId) {
     revalidatePath(`/solutions/invoices/${claimingInvoiceId}`)
   }
-  redirect(`/solutions/appointments/${id}`)
-
   return { success: true, data: { id } }
 }
 
