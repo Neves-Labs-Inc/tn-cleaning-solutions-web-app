@@ -13,6 +13,7 @@ import {
   MAX_SPAN_WEEKS,
   mergeWeeks,
   missingWeeks,
+  neighbourWeeks,
   parseWeeksSpan,
   weeksForRange,
 } from "../../src/lib/appointments/weeks.ts";
@@ -337,7 +338,68 @@ describe("groupWeekReads", () => {
     assert.deepEqual(reads.flat(), contiguous);
   });
 
+  it("reads across eight cached weeks but splits at nine", () => {
+    // Show more steps eight weeks, so re-reading up to eight cached weeks beats a second read.
+    assert.deepEqual(groupWeekReads(["2026-10-11", "2026-12-13"]), [
+      ["2026-10-11", "2026-12-13"],
+    ]);
+    assert.deepEqual(groupWeekReads(["2026-10-11", "2026-12-20"]), [
+      ["2026-10-11"],
+      ["2026-12-20"],
+    ]);
+  });
+
   it("reads nothing for no weeks", () => {
     assert.deepEqual(groupWeekReads([]), []);
+  });
+});
+
+describe("neighbourWeeks", () => {
+  it("is the week before and the week after the extent for a week", () => {
+    assert.deepEqual(neighbourWeeks(THIS_WEEK, BUSINESS_DATE), [
+      "2026-10-04",
+      "2026-12-06",
+    ]);
+  });
+
+  it("follows the list's extent after Show more", () => {
+    const longer = { ...THIS_WEEK, layout: "list" as const, weeks: 16 };
+
+    assert.deepEqual(neighbourWeeks(longer, BUSINESS_DATE), [
+      "2026-10-04",
+      "2027-01-31",
+    ]);
+  });
+
+  it("is the weeks only the previous and next month touch for a month", () => {
+    const october = { ...THIS_WEEK, layout: "month" as const };
+
+    assert.deepEqual(neighbourWeeks(october, BUSINESS_DATE), [
+      "2026-08-30",
+      "2026-09-06",
+      "2026-09-13",
+      "2026-09-20",
+      "2026-11-01",
+      "2026-11-08",
+      "2026-11-15",
+      "2026-11-22",
+      "2026-11-29",
+    ]);
+  });
+
+  it("crosses the year for December", () => {
+    const december = {
+      ...THIS_WEEK,
+      layout: "month" as const,
+      month: 12,
+    };
+
+    assert.deepEqual(neighbourWeeks(december, BUSINESS_DATE).slice(-5), [
+      "2027-01-03",
+      "2027-01-10",
+      "2027-01-17",
+      "2027-01-24",
+      "2027-01-31",
+    ]);
   });
 });

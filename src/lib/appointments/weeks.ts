@@ -1,4 +1,5 @@
 import {
+  addMonths,
   differenceInCalendarWeeks,
   eachWeekOfInterval,
   format,
@@ -7,12 +8,15 @@ import {
 
 import type { ScheduleAppointment } from "./overview.ts";
 import {
+  getReadRange,
   getWeekEnd,
   getWeekStart,
   LIST_WEEKS_STEP,
   MAX_LIST_WEEKS,
   parseDate,
+  stepWeek,
   type DateRange,
+  type RangeQuery,
 } from "./range.ts";
 
 // The appointments screen caches its range reads per Sunday-start week, so Week, List and
@@ -60,6 +64,30 @@ export function missingWeeks(
   isCached: (week: string) => boolean,
 ): string[] {
   return weeks.filter((week) => !isCached(week));
+}
+
+// The range one Prev or Next away: a week for Week and List, a month for Month.
+function stepRange(
+  query: RangeQuery,
+  offset: number,
+  businessDate: string,
+): RangeQuery {
+  if (query.layout !== "month") return stepWeek(query, offset, businessDate);
+
+  const target = addMonths(new Date(query.year, query.month - 1, 1), offset);
+  return { ...query, month: target.getMonth() + 1, year: target.getFullYear() };
+}
+
+// The weeks Prev and Next would need beyond the visible range's own, previous side first.
+export function neighbourWeeks(
+  query: RangeQuery,
+  businessDate: string,
+): string[] {
+  const visible = new Set(weeksForRange(getReadRange(query, businessDate)));
+  const neighbours = [-1, 1].flatMap((offset) =>
+    weeksForRange(getReadRange(stepRange(query, offset, businessDate), businessDate)),
+  );
+  return [...new Set(neighbours)].filter((week) => !visible.has(week));
 }
 
 // Strings compare correctly here: dates are yyyy-MM-dd and times HH:mm:ss.

@@ -6,6 +6,8 @@ import AppointmentsLoadError from "@/components/admin/appointments-load-error";
 import AppointmentsScreenSkeleton from "@/components/admin/appointments-screen-skeleton";
 import { AppointmentsViewToggle } from "@/components/admin/appointments-view-toggle";
 import { useAppointmentsScreen } from "@/hooks/use-appointments-screen";
+import { useBusinessDate } from "@/hooks/use-business-date";
+import { useNeighbourPrefetch } from "@/hooks/use-neighbour-prefetch";
 import { resolveFilterOptions } from "@/lib/appointments/filters";
 import {
   appointmentsHref,
@@ -20,10 +22,16 @@ type AppointmentsScreenProps = {
 // The appointments screen below its header. The URL holds the query; the data comes from the
 // client cache, so view, filter and cached range changes never wait on the server.
 export default function AppointmentsScreen({
-  businessDate,
+  businessDate: serverBusinessDate,
 }: AppointmentsScreenProps): React.ReactNode {
+  const businessDate = useBusinessDate(serverBusinessDate);
   const query = parseAppointmentsSearch(useSearchParams(), businessDate);
   const screen = useAppointmentsScreen(query, businessDate);
+  useNeighbourPrefetch(
+    query,
+    businessDate,
+    screen.status === "ready" && !screen.isRangePending,
+  );
 
   function handleNavigate(next: AppointmentsQuery): void {
     // Pushed (not replaced), so Back steps through ranges, layouts and filter changes. Next syncs
