@@ -37,6 +37,21 @@ export async function readAllPages<T>(readPage: (from: number, to: number) => Pr
   return rows
 }
 
+// readAllPages, narrowed to the given ids: one paged read per batch, so the id list never overflows
+// the request URL. Null ids reads unnarrowed. Rows keep the read's order within each batch only.
+export async function readAllPagesByIds<T>(
+  ids: string[] | null,
+  readPage: (idBatch: string[] | null, from: number, to: number) => PromiseLike<PageResult<T>>
+): Promise<T[]> {
+  if (ids === null) return readAllPages((from, to) => readPage(null, from, to))
+
+  const rows: T[] = []
+  for (const batch of inBatches(ids)) {
+    rows.push(...(await readAllPages((from, to) => readPage(batch, from, to))))
+  }
+  return rows
+}
+
 // priceAppointments sends every row id in its own `.in()` reads, so a long list is priced in batches.
 export async function priceAppointmentsInBatches(
   db: SupabaseClient<Database>,

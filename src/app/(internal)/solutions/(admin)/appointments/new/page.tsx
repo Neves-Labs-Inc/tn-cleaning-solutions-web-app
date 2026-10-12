@@ -1,6 +1,6 @@
-import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
+import { AppointmentsReturnLink } from '@/components/admin/appointments-return-link'
 import { AppointmentFormLoadError } from '@/components/admin/appointment-form-load-error'
 import { AppointmentForm } from '@/components/admin/appointment-form'
 import { AppointmentScheduleContext } from '@/components/admin/new-appointment-schedule-context'
@@ -88,9 +88,9 @@ export default async function NewAppointmentPage({ searchParams }: NewAppointmen
       <div className="space-y-3">
         <Button
           variant="ghost"
-          className="-ml-3 transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] active:bg-muted"
+          className="-ml-3 transition-[background-color,transform,box-shadow] duration-fast ease-out-quart active:scale-[0.98] active:bg-muted"
           nativeButton={false}
-          render={<Link href="/solutions/appointments" />}
+          render={<AppointmentsReturnLink />}
         >
           <ArrowLeft aria-hidden="true" />
           Appointments

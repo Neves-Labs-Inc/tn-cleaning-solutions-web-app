@@ -6,7 +6,7 @@ import { Pencil, RotateCcw } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
+import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { archiveClientJobPricing, restoreClientJobPricing } from '@/lib/actions/client-job-pricing'
 import { formatRate } from '@/lib/pricing/money'
 
@@ -102,7 +102,7 @@ export function ClientJobPricingList({ clientId, rows, today }: ClientJobPricing
 function RuleCard({ entry, clientId }: { entry: RuleEntry; clientId: string }) {
   const { row, status } = entry
 
-  const invalidateAppointments = useInvalidateAppointments()
+  const appointmentsCache = useAppointmentsCache()
   const [errorMessage, formAction] = useActionState(handleStateChange, '')
 
   async function handleStateChange(_previous: string, formData: FormData) {
@@ -116,7 +116,7 @@ function RuleCard({ entry, clientId }: { entry: RuleEntry; clientId: string }) {
 
       if (result.success) {
         // Cached prices come from the rate in force, so they are stale now.
-        void invalidateAppointments()
+        void appointmentsCache.refresh()
       } else {
         message = result.error
       }

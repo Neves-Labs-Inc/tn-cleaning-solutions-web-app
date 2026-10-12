@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { unstable_rethrow } from 'next/navigation'
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
 
@@ -8,8 +9,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
+import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { createClient, type ClientActionResult, updateClient } from '@/lib/actions/clients'
+import { appointmentsKeys } from '@/lib/appointments/appointments-keys'
 
 type ClientFormProps = {
   client?: {
@@ -42,19 +44,44 @@ function SubmitButton({ isEditMode }: { isEditMode: boolean }) {
 }
 
 export function ClientForm({ client }: ClientFormProps) {
-  const serverAction = client ? updateClient.bind(null, client.id) : createClient
-  const [state, formAction, _isPending] = useActionState(serverAction, initialState)
-  const invalidateAppointments = useInvalidateAppointments()
+  const appointmentsCache = useAppointmentsCache()
+  const saveAction = client ? updateClient.bind(null, client.id) : createClient
 
-  // A saved form never gets a result back: the action redirects. So discard at submit, before the
-  // action runs; a refused save costs one skeleton. Not prevented, so the action still dispatches.
-  function handleSubmit() {
-    void invalidateAppointments()
+  // A saved form never gets a result back: the action redirects. So patch the cache before the
+  // action runs; the code after the await only runs when the save is refused, and undoes the
+  // rename, so rows never show a name that wasn't saved.
+  async function handleSave(previous: ClientActionResult, formData: FormData): Promise<ClientActionResult> {
+    const name = String(formData.get('name') ?? '').trim()
+    const isRenamed = client !== undefined && name !== client.name
+
+    if (isRenamed) {
+      appointmentsCache.rename({ kind: 'client', id: client.id, name })
+    }
+
+    // After the rename: setQueryData clears the stale mark, so refresh last.
+    void appointmentsCache.refresh([appointmentsKeys.filterOptions])
+
+    try {
+      const result = await saveAction(previous, formData)
+      if (isRenamed && 'error' in result && result.error) {
+        appointmentsCache.rename({ kind: 'client', id: client.id, name: client.name })
+      }
+      return result
+    } catch (error) {
+      // A redirect is the success path and rethrows here; any other throw means nothing was saved.
+      unstable_rethrow(error)
+      if (isRenamed) {
+        appointmentsCache.rename({ kind: 'client', id: client.id, name: client.name })
+      }
+      throw error
+    }
   }
+
+  const [state, formAction, _isPending] = useActionState(handleSave, initialState)
 
   return (
     <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-      <form action={formAction} onSubmit={handleSubmit} className="space-y-5">
+      <form action={formAction} className="space-y-5">
         {'error' in state && state.error ? (
           <div
             className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"

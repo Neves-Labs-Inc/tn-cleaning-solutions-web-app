@@ -1,4 +1,4 @@
-import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
+import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { updateDraft, type InvoiceActionResult } from '@/lib/actions/invoices'
 
 import type { DraftDetails } from './invoice-detail-context'
@@ -37,13 +37,13 @@ function submitDraftUpdate({
 
 type SubmitDraftUpdate = typeof submitDraftUpdate
 
-// submitDraftUpdate that also drops the appointments cache once the draft saved.
+// submitDraftUpdate that also patches the appointments cache once the draft saved.
 export function useSubmitDraftUpdate(): SubmitDraftUpdate {
-  const invalidateAppointments = useInvalidateAppointments()
+  const { applyChanges } = useAppointmentsCache()
 
   return async (update) => {
     const result = await submitDraftUpdate(update)
-    if (result.success) void invalidateAppointments()
+    if (result.success) void applyChanges(result.appointmentIds)
     return result
   }
 }

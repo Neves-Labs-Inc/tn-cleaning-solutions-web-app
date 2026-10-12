@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
+import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { setDraftLinePrice } from '@/lib/actions/invoices'
 import { AMOUNT_TOO_LARGE_MESSAGE, parseDollarsToCents } from '@/lib/pricing/money'
 
@@ -30,7 +30,7 @@ function initialValue(amountCents: number | null): string {
 // Submit and clear state for one line's inline total editor.
 export function useLineTotalEdit({ invoiceId, appointmentId, amountCents, onClose, onPendingChange }: UseLineTotalEditOptions) {
   const router = useRouter()
-  const invalidateAppointments = useInvalidateAppointments()
+  const { applyChanges } = useAppointmentsCache()
   const [value, setValue] = useState(() => initialValue(amountCents))
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
@@ -49,7 +49,7 @@ export function useLineTotalEdit({ invoiceId, appointmentId, amountCents, onClos
     try {
       const result = await setDraftLinePrice(null, formData)
       if (result.success) {
-        void invalidateAppointments()
+        void applyChanges(result.appointmentIds)
         toast.success(successMessage)
         onClose()
         router.refresh()

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { CONNECTION_ERROR_MESSAGE } from "@/components/invoices/invoice-detail-context";
-import { useInvalidateAppointments } from "@/hooks/use-invalidate-appointments";
+import { useAppointmentsCache } from "@/hooks/use-appointments-cache";
 import type { InvoiceActionResult } from "@/lib/actions/invoices";
 
 // The submit flow of a payment sheet (Mark paid, Record payment): check the form, post it, then
@@ -46,7 +46,7 @@ export default function usePaymentSheetSubmit<T>({
   const [fieldErrors, setFieldErrors] = useState<SheetFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const invalidateAppointments = useInvalidateAppointments();
+  const { applyChanges } = useAppointmentsCache();
 
   function showFieldErrors(errors: SheetFieldErrors): void {
     setFieldErrors(errors);
@@ -63,7 +63,9 @@ export default function usePaymentSheetSubmit<T>({
     try {
       const result = await action(null, formData);
       if (result.success) {
-        void invalidateAppointments();
+        // Awaited, so the pending label holds until the rows have left the list; then the toast,
+        // the sheet closing and the selection clearing land together.
+        await applyChanges(result.appointmentIds);
         onSuccess(result.data);
         return;
       }

@@ -4,7 +4,7 @@ import type { Database } from "@/types/database";
 import {
   inBatches,
   priceAppointmentsInBatches,
-  readAllPages,
+  readAllPagesByIds,
 } from "../invoices/batch.ts";
 import {
   APPOINTMENT_PRICE_COLUMNS,
@@ -54,28 +54,32 @@ function displayedCents(display: DisplayPrice | undefined): number | null {
     : null;
 }
 
-// Every Not clocked appointment in every month, oldest first. Prices are read in batches, never
-// per row.
+// Every Not clocked appointment in every month, oldest first; with ids, only those of them that
+// are Not clocked. Prices are read in batches, never per row.
 export async function listNeedsCompletion(
   db: Db,
   now: Date,
+  ids: string[] | null = null,
 ): Promise<NeedsCompletionAppointment[]> {
   // A visit can't pass its grace end before its own day starts, so later days are never read.
   const businessDate = getBusinessDate(now);
 
   // Paged in an order with a unique last key so no row shifts between pages.
-  const scheduled = (await readAllPages((from, to) =>
-    db
+  const scheduled = (await readAllPagesByIds(ids, (idBatch, from, to) => {
+    const pastScheduled = db
       .from("appointments")
       .select(NEEDS_COMPLETION_COLUMNS)
       .eq("is_archived", false)
       .eq("status", "scheduled")
-      .lte("scheduled_date", businessDate)
+      .lte("scheduled_date", businessDate);
+    const scoped =
+      idBatch === null ? pastScheduled : pastScheduled.in("id", idBatch);
+    return scoped
       .order("scheduled_date", { ascending: true })
       .order("scheduled_start_time", { ascending: true })
       .order("id", { ascending: true })
-      .range(from, to),
-  )) as unknown as NeedsCompletionRow[];
+      .range(from, to);
+  })) as unknown as NeedsCompletionRow[];
   const rows = scheduled.filter((row) =>
     isNotClocked(
       {

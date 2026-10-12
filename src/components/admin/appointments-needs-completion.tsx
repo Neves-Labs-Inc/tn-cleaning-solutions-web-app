@@ -62,16 +62,25 @@ export default function AppointmentsNeedsCompletion({
 }: AppointmentsNeedsCompletionProps): React.ReactNode {
   const completion = useCompleteAppointments(appointments);
   const selectAllRef = useRef<HTMLElement>(null);
+  const emptyRef = useRef<HTMLDivElement>(null);
   const isBarOpen = completion.selected.length > 0;
+  // A run that clears the list unmounts select-all, so focus lands on the empty state instead.
+  const isListEmpty = appointments.length === 0;
 
   return (
     <>
       <AppointmentsNeedsHeader view="needs-completion" />
 
       {appointments.length === 0 && filteredEmpty ? (
-        filteredEmpty
+        <div ref={emptyRef} tabIndex={-1} className="outline-none">
+          {filteredEmpty}
+        </div>
       ) : appointments.length === 0 ? (
-        <Empty>
+        <Empty
+          ref={emptyRef}
+          tabIndex={-1}
+          className="outline-none animate-in fade-in-0 duration-base ease-out-quart"
+        >
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <CheckCircle2 aria-hidden="true" />
@@ -126,7 +135,9 @@ export default function AppointmentsNeedsCompletion({
         confirmVariant="default"
         onConfirm={completion.confirm}
         // Once the selection clears, the bar and its Mark complete button are gone from reach.
-        returnFocusRef={isBarOpen ? undefined : selectAllRef}
+        returnFocusRef={
+          isBarOpen ? undefined : isListEmpty ? emptyRef : selectAllRef
+        }
       />
     </>
   );

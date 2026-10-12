@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { useInvalidateAppointments } from "@/hooks/use-invalidate-appointments";
+import { useAppointmentsCache } from "@/hooks/use-appointments-cache";
 import { updateAppointmentEmployeeAdminNotes } from "@/lib/actions/appointments";
 
 // One Cleaner's admin notes on a visit. Saving notes never touches the clocks. The draft is
@@ -22,12 +22,13 @@ const SAVE_FAILED_MESSAGE = "Couldn't save notes. Try again.";
 
 export function useAdminNotes(
   assignmentId: string,
+  appointmentId: string,
   initialNotes: string,
 ): AdminNotes {
   const [savedNotes, setSavedNotes] = useState(initialNotes);
   const [draft, setDraft] = useState(initialNotes);
   const [isPending, startTransition] = useTransition();
-  const invalidateAppointments = useInvalidateAppointments();
+  const appointmentsCache = useAppointmentsCache();
 
   async function save(): Promise<void> {
     const submitted = draft;
@@ -38,7 +39,7 @@ export function useAdminNotes(
       );
       if (result.success) {
         setSavedNotes(submitted);
-        void invalidateAppointments();
+        void appointmentsCache.applyChanges([appointmentId]);
         toast.success(SAVED_MESSAGE);
       } else {
         console.warn("updateAppointmentEmployeeAdminNotes refused", {

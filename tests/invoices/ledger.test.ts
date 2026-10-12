@@ -269,3 +269,39 @@ test('markPaid keeps the raw message of an error that is not a refusal', async (
 
   assert.deepEqual(result, { ok: false, code: 'unknown', message: 'connection reset' })
 })
+
+test('appointmentIdsOn lists every appointment on the invoices, cancelled and archived lines included', async () => {
+  const { ledger } = setup({
+    appointments: [],
+    invoice_appointments: [
+      draftLine('inv-1', 'appt-1'),
+      { ...draftLine('inv-1', 'appt-2'), cancelled_at: '2026-10-02T10:00:00Z' },
+      { ...draftLine('inv-2', 'appt-3'), is_archived: true },
+      draftLine('inv-3', 'appt-4'),
+    ],
+  })
+
+  const result = await ledger.appointmentIdsOn(['inv-1', 'inv-2'])
+
+  assert.deepEqual(result, { ok: true, data: ['appt-1', 'appt-2', 'appt-3'] })
+})
+
+test('appointmentIdsOn reads past the URL limit when given many invoices', async () => {
+  const invoiceIds = Array.from({ length: 300 }, (_, index) => `inv-${index}`)
+  const { ledger } = setup({
+    appointments: [],
+    invoice_appointments: invoiceIds.map((invoiceId, index) => draftLine(invoiceId, `appt-${index}`)),
+  })
+
+  const result = await ledger.appointmentIdsOn(invoiceIds)
+
+  assert.equal(result.ok ? result.data.length : -1, 300)
+})
+
+test('appointmentIdsOn returns a failed read as an unknown error instead of throwing', async () => {
+  const { ledger } = setup({ appointments: [], invoice_appointments: [] }, undefined, ['invoice_appointments'])
+
+  const result = await ledger.appointmentIdsOn(['inv-1'])
+
+  assert.deepEqual(result, { ok: false, code: 'unknown', message: 'connection reset' })
+})

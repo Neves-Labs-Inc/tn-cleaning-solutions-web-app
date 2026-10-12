@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import ConfirmDialog from '@/components/ui/confirm-dialog'
 import SubmitButton from '@/components/ui/submit-button'
-import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
+import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import {
   cancelAppointment,
   markAppointmentComplete,
@@ -72,7 +72,7 @@ export default function AppointmentLifecycleActions({
   editHref,
 }: AppointmentLifecycleActionsProps) {
   const router = useRouter()
-  const invalidateAppointments = useInvalidateAppointments()
+  const appointmentsCache = useAppointmentsCache()
   const [error, setError] = useState<ActionError | null>(null)
   const [isCancelOpen, setIsCancelOpen] = useState(false)
 
@@ -89,7 +89,7 @@ export default function AppointmentLifecycleActions({
       const result = await action(appointmentId)
 
       if (result.success) {
-        void invalidateAppointments()
+        void appointmentsCache.applyChanges([appointmentId])
         toast.success(copy.successMessage)
       } else {
         setError({ title: copy.errorTitle, message: result.error })
