@@ -28,6 +28,7 @@ import CalculatedTotal from '@/components/admin/calculated-total'
 import { estimateAppointmentTotal } from '@/lib/pricing/estimate'
 import { parseDollarsToCents } from '@/lib/pricing/money'
 import type { ClientJobRule } from '@/lib/pricing/resolve'
+import { browserListStorage, listReturnHref } from '@/lib/appointments/list-return'
 import { planCrewChange } from '@/lib/appointments/crew'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
@@ -179,9 +180,8 @@ export function AppointmentForm({
           setHasSaved(true)
           // Patched before pushing so the list shows the change at once; the form stays locked meanwhile.
           await appointmentsCache.applyChanges(result.data?.ids ?? [])
-          const destination = appointment
-            ? `/solutions/appointments/${appointment.id}`
-            : '/solutions/appointments'
+          // Create and edit both return to the list's remembered state.
+          const destination = listReturnHref(browserListStorage())
           toast.success(appointment ? 'Appointment saved' : 'Appointment created')
           router.push(destination)
         }

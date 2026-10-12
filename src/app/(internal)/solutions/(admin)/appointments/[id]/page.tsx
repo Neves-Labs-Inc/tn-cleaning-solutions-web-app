@@ -1,9 +1,9 @@
-import Link from 'next/link'
 import { format, parseISO } from 'date-fns'
 import { ArrowLeft } from 'lucide-react'
 import { notFound } from 'next/navigation'
 
 import AppointmentCrewClocks from '@/components/admin/appointment-crew-clocks'
+import { AppointmentsReturnLink } from '@/components/admin/appointments-return-link'
 import BillingCard from '@/components/admin/billing-card'
 import AppointmentLifecycleActions, { CompletedByAdminHint } from '@/components/admin/appointment-lifecycle-actions'
 import { BillingMismatchNote } from '@/components/invoices/visit-line-summary'
@@ -129,7 +129,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
           <Button
             variant="ghost"
             className="-ml-3 w-fit transition-[background-color,transform,box-shadow] duration-fast ease-out-quart active:scale-[0.98] active:bg-muted"
-            render={<Link href="/solutions/appointments" />}
+            render={<AppointmentsReturnLink />}
             nativeButton={false}
           >
             <ArrowLeft aria-hidden="true" />
