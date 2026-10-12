@@ -149,3 +149,15 @@ test("accepts a symlink that resolves outside the repo", () => {
     assertSafeMigrationDir("/tmp/dump", REPO_ROOT, fs),
   );
 });
+
+test("returns the resolved directory, so callers write where the guard looked", () => {
+  // The raw string can differ from where the guard looked (symlinks, ".."), so callers use this.
+  const fs = fakeFs(["/", "/tmp", "/Volumes/secure", REPO_ROOT], {
+    "/tmp/dump": "/Volumes/secure/dump",
+  });
+
+  assert.equal(
+    assertSafeMigrationDir("/tmp/dump/", REPO_ROOT, fs),
+    "/Volumes/secure/dump",
+  );
+});

@@ -12,11 +12,13 @@ export type MigrationDirFs = {
   realpath: (path: string) => string;
 };
 
+// Returns the resolved directory. Write only there: the kernel follows a symlink before
+// applying "..", so the raw string can land somewhere the guard never checked.
 export function assertSafeMigrationDir(
   dir: string,
   repoRoot: string,
   fs: MigrationDirFs,
-): void {
+): string {
   if (!path.isAbsolute(dir)) {
     throw new Error(
       `MIGRATION_DIR must be an absolute path outside the repo, got "${dir}"`,
@@ -31,6 +33,7 @@ export function assertSafeMigrationDir(
         `(${resolvedRoot}). Pick a directory outside it.`,
     );
   }
+  return resolvedDir;
 }
 
 // Realpaths the deepest part of the path that exists, so a not-yet-created directory
