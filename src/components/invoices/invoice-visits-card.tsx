@@ -11,7 +11,6 @@ import { Card } from '@/components/ui/card'
 import ConfirmDialog from '@/components/ui/confirm-dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { claimableStates, lineMismatchLiveLabel } from '@/lib/invoices/lines'
-import { formatPriceBreakdown } from '@/lib/invoices/price-breakdown'
 import type { ClaimableVisit, InvoiceDetailLine } from '@/lib/invoices/queries'
 import { formatDateOnly, type InvoiceStatus, type LineState } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
@@ -79,7 +78,6 @@ function LineRow({ line, status, isEditable, isPending, isBusy, onRemove }: Line
           struck={isCancelled}
           billedAmountCents={line.billed_amount_cents}
           setPriceLink="none"
-          priceBreakdown={formatPriceBreakdown(line, status)}
           mismatchLiveLabel={lineMismatchLiveLabel(line, status)}
         />
         {isUnpriced && isEditable ? (
