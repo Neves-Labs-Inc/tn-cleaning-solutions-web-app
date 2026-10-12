@@ -52,6 +52,7 @@ import AppointmentsNeedsBilling from './appointments-needs-billing'
 import AppointmentsNeedsCompletion from './appointments-needs-completion'
 import AppointmentsOverviewTiles from './appointments-overview-tiles'
 import AppointmentsRangeNav from './appointments-range-nav'
+import AppointmentsWeekGrid from './appointments-week-grid'
 
 type AppointmentsViewToggleProps = {
   query: AppointmentsQuery
@@ -218,7 +219,7 @@ type ScheduleBodyProps = {
   phrase: string
   businessDate: string
   onClear: () => void
-  // The month grid, which shows even an empty month; the list otherwise.
+  // The month grid, which shows even an empty month; the week grid, which gives way to an empty state.
   calendar?: React.ReactNode
 }
 
@@ -308,7 +309,7 @@ export function AppointmentsViewToggle({
   const phonePhrase = getRangeCopy(query, businessDate, isMonth ? 'month' : 'list').phrase
   const desktopPhrase = getRangeCopy(query, businessDate).phrase
   const weekEnd = getWeekEnd(resolveWeekStart(query.from, businessDate))
-  // Until the week grid lands, Week lists its 7 days of the list-extent read.
+  // Week reads the list's extent (the server can't tell the width), so trim it to the 7 days the grid shows.
   const desktopVisible = isWeek ? visible.filter((appointment) => appointment.scheduledDate <= weekEnd) : visible
 
   function handleNavigate(next: AppointmentsQuery): void {
@@ -495,14 +496,22 @@ export function AppointmentsViewToggle({
                         appointments={desktopVisible}
                         phrase={desktopPhrase}
                         calendar={
-                          isMonth ? (
+                          isMonth || desktopVisible.length > 0 ? (
                             <div className="p-4">
-                              <AppointmentsCalendar
-                                appointments={visible}
-                                month={query.month}
-                                year={query.year}
-                                businessDate={businessDate}
-                              />
+                              {isMonth ? (
+                                <AppointmentsCalendar
+                                  appointments={visible}
+                                  month={query.month}
+                                  year={query.year}
+                                  businessDate={businessDate}
+                                />
+                              ) : (
+                                <AppointmentsWeekGrid
+                                  appointments={desktopVisible}
+                                  from={resolveWeekStart(query.from, businessDate)}
+                                  businessDate={businessDate}
+                                />
+                              )}
                             </div>
                           ) : undefined
                         }

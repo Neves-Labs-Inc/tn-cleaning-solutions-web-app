@@ -1,13 +1,25 @@
 'use client'
 
 import Link from 'next/link'
-import { eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
+import { useState } from 'react'
+import {
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameMonth,
+  parseISO,
+  startOfMonth,
+  startOfWeek,
+} from 'date-fns'
 
+import { Button } from '@/components/ui/button'
 import PaymentStatePill from '@/components/ui/payment-state-pill'
 import { appointmentDisplayBadge, NOT_CLOCKED_BADGE } from '@/components/ui/status-badge'
-import type { ScheduleAppointment } from '@/lib/appointments/overview'
+import { splitDayEvents, type ScheduleAppointment } from '@/lib/appointments/overview'
 import { cn } from '@/lib/utils'
 
+import AppointmentsDayDialog from './appointments-day-dialog'
 import { calendarEventTitle } from './calendar-event-title'
 
 type AppointmentsCalendarProps = {
@@ -23,9 +35,9 @@ const STATUS_TEXT_CLASSES = {
   default: 'text-muted-foreground',
 }
 
-const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+export const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-function CalendarEvent({ appointment }: { appointment: ScheduleAppointment }): React.ReactNode {
+export function CalendarEvent({ appointment }: { appointment: ScheduleAppointment }): React.ReactNode {
   const status = appointmentDisplayBadge(appointment.status, appointment.isNotClocked)
   const statusTextClass = status === NOT_CLOCKED_BADGE ? STATUS_TEXT_CLASSES.warning : STATUS_TEXT_CLASSES.default
 
@@ -50,6 +62,51 @@ function CalendarEvent({ appointment }: { appointment: ScheduleAppointment }): R
   )
 }
 
+type DayNumberLinkProps = {
+  dateKey: string
+  label: string
+  isToday: boolean
+}
+
+// A day's number (or "Nov 1"): starts a new appointment on that date.
+export function DayNumberLink({ dateKey, label, isToday }: DayNumberLinkProps): React.ReactNode {
+  return (
+    <Link
+      href={`/solutions/appointments/new?date=${dateKey}`}
+      aria-label={`New appointment on ${format(parseISO(dateKey), 'MMMM d, yyyy')}`}
+      className={cn(
+        'inline-flex h-7 min-w-7 cursor-pointer items-center justify-center rounded-full px-1.5 text-xs font-medium outline-none transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-ring',
+        isToday ? 'bg-primary text-primary-foreground' : 'hover:bg-muted active:bg-muted'
+      )}
+    >
+      {label}
+    </Link>
+  )
+}
+
+type DayViewAllButtonProps = {
+  dateKey: string
+  total: number
+  moreCount: number
+  onOpen: (dateKey: string) => void
+}
+
+function DayViewAllButton({ dateKey, total, moreCount, onOpen }: DayViewAllButtonProps): React.ReactNode {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      aria-haspopup="dialog"
+      aria-label={`View all ${total} ${total === 1 ? 'appointment' : 'appointments'} on ${format(parseISO(dateKey), 'EEEE, MMMM d')}`}
+      className="w-full cursor-pointer justify-start px-1.5 text-xs font-medium text-muted-foreground transition-[background-color,color,transform] duration-fast hover:text-foreground active:scale-[0.98]"
+      onClick={() => onOpen(dateKey)}
+    >
+      {moreCount > 0 ? `+${moreCount} more` : 'View all'}
+    </Button>
+  )
+}
+
 // The desktop month grid. Day numbers start a new appointment on that date.
 export default function AppointmentsCalendar({
   appointments,
@@ -63,40 +120,59 @@ export default function AppointmentsCalendar({
     end: endOfWeek(endOfMonth(monthDate)),
   })
   const byDate = Map.groupBy(appointments, (appointment) => appointment.scheduledDate)
+  const [openDate, setOpenDate] = useState<string | null>(null)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+
+  function handleOpenDay(dateKey: string): void {
+    setOpenDate(dateKey)
+    setIsDialogOpen(true)
+  }
 
   return (
-    <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border bg-border">
-      {DAY_HEADERS.map((day) => (
-        <div key={day} className="bg-muted px-2 py-1.5 text-center text-xs font-medium text-muted-foreground">
-          {day}
-        </div>
-      ))}
-      {days.map((day) => {
-        const dateKey = format(day, 'yyyy-MM-dd')
-        const isInMonth = isSameMonth(day, monthDate)
-        const isToday = dateKey === businessDate
+    <>
+      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border bg-border">
+        {DAY_HEADERS.map((day) => (
+          <div key={day} className="bg-muted px-2 py-1.5 text-center text-xs font-medium text-muted-foreground">
+            {day}
+          </div>
+        ))}
+        {days.map((day) => {
+          const dateKey = format(day, 'yyyy-MM-dd')
+          const isInMonth = isSameMonth(day, monthDate)
+          const isToday = dateKey === businessDate
+          const events = byDate.get(dateKey) ?? []
+          const { visible, moreCount } = splitDayEvents(events)
 
-        return (
-          <div
-            key={dateKey}
-            className={cn('min-h-32 min-w-0 space-y-1 bg-card p-1.5', !isInMonth && 'bg-muted/40 text-muted-foreground')}
-          >
-            <Link
-              href={`/solutions/appointments/new?date=${dateKey}`}
-              aria-label={`New appointment on ${format(day, 'MMMM d, yyyy')}`}
+          return (
+            <div
+              key={dateKey}
               className={cn(
-                'inline-flex size-7 items-center justify-center rounded-full text-xs font-medium outline-none transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-ring',
-                isToday ? 'bg-primary text-primary-foreground' : 'hover:bg-muted active:bg-muted'
+                'min-h-32 min-w-0 space-y-1 bg-card p-1.5',
+                !isInMonth && 'bg-muted/40 text-muted-foreground'
               )}
             >
-              {format(day, 'd')}
-            </Link>
-            {(byDate.get(dateKey) ?? []).map((appointment) => (
-              <CalendarEvent key={appointment.id} appointment={appointment} />
-            ))}
-          </div>
-        )
-      })}
-    </div>
+              <DayNumberLink dateKey={dateKey} label={format(day, 'd')} isToday={isToday} />
+              {visible.map((appointment) => (
+                <CalendarEvent key={appointment.id} appointment={appointment} />
+              ))}
+              {events.length > 0 ? (
+                <DayViewAllButton
+                  dateKey={dateKey}
+                  total={events.length}
+                  moreCount={moreCount}
+                  onOpen={handleOpenDay}
+                />
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
+      <AppointmentsDayDialog
+        date={openDate}
+        isOpen={isDialogOpen}
+        appointments={openDate === null ? [] : (byDate.get(openDate) ?? [])}
+        onOpenChange={setIsDialogOpen}
+      />
+    </>
   )
 }

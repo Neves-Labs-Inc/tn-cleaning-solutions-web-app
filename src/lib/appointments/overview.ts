@@ -241,3 +241,13 @@ export function resolveBillingSelection(
 export function isLockedRow(clientId: string, lockedClientId: string | null): boolean {
   return lockedClientId !== null && clientId !== lockedClientId
 }
+
+export const MONTH_CELL_EVENT_CAP = 3
+
+// A month cell shows its first events and counts the rest, so busy days don't stretch the grid.
+export function splitDayEvents<T>(
+  events: T[],
+  cap: number = MONTH_CELL_EVENT_CAP
+): { visible: T[]; moreCount: number } {
+  return { visible: events.slice(0, cap), moreCount: Math.max(events.length - cap, 0) }
+}

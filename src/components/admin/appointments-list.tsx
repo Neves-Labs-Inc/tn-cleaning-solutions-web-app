@@ -69,33 +69,39 @@ function Price({ cents, className }: { cents: number | null; className?: string 
 type RowProps = {
   appointment: ScheduleAppointment
   hasUnpricedTag: boolean
+  // 'stacked' keeps the phone layout at every width, for narrow hosts like the day dialog.
+  variant?: 'responsive' | 'stacked'
 }
 
-function AppointmentRowLink({ appointment, hasUnpricedTag }: RowProps): React.ReactNode {
+export function AppointmentRowLink({ appointment, hasUnpricedTag, variant = 'responsive' }: RowProps): React.ReactNode {
+  const isStacked = variant === 'stacked'
   const status = appointmentDisplayBadge(appointment.status, appointment.isNotClocked)
   const isUnpriced = appointment.priceCents === null
 
   return (
     <Link
       href={`/solutions/appointments/${appointment.id}`}
-      className="flex min-h-16 min-w-0 flex-1 flex-col gap-1.5 px-4 py-3 outline-none transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:bg-muted md:flex-row md:items-center md:justify-between md:gap-3 md:hover:bg-muted/60"
+      className={cn(
+        'flex min-h-16 min-w-0 flex-1 flex-col gap-1.5 px-4 py-3 outline-none transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:bg-muted md:hover:bg-muted/60',
+        !isStacked && 'md:flex-row md:items-center md:justify-between md:gap-3'
+      )}
     >
       <div className="min-w-0 space-y-1">
         <div className="flex items-start justify-between gap-3">
           <p className="min-w-0 text-sm font-medium break-words">
             {appointment.clientName} <span className="font-normal text-muted-foreground">· {appointment.jobName}</span>
           </p>
-          <Price cents={appointment.priceCents} className="shrink-0 md:hidden" />
+          <Price cents={appointment.priceCents} className={cn('shrink-0', !isStacked && 'md:hidden')} />
         </div>
         <p className="font-mono text-xs text-muted-foreground tabular-nums">{timeRange(appointment)}</p>
       </div>
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5 md:shrink-0 md:flex-nowrap">
+      <div className={cn('flex min-w-0 flex-wrap items-center gap-1.5', !isStacked && 'md:shrink-0 md:flex-nowrap')}>
         <StatusBadge tone={status.tone} icon={status.icon}>{status.label}</StatusBadge>
         <PaymentStatePill state={appointment.paymentState} />
         {hasUnpricedTag && isUnpriced && UNPRICED_BADGE ? (
           <StatusBadge tone={UNPRICED_BADGE.tone}>{UNPRICED_BADGE.label}</StatusBadge>
         ) : null}
-        <Price cents={appointment.priceCents} className="hidden w-24 text-right md:block" />
+        {isStacked ? null : <Price cents={appointment.priceCents} className="hidden w-24 text-right md:block" />}
       </div>
     </Link>
   )

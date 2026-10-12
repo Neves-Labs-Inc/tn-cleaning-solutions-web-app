@@ -48,8 +48,8 @@ export default function AppointmentsLoading() {
           <div className="hidden grid-cols-7 gap-px md:grid">
             {Array.from({ length: WEEK_DAYS }, (_, day) => (
               <div key={day} className="space-y-px">
-                <Skeleton className="h-10 rounded-none" />
-                <Skeleton className="h-64 rounded-none" />
+                <Skeleton className="h-14 rounded-none" />
+                <Skeleton className="h-48 rounded-none" />
               </div>
             ))}
           </div>

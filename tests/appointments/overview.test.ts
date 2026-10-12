@@ -9,6 +9,7 @@ import {
   isLockedRow,
   parseAppointmentsQuery,
   resolveBillingSelection,
+  splitDayEvents,
   syncPendingTile,
   summarizeOverview,
   tileCaption,
@@ -309,5 +310,25 @@ describe('resolveBillingSelection', () => {
       ['a2']
     )
     assert.equal(resolveBillingSelection(refreshed, ['a1']).lockedClientId, null)
+  })
+})
+
+describe('splitDayEvents', () => {
+  const eventsOf = (count: number): number[] => Array.from({ length: count }, (_, index) => index + 1)
+
+  it('shows nothing and counts nothing for an empty day', () => {
+    assert.deepEqual(splitDayEvents(eventsOf(0)), { visible: [], moreCount: 0 })
+  })
+
+  it('shows all three events of a day at the cap', () => {
+    assert.deepEqual(splitDayEvents(eventsOf(3)), { visible: [1, 2, 3], moreCount: 0 })
+  })
+
+  it('shows the first three events and counts the one beyond the cap', () => {
+    assert.deepEqual(splitDayEvents(eventsOf(4)), { visible: [1, 2, 3], moreCount: 1 })
+  })
+
+  it('counts every event beyond the first three on a busy day', () => {
+    assert.deepEqual(splitDayEvents(eventsOf(12)), { visible: [1, 2, 3], moreCount: 9 })
   })
 })
