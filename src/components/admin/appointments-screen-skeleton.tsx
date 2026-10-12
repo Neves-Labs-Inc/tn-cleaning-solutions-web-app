@@ -75,8 +75,11 @@ function ScheduleCardSkeleton({
 export default function AppointmentsScreenSkeleton({
   query,
 }: AppointmentsScreenSkeletonProps): React.ReactNode {
-  const isNeedsView =
-    query?.view === "needs-billing" || query?.view === "needs-completion";
+  const needsView =
+    query?.view === "needs-billing" || query?.view === "needs-completion"
+      ? query.view
+      : null;
+  const isNeedsView = needsView !== null;
 
   return (
     <div className="space-y-6" aria-busy="true">
@@ -85,8 +88,8 @@ export default function AppointmentsScreenSkeleton({
       <div className="space-y-3">
         <AppointmentsFiltersSkeleton showStatus={!isNeedsView} />
         <div className="overflow-hidden rounded-lg bg-card ring-1 ring-foreground/10">
-          {isNeedsView ? (
-            <AppointmentsNeedsSkeleton />
+          {needsView ? (
+            <AppointmentsNeedsSkeleton view={needsView} />
           ) : (
             <ScheduleCardSkeleton query={query} />
           )}

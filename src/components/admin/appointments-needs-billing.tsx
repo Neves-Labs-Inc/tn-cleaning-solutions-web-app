@@ -12,6 +12,7 @@ import type { NeedsBillingAppointment } from '@/lib/invoices/payment-state-queri
 import { cn } from '@/lib/utils'
 
 import AppointmentsList from './appointments-list'
+import AppointmentsNeedsHeader from './appointments-needs-header'
 import NeedsBillingBar from './needs-billing-bar'
 
 type AppointmentsNeedsBillingProps = {
@@ -88,10 +89,7 @@ export default function AppointmentsNeedsBilling({
 
   return (
     <>
-      <div className="space-y-1 border-b px-4 py-3">
-        <h2 className="text-lg font-semibold tracking-tight">Needs billing</h2>
-        <p className="text-sm text-muted-foreground">All months, oldest first. Pick appointments of one client.</p>
-      </div>
+      <AppointmentsNeedsHeader view="needs-billing" />
 
       {appointments.length === 0 && filteredEmpty ? (
         filteredEmpty
