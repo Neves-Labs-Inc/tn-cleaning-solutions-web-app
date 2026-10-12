@@ -10,6 +10,7 @@ import {
   clockStatusBadge,
   invoiceStatusBadge,
   lineStateBadge,
+  MISSED_CLOCK_BADGE,
   NOT_CLOCKED_BADGE,
   OVERRIDDEN_BADGE,
   paymentStateBadge,
@@ -25,12 +26,13 @@ export {
   clockStatusBadge,
   invoiceStatusBadge,
   lineStateBadge,
+  MISSED_CLOCK_BADGE,
   NOT_CLOCKED_BADGE,
   OVERRIDDEN_BADGE,
   paymentStateBadge,
 };
 
-export type StatusTone = "info" | "success" | "warning" | "danger" | "neutral";
+export type StatusTone = "info" | "success" | "warning" | "danger" | "progress" | "neutral";
 
 export type ClockStatus = "not_started" | "clocked_in" | "clocked_out";
 
@@ -57,6 +59,8 @@ const TONE_CLASSES: Record<StatusTone, string> = {
     "border-status-warning-border bg-status-warning text-status-warning-foreground dark:bg-status-warning",
   danger:
     "border-status-danger-border bg-status-danger text-status-danger-foreground dark:bg-status-danger",
+  progress:
+    "border-status-progress-border bg-status-progress text-status-progress-foreground dark:bg-status-progress",
   neutral: "border-border bg-muted text-muted-foreground dark:bg-muted",
 };
 
@@ -66,6 +70,7 @@ export const CARD_TINT_CLASSES: Record<StatusTone, string> = {
   success: "border-status-success-border bg-status-success dark:bg-status-success",
   warning: "border-status-warning-border bg-status-warning dark:bg-status-warning",
   danger: "border-status-danger-border bg-status-danger dark:bg-status-danger",
+  progress: "border-status-progress-border bg-status-progress dark:bg-status-progress",
   neutral: "border-border bg-muted dark:bg-muted", // never returned by appointmentCardTone; kept for a total Record
 };
 

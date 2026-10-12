@@ -17,6 +17,7 @@ const APPOINTMENT: ScheduleAppointment = {
   paymentState: 'unbilled',
   claim: null,
   isNotClocked: false,
+  isMissedClock: false,
 }
 
 describe('calendarEventTitle', () => {

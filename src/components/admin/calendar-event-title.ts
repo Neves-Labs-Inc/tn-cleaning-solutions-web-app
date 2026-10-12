@@ -8,7 +8,7 @@ export function calendarEventTitle(appointment: ScheduleAppointment): string {
   const parts = [
     `${appointment.startTime.slice(0, 5)} ${appointment.jobName}`,
     appointment.clientName,
-    appointmentDisplayBadge(appointment.status, appointment.isNotClocked).label,
+    appointmentDisplayBadge(appointment).label,
   ]
   if (appointment.claim && appointment.paymentState) {
     parts.push(paymentStateBadge(appointment.paymentState).label, appointment.claim.number ?? 'Draft')

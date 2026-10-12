@@ -93,7 +93,7 @@ export function formatTime(value: string): string {
 
 export function appointmentStatusBadgeClasses(status: AppointmentStatus): string {
     if (status === 'in_progress') {
-        return 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+        return 'border border-status-progress-border bg-status-progress text-status-progress-foreground'
     }
 
     if (status === 'completed') {

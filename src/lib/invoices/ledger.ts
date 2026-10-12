@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { Database } from '@/types/database'
+import { inBatches, readAllPages } from './batch.ts'
 import { loadDraftLines, type DraftLine } from './draft-lines.ts'
 import { messageFor, toLedgerError, type LedgerError, type LedgerErrorCode, type PostgrestLikeError } from './errors.ts'
 import { hasUnpricedLine } from './lines.ts'
@@ -163,6 +164,34 @@ export class InvoiceLedger {
     }
 
     return { ok: true, data: outcome }
+  }
+
+  // Every appointment the invoices hold, cancelled and archived lines too: the ids whose Payment
+  // state, claim and price a change to those invoices can move. Read before the change, since a
+  // line may leave the invoice with it.
+  async appointmentIdsOn(invoiceIds: string[]): Promise<LedgerResult<string[]>> {
+    const appointmentIds = new Set<string>()
+
+    try {
+      for (const batch of inBatches(invoiceIds)) {
+        const lines = await readAllPages((from, to) =>
+          this.db
+            .from('invoice_appointments')
+            .select('appointment_id')
+            .in('invoice_id', batch)
+            .order('invoice_id', { ascending: true })
+            .order('appointment_id', { ascending: true })
+            .range(from, to)
+        )
+        for (const line of lines) {
+          appointmentIds.add(line.appointment_id)
+        }
+      }
+    } catch (thrown) {
+      return this.fail('appointmentIdsOn', { invoiceIds }, toLedgerError(asPostgrestLike(thrown)))
+    }
+
+    return { ok: true, data: [...appointmentIds] }
   }
 
   async voidInvoice(invoiceId: string): Promise<LedgerResult<null>> {

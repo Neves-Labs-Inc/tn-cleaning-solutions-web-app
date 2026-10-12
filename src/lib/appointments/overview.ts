@@ -32,6 +32,8 @@ export type ScheduleAppointment = {
   claim: PaymentClaim | null
   // Still scheduled an hour past its end; computed on the server so every render agrees.
   isNotClocked: boolean
+  // In progress an hour past its end; display only, like isNotClocked.
+  isMissedClock: boolean
 }
 
 // Scheduled means nobody has a counted clock-in, so no clock read is needed. Display only.
@@ -42,6 +44,21 @@ export function isNotClocked(
   if (appointment.status !== 'scheduled') return false
 
   // An unreadable date or time reads as "not flagged": a render must never throw over a label.
+  try {
+    return now.getTime() > getGraceEnd(appointment.scheduledDate, appointment.endTime).getTime()
+  } catch {
+    return false
+  }
+}
+
+// In progress means someone clocked in but the visit never completed. Display only.
+export function isMissedClock(
+  appointment: Pick<ScheduleAppointment, 'status' | 'scheduledDate' | 'endTime'>,
+  now: Date
+): boolean {
+  if (appointment.status !== 'in_progress') return false
+
+  // Same rule as isNotClocked: an unreadable date or time must never throw over a label.
   try {
     return now.getTime() > getGraceEnd(appointment.scheduledDate, appointment.endTime).getTime()
   } catch {

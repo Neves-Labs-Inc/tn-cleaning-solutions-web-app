@@ -1,5 +1,9 @@
 "use server";
 
+import {
+  listAppointmentChanges,
+  type AppointmentChanges,
+} from "@/lib/appointments/appointment-changes";
 import { listFilterOptions } from "@/lib/appointments/filter-options";
 import type { FilterOptions } from "@/lib/appointments/filters";
 import { listAppointmentWeeks } from "@/lib/appointments/month-appointments";
@@ -25,6 +29,16 @@ import { createClient } from "@/lib/supabase/server";
 // show it; the server log has it.
 
 type Db = Awaited<ReturnType<typeof createClient>>;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Takes unknown: a server action's arguments are whatever the request carried.
+function isIdList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.every((id) => typeof id === "string" && UUID.test(id))
+  );
+}
 
 async function requireAdminDb(action: string): Promise<Db> {
   const db = await createClient();
@@ -58,6 +72,21 @@ export async function loadAppointmentWeeks(
   }
 
   return listAppointmentWeeks(db, span, new Date());
+}
+
+// The fresh rows for appointments a change touched, for patching the cached weeks and Needs lists.
+export async function loadAppointmentChanges(
+  ids: string[],
+): Promise<AppointmentChanges> {
+  const db = await requireAdminDb("loadAppointmentChanges");
+  if (!isIdList(ids)) {
+    console.warn("loadAppointmentChanges: refused invalid ids", {
+      isArray: Array.isArray(ids),
+    });
+    throw new Error("Invalid appointment ids");
+  }
+
+  return listAppointmentChanges(db, ids, new Date());
 }
 
 export async function loadNeedsBilling(): Promise<NeedsBillingAppointment[]> {

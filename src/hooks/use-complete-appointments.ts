@@ -1,10 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { useInvalidateAppointments } from "@/hooks/use-invalidate-appointments";
+import { useAppointmentsCache } from "@/hooks/use-appointments-cache";
 import { markAppointmentsComplete } from "@/lib/actions/appointments";
 import type { NeedsCompletionAppointment } from "@/lib/appointments/needs-completion";
 import {
@@ -40,8 +39,7 @@ type DialogState = { isOpen: boolean; count: number };
 export function useCompleteAppointments(
   appointments: NeedsCompletionAppointment[],
 ): CompleteAppointments {
-  const router = useRouter();
-  const invalidateAppointments = useInvalidateAppointments();
+  const appointmentsCache = useAppointmentsCache();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dialog, setDialog] = useState<DialogState>({ isOpen: false, count: 0 });
 
@@ -73,13 +71,15 @@ export function useCompleteAppointments(
 
   async function confirm(): Promise<void> {
     try {
-      const result = await markAppointmentsComplete(
-        selected.map((appointment) => appointment.id),
-      );
+      const requestedIds = selected.map((appointment) => appointment.id);
+      const result = await markAppointmentsComplete(requestedIds);
 
       if (result.success) {
-        // Even a partial run completed some rows.
-        void invalidateAppointments();
+        // Even a partial run completed some rows. Awaited, so the dialog's "Marking…" covers the
+        // read and the completed rows are gone when it closes. Skipped rows changed elsewhere, so
+        // they're patched too; only the ones never reached are left alone.
+        const attemptedIds = requestedIds.filter((id) => !result.failedIds.includes(id));
+        await appointmentsCache.applyChanges(attemptedIds);
         const outcome = describeCompletion({
           completed: result.completedCount,
           skipped: result.skippedCount,
@@ -91,7 +91,6 @@ export function useCompleteAppointments(
           toast.success(outcome.message);
         } else {
           toast.error(outcome.message);
-          router.refresh();
         }
       } else {
         // The selection stays, so a retry is one tap.

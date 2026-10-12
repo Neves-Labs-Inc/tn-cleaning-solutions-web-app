@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { isNotClocked } from '../../src/lib/appointments/overview.ts'
+import { isMissedClock, isNotClocked } from '../../src/lib/appointments/overview.ts'
 import type { AppointmentStatus } from '../../src/lib/appointments/lifecycle.ts'
 
 // 2026-10-07 is Eastern daylight time (UTC-4): 11:30 ends at 15:30Z, the grace ends at 16:30Z.
@@ -37,5 +37,32 @@ describe('isNotClocked', () => {
 
   it('is false when the date or time cannot be read', () => {
     assert.equal(isNotClocked({ ...VISIT, scheduledDate: 'nope' }, new Date('2026-10-20T12:00:00Z')), false)
+  })
+})
+
+describe('isMissedClock', () => {
+  const IN_PROGRESS = { ...VISIT, status: 'in_progress' as AppointmentStatus }
+
+  it('is not yet true at exactly one hour after the scheduled end', () => {
+    assert.equal(isMissedClock(IN_PROGRESS, new Date('2026-10-07T16:30:00Z')), false)
+  })
+
+  it('is true once an in-progress visit is a second past the grace end', () => {
+    assert.equal(isMissedClock(IN_PROGRESS, new Date('2026-10-07T16:30:01Z')), true)
+  })
+
+  it('is false before the grace end', () => {
+    assert.equal(isMissedClock(IN_PROGRESS, new Date('2026-10-07T14:00:00Z')), false)
+  })
+
+  it('is false for every status but in progress', () => {
+    const longAfter = new Date('2026-10-20T12:00:00Z')
+    for (const status of ['scheduled', 'completed', 'cancelled'] as AppointmentStatus[]) {
+      assert.equal(isMissedClock({ ...VISIT, status }, longAfter), false, status)
+    }
+  })
+
+  it('is false rather than throwing on an unreadable date', () => {
+    assert.equal(isMissedClock({ ...IN_PROGRESS, scheduledDate: 'nope' }, new Date('2026-10-20T12:00:00Z')), false)
   })
 })

@@ -19,6 +19,7 @@ import {
   appointmentCardTone,
   appointmentDisplayBadge,
   CARD_TINT_CLASSES,
+  MISSED_CLOCK_BADGE,
   NOT_CLOCKED_BADGE,
 } from '@/components/ui/status-badge'
 import { splitDayEvents, type ScheduleAppointment } from '@/lib/appointments/overview'
@@ -46,10 +47,10 @@ const TINTED_SECONDARY_TEXT_CLASS = 'text-foreground/70'
 export const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export function CalendarEvent({ appointment }: { appointment: ScheduleAppointment }): React.ReactNode {
-  const status = appointmentDisplayBadge(appointment.status, appointment.isNotClocked)
+  const status = appointmentDisplayBadge(appointment)
   const tone = appointmentCardTone(appointment)
   const secondaryTextClass = tone === null ? STATUS_TEXT_CLASSES.default : TINTED_SECONDARY_TEXT_CLASS
-  const statusTextClass = status === NOT_CLOCKED_BADGE ? STATUS_TEXT_CLASSES.danger : secondaryTextClass
+  const statusTextClass = status === NOT_CLOCKED_BADGE || status === MISSED_CLOCK_BADGE ? STATUS_TEXT_CLASSES.danger : secondaryTextClass
 
   return (
     <Link
