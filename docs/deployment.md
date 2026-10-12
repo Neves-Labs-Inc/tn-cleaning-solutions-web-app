@@ -17,15 +17,15 @@ Deploys are driven by GitHub Actions (`.github/workflows/ci.yml`), not by Vercel
 Do these in order.
 
 1. **Before the first merge with this pipeline**: run `supabase/checks/pricing_backfill_check.sql` against a restore of prod (B-04 in `.planning/STATE.md`), then bring prod up to date by hand. Otherwise the first automated deploy pushes every pending migration at once.
-2. **Vercel**: create an access token (Account Settings > Tokens). Run `vercel link` locally; `orgId` and `projectId` are in `.vercel/project.json`.
+2. **Vercel**: create an access token (Account Settings > Tokens). Run `vercel link` locally; the IDs are in `.vercel/repo.json` (`projects[0].orgId` and `projects[0].id`) for a Git-linked project, or `.vercel/project.json` (`orgId`, `projectId`) otherwise.
 3. **Supabase**: create a personal access token. Note the prod project ref and the prod DB password.
 4. **GitHub > Settings > Environments > `Production`**: add these secrets, then set Deployment branches to "Selected branches and tags" = `main`.
 
    | Secret | Value |
    | --- | --- |
    | `VERCEL_TOKEN` | Vercel access token (step 2) |
-   | `VERCEL_ORG_ID` | `orgId` from `.vercel/project.json` |
-   | `VERCEL_PROJECT_ID` | `projectId` from `.vercel/project.json` |
+   | `VERCEL_ORG_ID` | `orgId` from `.vercel/repo.json` or `project.json` |
+   | `VERCEL_PROJECT_ID` | project `id` from `.vercel/repo.json` (`projectId` in `project.json`) |
    | `SUPABASE_ACCESS_TOKEN` | Supabase personal access token (step 3) |
    | `SUPABASE_DB_PASSWORD` | Prod DB password |
    | `SUPABASE_PROJECT_ID` | Prod project ref |
