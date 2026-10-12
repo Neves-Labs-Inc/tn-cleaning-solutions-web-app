@@ -323,8 +323,8 @@ export function AppointmentForm({
 
   return (
     <section className="rounded-lg bg-card p-4 text-card-foreground shadow-sm ring-1 ring-foreground/10 sm:p-5">
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <fieldset disabled={isLocked} className="contents">
+      <form onSubmit={handleSubmit}>
+        <fieldset disabled={isLocked} className="min-w-0 space-y-5">
         {invoiceClaim ? <InvoiceClaimBanner claim={invoiceClaim} /> : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
