@@ -6,6 +6,7 @@ import { Eye, Pencil, RotateCcw, Search, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
 import { archiveClient, restoreClient } from '@/lib/actions/clients'
 
 export type ClientWithLocationCount = {
@@ -31,8 +32,11 @@ function shortNotes(notes: string | null) {
 }
 
 function ClientCard({ client, archived }: { client: ClientWithLocationCount; archived?: boolean }) {
+	const invalidateAppointments = useInvalidateAppointments()
 	const action = async (_formData: FormData) => {
-		await (archived ? restoreClient(client.id) : archiveClient(client.id))
+		const result = await (archived ? restoreClient(client.id) : archiveClient(client.id))
+		// The Client filter lists only active clients, so a change shows on the next view.
+		if (result.success) void invalidateAppointments()
 	}
 	const locationCount = getLocationCount(client)
 	return (

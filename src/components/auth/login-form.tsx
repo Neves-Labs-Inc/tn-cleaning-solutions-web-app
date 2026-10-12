@@ -4,6 +4,7 @@ import { AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useActionState, useEffect, useState } from 'react'
 
+import { clearBrowserQueryCache } from '@/components/admin/admin-query-provider'
 import { Alert, AlertTitle } from '@/components/ui/alert'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -34,6 +35,12 @@ export function LoginForm({ action }: LoginFormProps) {
   const [state, formAction] = useActionState(action, initialState)
   // Controlled so a failed submit does not wipe the email (React resets uncontrolled inputs); never the password.
   const [email, setEmail] = useState('')
+
+  // Sign-out lands here by soft navigation, and a late refetch may have refilled the cache,
+  // so the next account must never see the previous one's rows.
+  useEffect(() => {
+    clearBrowserQueryCache()
+  }, [])
 
   useEffect(() => {
     const firstInvalidId = state.fieldErrors.email
