@@ -8,6 +8,11 @@ import { APPOINTMENT_PRICE_COLUMNS, type DisplayPrice, type PriceableAppointment
 import type { AppointmentStatus } from './lifecycle.ts'
 import { isNotClocked, type ScheduleAppointment } from './overview.ts'
 import { getMonthRange, type DateRange } from './range.ts'
+import {
+  bucketByWeek,
+  type AppointmentWeeks,
+  type WeeksSpan,
+} from "./weeks.ts";
 
 // The appointments screen's range reads. Admin pages only: it reads client names and invoice
 // numbers. No `server-only` import, so node:test can load it; call it from server code only.
@@ -87,4 +92,15 @@ export async function listMonthAppointments(
   now: Date
 ): Promise<ScheduleAppointment[]> {
   return listRangeAppointments(db, getMonthRange(month, year), now)
+}
+
+// A run of weeks for the screen's per-week cache: one range read, split by week start, with
+// every week of the span present.
+export async function listAppointmentWeeks(
+  db: Db,
+  span: WeeksSpan,
+  now: Date,
+): Promise<AppointmentWeeks> {
+  const appointments = await listRangeAppointments(db, span, now);
+  return bucketByWeek(appointments, span);
 }
