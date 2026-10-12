@@ -35,9 +35,17 @@ import { mergeWeeks, weeksForRange } from "@/lib/appointments/weeks";
 import type { PaymentMethod } from "@/lib/invoices/ledger";
 import type { NeedsBillingAppointment } from "@/lib/invoices/payment-state-queries";
 
+// How the range body stands. Show more keeps the rows already shown while the new weeks load.
+export type RangeState =
+  | { status: "ready" }
+  // The target range has no cached data, so the body is a skeleton and `appointments` is empty.
+  | { status: "loading" }
+  | { status: "loading-more" }
+  | { status: "more-error"; onRetry: () => void };
+
 export type AppointmentsScreenData = {
   overview: Overview;
-  // The range on screen: the target once its weeks are cached, else the last one shown.
+  // The range the body shows: the target, or while Show more loads, the range shown so far.
   range: RangeQuery;
   // That range's appointments.
   appointments: ScheduleAppointment[];
@@ -51,12 +59,7 @@ export type AppointmentsScreenData = {
 export type AppointmentsScreen =
   | { status: "loading" }
   | { status: "error"; isRetrying: boolean; onRetry: () => void }
-  | {
-      status: "ready";
-      data: AppointmentsScreenData;
-      // The target range has no cached data yet, so `data.range` is still the previous one.
-      isRangePending: boolean;
-    };
+  | { status: "ready"; data: AppointmentsScreenData; rangeState: RangeState };
 
 type WeekResult = UseQueryResult<ScheduleAppointment[]>;
 
@@ -71,6 +74,17 @@ function isSameRange(left: RangeQuery, right: RangeQuery): boolean {
     left.weeks === right.weeks &&
     left.month === right.month &&
     left.year === right.year
+  );
+}
+
+// Show more widens a List or Week read from the same first week, so the rows already shown are
+// the start of the new range.
+function isShowMore(shown: RangeQuery, target: RangeQuery): boolean {
+  return (
+    shown.layout !== "month" &&
+    shown.layout === target.layout &&
+    shown.from === target.from &&
+    target.weeks > shown.weeks
   );
 }
 
@@ -93,7 +107,7 @@ export function useAppointmentsScreen(
 ): AppointmentsScreen {
   const queryClient = useQueryClient();
   const batcher = getWeeksBatcher(queryClient);
-  // The last range whose weeks were all cached, shown dimmed while the next one loads.
+  // The last range whose weeks were all cached: the rows Show more keeps while the new weeks load.
   const [shownRange, setShownRange] = useState<RangeQuery | null>(null);
 
   const [businessYear, businessMonth] = businessDate.split("-").map(Number);
@@ -105,15 +119,12 @@ export function useAppointmentsScreen(
     shownRange === null
       ? []
       : weeksForRange(getReadRange(shownRange, businessDate));
-  const fetchedWeeks = new Set([...targetWeeks, ...monthWeeks]);
-  const weeks = [...new Set([...fetchedWeeks, ...shownWeeks])];
+  const weeks = [...new Set([...targetWeeks, ...monthWeeks])];
 
   const weekResults = useQueries({
     queries: weeks.map((week) => ({
       queryKey: appointmentsKeys.week(week),
       queryFn: () => batcher.load(week),
-      // The shown range's other weeks are only read back from the cache, never fetched.
-      enabled: fetchedWeeks.has(week),
     })),
   });
   // Arrow wrappers, so the query context never reaches a server action as an argument.
@@ -150,14 +161,24 @@ export function useAppointmentsScreen(
     setShownRange(targetRange);
   }
 
-  const displayed =
-    targetChunks !== null
-      ? { range: targetRange, chunks: targetChunks }
-      : shownRange !== null && shownChunks !== null
-        ? { range: shownRange, chunks: shownChunks }
-        : null;
-  const neededReads: Array<UseQueryResult<unknown>> = [
-    ...weekResults.filter((_, index) => fetchedWeeks.has(weeks[index])),
+  const isMore =
+    targetChunks === null &&
+    shownRange !== null &&
+    shownChunks !== null &&
+    isShowMore(shownRange, targetRange);
+  const displayed = isMore
+    ? { range: shownRange, chunks: shownChunks }
+    : { range: targetRange, chunks: targetChunks ?? [] };
+
+  const targetReads = weeks.flatMap((week, index) =>
+    targetWeeks.includes(week) && !monthWeeks.includes(week)
+      ? [weekResults[index]]
+      : [],
+  );
+  const otherReads: Array<UseQueryResult<unknown>> = [
+    ...weeks.flatMap((week, index) =>
+      monthWeeks.includes(week) || !isMore ? [weekResults[index]] : [],
+    ),
     needsBilling,
     needsCompletion,
     filterOptions,
@@ -165,9 +186,25 @@ export function useAppointmentsScreen(
   ];
   // errorUpdateCount, not isError: v5 resets a refetched query with no data to pending, which
   // would swap the error card for the skeleton mid-retry. A successful fetch fills data.
-  const failedReads = neededReads.filter(
-    (read) => read.data === undefined && read.errorUpdateCount > 0,
-  );
+  const hasFailed = (read: UseQueryResult<unknown>): boolean =>
+    read.data === undefined && read.errorUpdateCount > 0;
+  const failedReads = otherReads.filter(hasFailed);
+  // While Show more loads, its new weeks failing only fails the extra rows, not the screen.
+  const failedMoreReads = isMore ? targetReads.filter(hasFailed) : [];
+
+  let rangeState: RangeState = { status: "ready" };
+  if (isMore && failedMoreReads.some((read) => !read.isFetching)) {
+    rangeState = {
+      status: "more-error",
+      onRetry: () => {
+        for (const read of failedMoreReads) void read.refetch();
+      },
+    };
+  } else if (isMore) {
+    rangeState = { status: "loading-more" };
+  } else if (targetChunks === null) {
+    rangeState = { status: "loading" };
+  }
 
   let screen: AppointmentsScreen;
   if (failedReads.length > 0) {
@@ -179,7 +216,6 @@ export function useAppointmentsScreen(
       },
     };
   } else if (
-    displayed === null ||
     monthChunks === null ||
     needsBilling.data === undefined ||
     needsCompletion.data === undefined ||
@@ -189,7 +225,7 @@ export function useAppointmentsScreen(
   } else {
     screen = {
       status: "ready",
-      isRangePending: targetChunks === null,
+      rangeState,
       data: {
         overview: summarizeOverview(
           needsBilling.data,

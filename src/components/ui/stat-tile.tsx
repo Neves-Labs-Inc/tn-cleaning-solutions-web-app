@@ -81,6 +81,10 @@ type StatTileSkeletonProps = {
   icon?: boolean;
   caption?: boolean;
   fitValue?: boolean;
+  // Hold two lines for the label or the caption until the tile is wide enough for one, as the
+  // loaded text wraps in narrow tiles. Need fitValue, whose container the widths are read from.
+  reserveLabelWrap?: boolean;
+  reserveCaptionWrap?: boolean;
   className?: string;
 };
 
@@ -90,12 +94,20 @@ export function StatTileSkeleton({
   icon = false,
   caption = false,
   fitValue = false,
+  reserveLabelWrap = false,
+  reserveCaptionWrap = false,
   className,
 }: StatTileSkeletonProps): React.ReactNode {
   return (
     <div className={cn(TILE_CLASSES, fitValue && "@container", className)}>
       {/* The 20px icon sets the label row's height when there is one. */}
-      <div className={cn("flex items-center", icon ? "h-5" : "h-4")}>
+      <div
+        className={cn(
+          "flex items-center",
+          icon ? "h-5" : "h-4",
+          reserveLabelWrap && "h-8 @[10.5rem]:h-5",
+        )}
+      >
         <Skeleton className="h-full w-20" />
       </div>
       <Skeleton
@@ -104,7 +116,11 @@ export function StatTileSkeleton({
           fitValue ? "h-7 @[8.5rem]:h-8 @[11rem]:h-9" : "h-8 sm:h-9",
         )}
       />
-      {caption ? <Skeleton className="h-4 w-28" /> : null}
+      {caption ? (
+        <Skeleton
+          className={cn("h-4 w-28", reserveCaptionWrap && "h-8 @[11.5rem]:h-4")}
+        />
+      ) : null}
     </div>
   );
 }

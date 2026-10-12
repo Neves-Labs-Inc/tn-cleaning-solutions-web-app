@@ -30,7 +30,7 @@ export default function AppointmentsScreen({
   useNeighbourPrefetch(
     query,
     businessDate,
-    screen.status === "ready" && !screen.isRangePending,
+    screen.status === "ready" && screen.rangeState.status === "ready",
   );
 
   function handleNavigate(next: AppointmentsQuery): void {
@@ -41,7 +41,7 @@ export default function AppointmentsScreen({
 
   let content: React.ReactNode;
   if (screen.status === "loading") {
-    content = <AppointmentsScreenSkeleton />;
+    content = <AppointmentsScreenSkeleton query={query} />;
   } else if (screen.status === "error") {
     content = (
       <AppointmentsLoadError
@@ -56,7 +56,7 @@ export default function AppointmentsScreen({
         // A client or job the selects can't show reads as All, so it never filters unseen.
         query={resolveFilterOptions(query, data.filterOptions)}
         range={data.range}
-        isRangePending={screen.isRangePending}
+        rangeState={screen.rangeState}
         overview={data.overview}
         appointments={data.appointments}
         // Only the Needs billing view lists them; the tile above already has its total.

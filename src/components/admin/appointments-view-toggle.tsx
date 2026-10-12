@@ -2,11 +2,13 @@
 
 import Link from 'next/link'
 import { useId } from 'react'
-import { Calendar, CalendarDays, CalendarRange, CheckCircle2, List, ReceiptText, SearchX } from 'lucide-react'
+import { AlertCircle, Calendar, CalendarDays, CalendarRange, CheckCircle2, List, ReceiptText, SearchX } from 'lucide-react'
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Spinner } from '@/components/ui/spinner'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   ALL_APPOINTMENTS_FILTER,
@@ -37,6 +39,7 @@ import {
   type Layout,
   type RangeQuery,
 } from '@/lib/appointments/range'
+import type { RangeState } from '@/hooks/use-appointments-screen'
 import type { NeedsCompletionAppointment } from '@/lib/appointments/needs-completion'
 import type { PaymentMethod } from '@/lib/invoices/ledger'
 import type { NeedsBillingAppointment } from '@/lib/invoices/payment-state-queries'
@@ -45,20 +48,23 @@ import { cn } from '@/lib/utils'
 import AppointmentsCalendar from './appointments-calendar'
 import AppointmentsFilters from './appointments-filters'
 import AppointmentsList from './appointments-list'
+import AppointmentsListSkeleton from './appointments-list-skeleton'
+import AppointmentsMonthGridSkeleton from './appointments-month-grid-skeleton'
 import AppointmentsMonthNav from './appointments-month-nav'
 import AppointmentsNeedsBilling from './appointments-needs-billing'
 import AppointmentsNeedsCompletion from './appointments-needs-completion'
 import AppointmentsOverviewTiles from './appointments-overview-tiles'
 import AppointmentsRangeNav from './appointments-range-nav'
 import AppointmentsWeekGrid from './appointments-week-grid'
+import AppointmentsWeekGridSkeleton from './appointments-week-grid-skeleton'
 
 type AppointmentsViewToggleProps = {
   // The URL's query: the view, the filters and the target range the nav header shows.
   query: AppointmentsQuery
-  // The range the body shows: the target once it has data, else the previous one.
+  // The range the body shows: the target, or while Show more loads, the range shown so far.
   range: RangeQuery
-  // The target range is still loading, so the body dims over the previous range's rows.
-  isRangePending: boolean
+  // Whether the body is a skeleton, or Show more is loading or has failed.
+  rangeState: RangeState
   overview: Overview
   // The body range's appointments: the month in the Month layout, from the week start onward otherwise.
   appointments: ScheduleAppointment[]
@@ -247,6 +253,86 @@ function ScheduleBody({ query, appointments, phrase, businessDate, onClear, cale
   return body
 }
 
+type RangeSkeletonProps = {
+  layout: Layout
+  month: number
+  year: number
+}
+
+// The skeleton of the layout being loaded: the list on phones, and the grid from md for Week and Month.
+function RangeSkeleton({ layout, month, year }: RangeSkeletonProps): React.ReactNode {
+  if (layout === 'list') return <AppointmentsListSkeleton />
+
+  return (
+    <>
+      <div className="md:hidden">
+        <AppointmentsListSkeleton />
+      </div>
+      <div className="hidden md:block">
+        {layout === 'month' ? <AppointmentsMonthGridSkeleton month={month} year={year} /> : <AppointmentsWeekGridSkeleton />}
+      </div>
+    </>
+  )
+}
+
+type ShowMoreFooterProps = {
+  rangeState: RangeState
+  // Week shows the 7 days on desktop, so Show more is a phone control there.
+  isPhoneOnly: boolean
+  onShowMore: () => void
+}
+
+// Outside the keyed body, so the rows already shown don't replay their entrance. While the new weeks
+// load, skeleton rows sit above the button; if they fail, an inline alert takes the same slot.
+function ShowMoreFooter({ rangeState, isPhoneOnly, onShowMore }: ShowMoreFooterProps): React.ReactNode {
+  const isLoading = rangeState.status === 'loading-more'
+  const isFailed = rangeState.status === 'more-error'
+
+  return (
+    <div className={cn(isPhoneOnly && 'md:hidden')}>
+      {isLoading ? <AppointmentsListSkeleton bands={1} /> : null}
+      {rangeState.status === 'more-error' ? (
+        <div className="px-4 py-3">
+          <Alert variant="destructive" className="animate-in fade-in-0 duration-base ease-out-quart">
+            <AlertCircle aria-hidden="true" />
+            <AlertTitle>Couldn&apos;t load more weeks</AlertTitle>
+            <AlertDescription>The appointments above are still up to date.</AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
+      <div className="flex justify-center border-t p-4">
+        <Button
+          type="button"
+          variant="outline"
+          // Disabled but focusable, so keyboard focus survives the label swap.
+          disabled={isLoading}
+          focusableWhenDisabled
+          aria-busy={isLoading || undefined}
+          className={cn(
+            PRESS_CLASS,
+            'w-full sm:w-auto sm:min-w-40',
+            // focusableWhenDisabled sets aria-disabled, not :disabled, so the Button's own disabled styles never apply.
+            // Dim only the content, not the whole button, so the focus ring keeps its full alpha.
+            'aria-disabled:cursor-default aria-disabled:text-muted-foreground aria-disabled:hover:text-muted-foreground aria-disabled:hover:bg-transparent aria-disabled:active:translate-y-0 aria-disabled:active:scale-100'
+          )}
+          onClick={rangeState.status === 'more-error' ? rangeState.onRetry : onShowMore}
+        >
+          {isLoading ? (
+            <>
+              <Spinner className="size-4" />
+              Loading more…
+            </>
+          ) : isFailed ? (
+            'Try again'
+          ) : (
+            'Show more'
+          )}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function filterOf({ clientId, jobId, status }: AppointmentsQuery): AppointmentsFilter {
   return { clientId, jobId, status }
 }
@@ -265,7 +351,7 @@ function isPlainClick(event: React.MouseEvent): boolean {
 export function AppointmentsViewToggle({
   query,
   range,
-  isRangePending,
+  rangeState,
   overview,
   appointments,
   needsBilling,
@@ -286,6 +372,8 @@ export function AppointmentsViewToggle({
   const visible = appointmentsInView(appointments, bodyQuery)
   // Status doesn't apply to a Needs view, so it neither narrows nor counts as a filter there.
   const isNeedsView = isNeedsBilling || isNeedsCompletion
+  // Only the schedule body has a range to wait for; the Needs lists are already loaded.
+  const isBodyLoading = rangeState.status === 'loading' && !isNeedsView
   const filter = filterOf(query)
 
   const needsFilter = { ...filter, status: 'all' as const }
@@ -381,17 +469,16 @@ export function AppointmentsViewToggle({
         <p aria-live="polite" className="sr-only">
           {isNeedsView ? (
             countLabel(visibleNeedsCount)
+          ) : isBodyLoading ? (
+            'Loading appointments…'
           ) : (
             <ResponsiveText phone={countLabel(visible.length)} desktop={countLabel(desktopVisible.length)} />
           )}
         </p>
         <Card
-          aria-busy={isRangePending || undefined}
-          className={cn(
-            // Visible overflow, so the date bands can stick under the top bar.
-            'gap-0 overflow-visible p-0 text-sm transition-opacity duration-fast',
-            isRangePending && 'opacity-60'
-          )}
+          aria-busy={isBodyLoading || undefined}
+          // Visible overflow, so the date bands can stick under the top bar.
+          className="gap-0 overflow-visible p-0 text-sm"
         >
           {isNeedsBilling ? (
             <AppointmentsNeedsBilling
@@ -481,58 +568,55 @@ export function AppointmentsViewToggle({
                 </p>
               ) : null}
 
-              {/* Keyed by the range on screen, so rows replay their entrance when new range data lands, not on the click. */}
-              <div key={`${bodyQuery.layout}-${bodyQuery.from}-${bodyQuery.year}-${bodyQuery.month}`}>
-                {bodyQuery.layout === 'list' ? (
-                  <ScheduleBody {...scheduleProps} appointments={visible} phrase={phonePhrase} />
-                ) : (
-                  <>
-                    <div className="hidden md:block">
-                      <ScheduleBody
-                        {...scheduleProps}
-                        appointments={desktopVisible}
-                        phrase={desktopPhrase}
-                        calendar={
-                          isMonth || desktopVisible.length > 0 ? (
-                            <div className="p-4">
-                              {isMonth ? (
-                                <AppointmentsCalendar
-                                  appointments={visible}
-                                  month={bodyQuery.month}
-                                  year={bodyQuery.year}
-                                  businessDate={businessDate}
-                                />
-                              ) : (
-                                <AppointmentsWeekGrid
-                                  appointments={desktopVisible}
-                                  from={resolveWeekStart(bodyQuery.from, businessDate)}
-                                  businessDate={businessDate}
-                                />
-                              )}
-                            </div>
-                          ) : undefined
-                        }
-                      />
-                    </div>
-                    <div className="md:hidden">
-                      <ScheduleBody {...scheduleProps} appointments={visible} phrase={phonePhrase} />
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Outside the keyed block, so the rows already shown don't replay their entrance. */}
-              {!isMonth && canShowMore(bodyQuery) ? (
-                <div className={cn('flex justify-center border-t p-4', isWeek && 'md:hidden')}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(PRESS_CLASS, 'w-full sm:w-auto')}
-                    onClick={handleShowMore}
-                  >
-                    Show more
-                  </Button>
+              {isBodyLoading ? (
+                <RangeSkeleton layout={bodyQuery.layout} month={bodyQuery.month} year={bodyQuery.year} />
+              ) : (
+                // Keyed by the range on screen, so rows replay their entrance when new range data lands, not on the click.
+                <div
+                  key={`${bodyQuery.layout}-${bodyQuery.from}-${bodyQuery.year}-${bodyQuery.month}`}
+                  className="animate-in fade-in-0 duration-slow ease-out-quart"
+                >
+                  {bodyQuery.layout === 'list' ? (
+                    <ScheduleBody {...scheduleProps} appointments={visible} phrase={phonePhrase} />
+                  ) : (
+                    <>
+                      <div className="hidden md:block">
+                        <ScheduleBody
+                          {...scheduleProps}
+                          appointments={desktopVisible}
+                          phrase={desktopPhrase}
+                          calendar={
+                            isMonth || desktopVisible.length > 0 ? (
+                              <div className="p-4">
+                                {isMonth ? (
+                                  <AppointmentsCalendar
+                                    appointments={visible}
+                                    month={bodyQuery.month}
+                                    year={bodyQuery.year}
+                                    businessDate={businessDate}
+                                  />
+                                ) : (
+                                  <AppointmentsWeekGrid
+                                    appointments={desktopVisible}
+                                    from={resolveWeekStart(bodyQuery.from, businessDate)}
+                                    businessDate={businessDate}
+                                  />
+                                )}
+                              </div>
+                            ) : undefined
+                          }
+                        />
+                      </div>
+                      <div className="md:hidden">
+                        <ScheduleBody {...scheduleProps} appointments={visible} phrase={phonePhrase} />
+                      </div>
+                    </>
+                  )}
                 </div>
+              )}
+
+              {!isMonth && !isBodyLoading && canShowMore(bodyQuery) ? (
+                <ShowMoreFooter rangeState={rangeState} isPhoneOnly={isWeek} onShowMore={handleShowMore} />
               ) : null}
             </>
           )}
