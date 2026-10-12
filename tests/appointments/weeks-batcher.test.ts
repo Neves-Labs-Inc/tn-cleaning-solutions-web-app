@@ -22,6 +22,7 @@ function visit(id: string, scheduledDate: string): ScheduleAppointment {
     priceCents: null,
     paymentState: null,
     isNotClocked: false,
+    isMissedClock: false,
   } as ScheduleAppointment;
 }
 

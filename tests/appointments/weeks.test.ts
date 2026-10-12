@@ -53,6 +53,7 @@ function visit(
     paymentState: null,
     claim: null,
     isNotClocked: false,
+    isMissedClock: false,
   };
 }
 

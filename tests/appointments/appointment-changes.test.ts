@@ -91,6 +91,7 @@ describe("listAppointmentChanges", () => {
         paymentState: "paid",
         claim: { id: "inv-paid", number: "INV-002-SMI2026", status: "paid" },
         isNotClocked: false,
+        isMissedClock: false,
       },
     ]);
     assert.deepEqual(changes.needsBilling, []);

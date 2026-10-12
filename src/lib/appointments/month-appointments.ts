@@ -6,7 +6,7 @@ import { paymentStateOf } from '../invoices/payment-state.ts'
 import { loadClaims } from '../invoices/payment-state-queries.ts'
 import { APPOINTMENT_PRICE_COLUMNS, type DisplayPrice, type PriceableAppointment } from '../pricing/index.ts'
 import type { AppointmentStatus } from './lifecycle.ts'
-import { isNotClocked, type ScheduleAppointment } from './overview.ts'
+import { isMissedClock, isNotClocked, type ScheduleAppointment } from './overview.ts'
 import { getMonthRange, type DateRange } from './range.ts'
 import {
   bucketByWeek,
@@ -60,6 +60,10 @@ async function toScheduleAppointments(db: Db, rows: MonthRow[], now: Date): Prom
       paymentState: paymentStateOf({ status: row.status, completed_at: row.completed_at, claim }),
       claim,
       isNotClocked: isNotClocked(
+        { status: row.status, scheduledDate: row.scheduled_date, endTime: row.scheduled_end_time },
+        now
+      ),
+      isMissedClock: isMissedClock(
         { status: row.status, scheduledDate: row.scheduled_date, endTime: row.scheduled_end_time },
         now
       ),

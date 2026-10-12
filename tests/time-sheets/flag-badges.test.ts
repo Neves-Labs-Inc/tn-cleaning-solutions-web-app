@@ -43,9 +43,9 @@ test("an odd duration shows its percentage as a warning", () => {
   assert.deepEqual(badges, [{ tone: "warning", label: "Odd duration · 42%", icon: Hourglass }]);
 });
 
-test("in progress is success and upcoming is info", () => {
+test("in progress is progress and upcoming is info", () => {
   assert.deepEqual(timeSheetFlagBadges({ ...BASE, state: "in_progress" }), [
-    { tone: "success", label: "In progress" },
+    { tone: "progress", label: "In progress" },
   ]);
   assert.deepEqual(timeSheetFlagBadges({ ...BASE, state: "upcoming" }), [
     { tone: "info", label: "Upcoming" },

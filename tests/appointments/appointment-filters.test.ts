@@ -45,6 +45,7 @@ function row(id: string, overrides: Partial<ScheduleAppointment> = {}): Schedule
     paymentState: null,
     claim: null,
     isNotClocked: false,
+    isMissedClock: false,
     ...overrides,
   }
 }
@@ -54,6 +55,10 @@ function ids(appointments: ScheduleAppointment[]): string[] {
 }
 
 describe('appointment filters in the URL', () => {
+  it('reads the Missed clock status', () => {
+    assert.equal(parseAppointmentsQuery({ status: 'missed_clock' }, BUSINESS_DATE).status, 'missed_clock')
+  })
+
   it('reads the client, job and status', () => {
     const query = parseAppointmentsQuery({ client: 'smith', job: 'deep', status: 'not_clocked' }, BUSINESS_DATE)
 
@@ -124,6 +129,7 @@ describe('filtering the schedule', () => {
     row('upcoming', { status: 'scheduled' }),
     row('not-clocked', { status: 'scheduled', isNotClocked: true }),
     row('in-progress', { status: 'in_progress' }),
+    row('missed-clock', { status: 'in_progress', isMissedClock: true }),
     row('completed', { status: 'completed', paymentState: 'billed' }),
     row('cancelled', { status: 'cancelled' }),
   ]
@@ -135,15 +141,17 @@ describe('filtering the schedule', () => {
 
   it('keeps only the chosen In progress or Completed status', () => {
     assert.deepEqual(ids(appointmentsInView(month, { ...OCTOBER, status: 'in_progress' })), ['in-progress'])
+    assert.deepEqual(ids(appointmentsInView(month, { ...OCTOBER, status: 'missed_clock' })), ['missed-clock'])
     assert.deepEqual(ids(appointmentsInView(month, { ...OCTOBER, status: 'completed' })), ['completed'])
   })
 
   it('hides cancelled under All unless Show cancelled is on', () => {
-    assert.deepEqual(ids(appointmentsInView(month, OCTOBER)), ['upcoming', 'not-clocked', 'in-progress', 'completed'])
+    assert.deepEqual(ids(appointmentsInView(month, OCTOBER)), ['upcoming', 'not-clocked', 'in-progress', 'missed-clock', 'completed'])
     assert.deepEqual(ids(appointmentsInView(month, { ...OCTOBER, showCancelled: true })), [
       'upcoming',
       'not-clocked',
       'in-progress',
+      'missed-clock',
       'completed',
       'cancelled',
     ])

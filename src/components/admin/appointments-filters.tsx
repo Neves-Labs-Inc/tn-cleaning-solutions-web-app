@@ -28,6 +28,7 @@ const STATUS_OPTIONS: Array<{ value: AppointmentStatusFilter; label: string }> =
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'not_clocked', label: 'Not clocked' },
   { value: 'in_progress', label: 'In progress' },
+  { value: 'missed_clock', label: 'Missed clock' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
 ]

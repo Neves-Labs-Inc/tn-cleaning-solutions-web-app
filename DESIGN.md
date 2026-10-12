@@ -62,9 +62,10 @@ Statuses in this product (`appointment status`, `clock status`, `invoice status`
 | Token | Meaning | Light (bg / fg / border) | Dark (bg / fg / border) |
 |---|---|---|---|
 | `--status-info` | scheduled, issued, neutral-forward | `oklch(0.97 0.014 254)` / `oklch(0.42 0.15 262)` / `oklch(0.88 0.05 254)` | `oklch(0.62 0.17 262 / 0.15)` / `oklch(0.80 0.10 254)` / `oklch(0.62 0.17 262 / 0.35)` |
-| `--status-success` | in progress (clocked in), paid, completed-by-me | `oklch(0.97 0.03 155)` / `oklch(0.43 0.12 152)` / `oklch(0.88 0.07 155)` | `oklch(0.60 0.14 152 / 0.15)` / `oklch(0.82 0.12 155)` / `oklch(0.60 0.14 152 / 0.35)` |
+| `--status-success` | clocked in, paid, completed-by-me | `oklch(0.97 0.03 155)` / `oklch(0.43 0.12 152)` / `oklch(0.88 0.07 155)` | `oklch(0.60 0.14 152 / 0.15)` / `oklch(0.82 0.12 155)` / `oklch(0.60 0.14 152 / 0.35)` |
 | `--status-warning` | not started, open shift, overdue | `oklch(0.97 0.04 85)` / `oklch(0.47 0.13 65)` / `oklch(0.88 0.10 85)` | `oklch(0.70 0.16 70 / 0.15)` / `oklch(0.85 0.14 85)` / `oklch(0.70 0.16 70 / 0.35)` |
 | `--status-danger` | cancelled, void, error | `oklch(0.97 0.02 20)` / `oklch(0.50 0.19 27)` / `oklch(0.88 0.06 20)` | `oklch(0.64 0.21 25 / 0.15)` / `oklch(0.82 0.10 20)` / `oklch(0.64 0.21 25 / 0.35)` |
+| `--status-progress` | appointment in progress | `oklch(0.97 0.02 295)` / `oklch(0.45 0.17 295)` / `oklch(0.88 0.06 295)` | `oklch(0.62 0.18 295 / 0.15)` / `oklch(0.82 0.10 295)` / `oklch(0.62 0.18 295 / 0.35)` |
 | (neutral) | completed, clocked out, archived | `--muted` / `--muted-foreground` / `--border` | same tokens |
 
 Expose each as `--color-status-<name>`, `--color-status-<name>-foreground`, `--color-status-<name>-border` in `@theme inline`. Status is **never color-alone**: every status pill carries a label, and pills that need scanning at a glance also carry a lucide icon (`Clock`, `CheckCircle2`, `XCircle`, `CircleDashed`).
@@ -74,20 +75,22 @@ Mapping (single source of truth lives in one `status-badge.tsx`, §10):
 | Domain value | Token |
 |---|---|
 | appointment `scheduled` | info |
-| appointment `in_progress` | success |
+| appointment `in_progress` | progress |
 | appointment `completed` | neutral |
 | appointment `cancelled` | danger |
 | clock `not_started` | warning |
 | clock `clocked_in` | success |
 | clock `clocked_out` | neutral |
+| time sheet in progress | progress |
 | time sheet open shift ("still clocked in") | warning |
 | invoice `draft` | neutral; `issued` info; `overdue` warning; `paid` success; `void` danger |
 | Payment state `unbilled` | warning |
 | Payment state `billed` | info |
 | Payment state `paid` | success |
 | appointment Not clocked | danger |
+| appointment Missed clock | danger |
 
-Appointment cards and list rows are tinted with their tone via `appointmentCardTone` (Not clocked wins over the Payment state; Cancelled and appointments with no Payment state stay untinted). The surface classes live in `CARD_TINT_CLASSES` in `status-badge.tsx`.
+Appointment cards and list rows are tinted with their tone via `appointmentCardTone` (Missed clock wins, then Not clocked, then In progress, then the Payment state; Cancelled and appointments with neither stay untinted). The surface classes live in `CARD_TINT_CLASSES` in `status-badge.tsx`.
 
 ### 3.3 Dark mode
 
@@ -245,7 +248,7 @@ Where each thing comes from. New components are marked **(new)**.
 | Dates | `ui/calendar.tsx` inside a `Drawer` on phones, `Popover` on desktop; `type="date"` native input is acceptable on employee screens | |
 | Search field | `ui/input-group.tsx` with leading `Search` icon and a clear `Button size="icon"` | Not a bare `<input>` |
 | Cards / list rows | `ui/card.tsx`; **(new)** `ui/list-row.tsx` for tappable rows | See §10.1 |
-| Status pills | **(new)** `ui/status-badge.tsx` built on `ui/badge.tsx` | Takes a `tone` (`info|success|warning|danger|neutral`), `icon?`, label. The *only* place status colors are painted |
+| Status pills | **(new)** `ui/status-badge.tsx` built on `ui/badge.tsx` | Takes a `tone` (`info|success|warning|danger|progress|neutral`), `icon?`, label. The *only* place status colors are painted |
 | Stat tiles | `components/dashboard/statCard.tsx` → rename **(new)** `ui/stat-tile.tsx` | §12 |
 | Page header | **(new)** `ui/page-header.tsx` | title, optional description, optional right-slot action. Replaces the gradient hero sections |
 | Empty state | `ui/empty.tsx` | `EmptyMedia variant="icon"` + title + one-sentence description + optional single action |

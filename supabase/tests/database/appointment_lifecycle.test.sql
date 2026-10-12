@@ -9,7 +9,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(66);
+select plan(74);
 
 
 -- Fixtures (as postgres) -----------------------------------------------------------------------
@@ -82,7 +82,7 @@ select col_not_null('public', 'appointments', 'manually_completed', 'manually_co
 select col_default_is('public', 'appointments', 'manually_completed', 'false', 'manually_completed defaults to false');
 
 
--- L1: clocks drive the status, a no-show never holds it open ------------------------------------
+-- L1: clocks drive the status, every Cleaner on the crew must clock ------------------------------
 
 select public.pgtap_lifecycle_appointment('d2000000-0000-4000-8000-000000000001', 'scheduled');
 insert into public.appointment_employees (id, appointment_id, employee_id) values
@@ -101,15 +101,15 @@ select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000001'),
 select is(public.pgtap_lifecycle_clock('a2000000-0000-4000-8000-000000000001', 'f2000000-0000-4000-8000-000000000011', 'out'),
 	'clocked', 'L1: A clocks out');
 select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000001'),
-	'completed/clocks', 'L1: completed once everyone who clocked in has clocked out, though B never clocked in');
+	'in_progress/clocks', 'L1: still in progress after A clocked out, because B never clocked in');
 select is(public.pgtap_lifecycle_clock('a2000000-0000-4000-8000-000000000002', 'f2000000-0000-4000-8000-000000000012', 'in'),
-	'clocked', 'L1: B can clock in late on a completion derived from the clocks');
+	'clocked', 'L1: B clocks in late');
 select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000001'),
-	'in_progress/clocks', 'L1: the late clock-in reopens it to in progress');
+	'in_progress/clocks', 'L1: in progress while B is clocked in');
 select is(public.pgtap_lifecycle_clock('a2000000-0000-4000-8000-000000000002', 'f2000000-0000-4000-8000-000000000012', 'out'),
 	'clocked', 'L1: B clocks out');
 select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000001'),
-	'completed/clocks', 'L1: completed again once B clocked out');
+	'completed/clocks', 'L1: completed once every Cleaner on the crew clocked in and out');
 
 reset role;
 
@@ -304,6 +304,47 @@ select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000006'),
 	'in_progress/clocks', 'L6: Restore with an open shift derives in progress, not the completed that was written');
 
 
+-- L7: a Cleaner who never clocks in holds it open until resolved --------------------------------
+
+select public.pgtap_lifecycle_appointment('d2000000-0000-4000-8000-000000000007', 'scheduled');
+insert into public.appointment_employees (id, appointment_id, employee_id, clocked_in_at, clocked_out_at) values
+	('f2000000-0000-4000-8000-000000000071', 'd2000000-0000-4000-8000-000000000007', 'e2000000-0000-4000-8000-00000000000a', '2026-10-01 09:00+00', '2026-10-01 11:00+00');
+insert into public.appointment_employees (id, appointment_id, employee_id) values
+	('f2000000-0000-4000-8000-000000000072', 'd2000000-0000-4000-8000-000000000007', 'e2000000-0000-4000-8000-00000000000b');
+select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000007'),
+	'in_progress/clocks', 'L7: A clocked in and out, B never clocked in: in progress');
+
+update public.appointments set manually_completed = true where id = 'd2000000-0000-4000-8000-000000000007';
+select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000007'),
+	'completed/manual', 'L7: Manual completion completes it with B still never clocked in');
+
+update public.appointments set manually_completed = false where id = 'd2000000-0000-4000-8000-000000000007';
+select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000007'),
+	'in_progress/clocks', 'L7: Undo complete goes back to in progress');
+
+update public.appointment_employees set is_archived = true where id = 'f2000000-0000-4000-8000-000000000072';
+select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000007'),
+	'completed/clocks', 'L7: removing B from the crew (archived) completes it');
+
+update public.appointment_employees set is_archived = false where id = 'f2000000-0000-4000-8000-000000000072';
+select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000007'),
+	'in_progress/clocks', 'L7: putting B back on the crew reopens it');
+
+delete from public.appointment_employees where id = 'f2000000-0000-4000-8000-000000000072';
+select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000007'),
+	'completed/clocks', 'L7: deleting B''s crew row completes it');
+
+insert into public.appointment_employees (id, appointment_id, employee_id, is_archived) values
+	('f2000000-0000-4000-8000-000000000073', 'd2000000-0000-4000-8000-000000000007', 'e2000000-0000-4000-8000-00000000000b', null);
+select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000007'),
+	'in_progress/clocks', 'L7: an unclocked crew row with is_archived NULL counts as on the crew');
+
+update public.appointment_employees set clocked_in_at = '2026-10-01 09:00+00', clocked_out_at = '2026-10-01 11:00+00'
+	where id = 'f2000000-0000-4000-8000-000000000073';
+select is(public.pgtap_lifecycle_state('d2000000-0000-4000-8000-000000000007'),
+	'completed/clocks', 'L7: entering B''s clocks (Clock correction) completes it');
+
+
 -- Backfill rule --------------------------------------------------------------------------------
 
 -- A first pass settles whatever rows already exist, so the counts below are this file's alone.
@@ -343,7 +384,6 @@ insert into public.appointment_employees (appointment_id, employee_id, clocked_i
 	('d2000000-0000-4000-8000-0000000000b2', 'e2000000-0000-4000-8000-00000000000a', '2026-09-01 09:00+00', null),
 	('d2000000-0000-4000-8000-0000000000b3', 'e2000000-0000-4000-8000-00000000000a', '2026-09-01 09:00+00', '2026-09-01 11:00+00'),
 	('d2000000-0000-4000-8000-0000000000b4', 'e2000000-0000-4000-8000-00000000000a', '2026-09-01 09:00+00', '2026-09-01 11:00+00'),
-	('d2000000-0000-4000-8000-0000000000b4', 'e2000000-0000-4000-8000-00000000000b', null, null),
 	('d2000000-0000-4000-8000-0000000000b5', 'e2000000-0000-4000-8000-00000000000a', '2026-09-01 09:00+00', null),
 	('d2000000-0000-4000-8000-0000000000b6', 'e2000000-0000-4000-8000-00000000000a', null, null),
 	('d2000000-0000-4000-8000-0000000000b8', 'e2000000-0000-4000-8000-00000000000a', '2026-09-01 09:00+00', '2026-09-01 11:00+00');

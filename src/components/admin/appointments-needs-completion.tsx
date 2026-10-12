@@ -49,6 +49,7 @@ function toListRow(appointment: NeedsCompletionAppointment): ScheduleAppointment
     paymentState: null,
     claim: null,
     isNotClocked: true,
+    isMissedClock: false,
   };
 }
 
