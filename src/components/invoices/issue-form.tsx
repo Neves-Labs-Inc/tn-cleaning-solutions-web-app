@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import SubmitButton from '@/components/ui/submit-button'
+import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
 import { issueInvoice } from '@/lib/actions/invoices'
 import { formatCents } from '@/lib/pricing/money'
 
@@ -39,6 +40,7 @@ export default function IssueForm({
   onPendingChange,
 }: IssueFormProps) {
   const { isDetailsDirty, showPageError } = useInvoiceDetail()
+  const invalidateAppointments = useInvalidateAppointments()
   const dueDateId = useId()
   const hintId = useId()
   const errorId = useId()
@@ -61,6 +63,7 @@ export default function IssueForm({
     try {
       const result = await issueInvoice(null, formData)
       if (result.success) {
+        void invalidateAppointments()
         toast.success(`Issued ${result.data.invoiceNumber}`)
         onSuccess()
         return

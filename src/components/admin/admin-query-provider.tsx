@@ -38,6 +38,11 @@ function getQueryClient(): QueryClient {
   return browserQueryClient;
 }
 
+// Sign-out returns to /login without a full reload, so the next account must not see this one's rows.
+export function clearBrowserQueryCache(): void {
+  browserQueryClient?.clear();
+}
+
 export default function AdminQueryProvider({
   children,
 }: AdminQueryProviderProps): React.ReactNode {

@@ -15,7 +15,7 @@ import type { ClaimableVisit } from '@/lib/invoices/queries'
 import { ClaimableVisitList } from './claimable-visit-list'
 import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail } from './invoice-detail-context'
 import { SHEET_BUTTON_CLASS, SheetButtons } from './sheet-buttons'
-import { submitDraftUpdate } from './submit-draft-update'
+import { useSubmitDraftUpdate } from './submit-draft-update'
 
 type AddVisitsPickerProps = {
   invoiceId: string
@@ -37,6 +37,7 @@ export default function AddVisitsPicker({
   businessDate,
 }: AddVisitsPickerProps) {
   const router = useRouter()
+  const submitDraftUpdate = useSubmitDraftUpdate()
   const { showPageError } = useInvoiceDetail()
   const [isOpen, setIsOpen] = useState(false)
   const [isPending, setIsPending] = useState(false)

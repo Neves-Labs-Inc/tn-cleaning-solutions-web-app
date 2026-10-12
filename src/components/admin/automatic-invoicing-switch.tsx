@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
+import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
 import { setClientAutomaticInvoicing } from '@/lib/actions/invoices'
 
 const FALLBACK_ERROR = 'Try again.'
@@ -37,6 +38,7 @@ type AutomaticInvoicingSwitchProps = {
 
 export default function AutomaticInvoicingSwitch({ clientId, clientName, isOn }: AutomaticInvoicingSwitchProps) {
   const [isSaving, startSaving] = useTransition()
+  const invalidateAppointments = useInvalidateAppointments()
   const [optimisticIsOn, setOptimisticIsOn] = useOptimistic(isOn)
   const [error, setError] = useState<string | null>(null)
 
@@ -54,6 +56,7 @@ export default function AutomaticInvoicingSwitch({ clientId, clientName, isOn }:
 
         // The optimistic value falls back to the server's when the transition ends, so a failure reverts itself.
         if (result.success) {
+          void invalidateAppointments()
           toast.success(`Automatic invoicing ${next ? 'on' : 'off'} for ${clientName}`)
           return
         }

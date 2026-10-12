@@ -17,6 +17,7 @@ import {
   type AppointmentActionResult,
   updateAppointment,
 } from '@/lib/actions/appointments'
+import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
 import { formatMinutes } from '@/components/admin/time-sheets/format-minutes'
 import { formatRate } from '@/lib/pricing/money'
 import { planCrewChange } from '@/lib/appointments/crew'
@@ -160,10 +161,24 @@ export function AppointmentForm({
   const serverAction = appointment ? updateAppointment.bind(null, appointment.id) : createAppointment
   const [state, formAction, isPending] = useActionState(serverAction, initialState)
   const scheduledDateRef = useRef<HTMLInputElement>(null)
+  const invalidateAppointments = useInvalidateAppointments()
+  // A saved form never gets a state back: the action redirects away. So a submit still unanswered
+  // when the form unmounts means it saved.
+  const hasUnansweredSubmitRef = useRef(false)
   const fieldErrors = 'fieldErrors' in state ? state.fieldErrors : undefined
   const scheduledDateError = fieldErrors?.scheduled_date
   const formError = 'error' in state ? state.error : ''
   const formErrorRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    hasUnansweredSubmitRef.current = false
+  }, [state])
+
+  useEffect(() => {
+    return () => {
+      if (hasUnansweredSubmitRef.current) void invalidateAppointments()
+    }
+  }, [invalidateAppointments])
 
   // A refused date is fixed in place, so focus lands on it when the action returns.
   useEffect(() => {
@@ -186,6 +201,7 @@ export function AppointmentForm({
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
+    hasUnansweredSubmitRef.current = true
     startTransition(() => formAction(formData))
   }
 

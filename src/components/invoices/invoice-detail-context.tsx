@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { createContext, use, useState } from 'react'
 import { toast } from 'sonner'
 
+import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
 import type { InvoiceActionResult } from '@/lib/actions/invoices'
 
 export type ActionError = { title: string; message: string }
@@ -40,6 +41,7 @@ type InvoiceDetailProviderProps = {
 // Keyed on the invoice id by the page, so unsaved edits survive re-renders of the same invoice.
 export function InvoiceDetailProvider({ savedDetails, children }: InvoiceDetailProviderProps) {
   const router = useRouter()
+  const invalidateAppointments = useInvalidateAppointments()
   const [pageError, setPageError] = useState<ActionError | null>(null)
   const [details, setDetails] = useState(savedDetails)
 
@@ -51,6 +53,7 @@ export function InvoiceDetailProvider({ savedDetails, children }: InvoiceDetailP
     try {
       const result = await action()
       if (result.success) {
+        void invalidateAppointments()
         toast.success(typeof copy.success === 'string' ? copy.success : copy.success(result.data))
         return result.data
       }

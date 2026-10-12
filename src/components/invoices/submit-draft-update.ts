@@ -1,3 +1,4 @@
+import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
 import { updateDraft, type InvoiceActionResult } from '@/lib/actions/invoices'
 
 import type { DraftDetails } from './invoice-detail-context'
@@ -12,7 +13,7 @@ type DraftUpdate = {
 }
 
 // One way to post updateDraft's form, for line removal, Add visits and Save.
-export function submitDraftUpdate({
+function submitDraftUpdate({
   invoiceId,
   addIds = [],
   removeIds = [],
@@ -32,4 +33,17 @@ export function submitDraftUpdate({
     formData.set('notes', details.notes)
   }
   return updateDraft(null, formData)
+}
+
+type SubmitDraftUpdate = typeof submitDraftUpdate
+
+// submitDraftUpdate that also drops the appointments cache once the draft saved.
+export function useSubmitDraftUpdate(): SubmitDraftUpdate {
+  const invalidateAppointments = useInvalidateAppointments()
+
+  return async (update) => {
+    const result = await submitDraftUpdate(update)
+    if (result.success) void invalidateAppointments()
+    return result
+  }
 }

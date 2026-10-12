@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { CONNECTION_ERROR_MESSAGE } from "@/components/invoices/invoice-detail-context";
+import { useInvalidateAppointments } from "@/hooks/use-invalidate-appointments";
 import type { InvoiceActionResult } from "@/lib/actions/invoices";
 
 // The submit flow of a payment sheet (Mark paid, Record payment): check the form, post it, then
@@ -45,6 +46,7 @@ export default function usePaymentSheetSubmit<T>({
   const [fieldErrors, setFieldErrors] = useState<SheetFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const invalidateAppointments = useInvalidateAppointments();
 
   function showFieldErrors(errors: SheetFieldErrors): void {
     setFieldErrors(errors);
@@ -61,6 +63,7 @@ export default function usePaymentSheetSubmit<T>({
     try {
       const result = await action(null, formData);
       if (result.success) {
+        void invalidateAppointments();
         onSuccess(result.data);
         return;
       }

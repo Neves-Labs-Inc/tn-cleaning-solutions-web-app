@@ -1,12 +1,11 @@
-import { LogOut } from 'lucide-react'
 import { redirect } from 'next/navigation'
 
 import { PasswordForm } from '@/components/profile/password-form'
 import { ProfileForm } from '@/components/profile/profile-form'
+import { SignOutForm } from '@/components/profile/sign-out-form'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
-import SubmitButton from '@/components/ui/submit-button'
 import { createClient } from '@/lib/supabase/server'
 
 import signOutAction from '../signOutAction'
@@ -76,16 +75,7 @@ export default async function ProfilePage() {
 
             <PasswordForm />
 
-            <form action={signOutAction}>
-                <SubmitButton
-                    label="Sign out"
-                    pendingLabel="Signing out…"
-                    variant="outline"
-                    size="lg"
-                    className="w-full"
-                    icon={<LogOut aria-hidden="true" />}
-                />
-            </form>
+            <SignOutForm signOut={signOutAction} />
         </div>
     )
 }

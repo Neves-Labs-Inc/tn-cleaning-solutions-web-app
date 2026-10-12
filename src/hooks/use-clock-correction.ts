@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+import { useInvalidateAppointments } from "@/hooks/use-invalidate-appointments";
 import { correctSessionClocks } from "@/lib/actions/time-sheets";
 import {
   draftToInstants,
@@ -92,6 +93,7 @@ export function useClockCorrection(
   onClose: () => void,
 ): ClockCorrection {
   const router = useRouter();
+  const invalidateAppointments = useInvalidateAppointments();
   const baseId = useId();
   // Read once on open: the prefill and hints describe the moment the admin asked to fix.
   const [openedAt] = useState(() => new Date());
@@ -197,6 +199,7 @@ export function useClockCorrection(
       if (result.ok) {
         const isClear = instants.clockIn === null && instants.clockOut === null;
         toast.success(isClear ? CLEARED_MESSAGE : SUCCESS_MESSAGES[mode]);
+        void invalidateAppointments();
         router.refresh();
         onClose();
       } else {

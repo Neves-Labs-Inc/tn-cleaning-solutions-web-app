@@ -12,7 +12,7 @@ import SubmitButton from '@/components/ui/submit-button'
 import { Textarea } from '@/components/ui/textarea'
 
 import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail } from './invoice-detail-context'
-import { submitDraftUpdate } from './submit-draft-update'
+import { useSubmitDraftUpdate } from './submit-draft-update'
 
 type DraftDetailsFormProps = {
   invoiceId: string
@@ -26,6 +26,7 @@ const ERROR_TITLE = "Couldn't save the draft"
 // change re-rendering the page and the Issue sheet can tell they're unsaved.
 export default function DraftDetailsForm({ invoiceId, createdLabel, businessDate }: DraftDetailsFormProps) {
   const { details, setDetails, showPageError } = useInvoiceDetail()
+  const submitDraftUpdate = useSubmitDraftUpdate()
   const dueDateId = useId()
   const notesId = useId()
   const [error, setError] = useState<string | null>(null)

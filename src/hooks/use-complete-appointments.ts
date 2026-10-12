@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { useInvalidateAppointments } from "@/hooks/use-invalidate-appointments";
 import { markAppointmentsComplete } from "@/lib/actions/appointments";
 import type { NeedsCompletionAppointment } from "@/lib/appointments/needs-completion";
 import {
@@ -40,6 +41,7 @@ export function useCompleteAppointments(
   appointments: NeedsCompletionAppointment[],
 ): CompleteAppointments {
   const router = useRouter();
+  const invalidateAppointments = useInvalidateAppointments();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dialog, setDialog] = useState<DialogState>({ isOpen: false, count: 0 });
 
@@ -76,6 +78,8 @@ export function useCompleteAppointments(
       );
 
       if (result.success) {
+        // Even a partial run completed some rows.
+        void invalidateAppointments();
         const outcome = describeCompletion({
           completed: result.completedCount,
           skipped: result.skippedCount,
