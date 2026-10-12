@@ -31,14 +31,14 @@ const ALERT_ENTER_CLASSES =
   'animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart'
 
 type UpdatePasswordFormProps = {
-  code: string | null
+  tokenHash: string | null
   action: (
     previousState: UpdatePasswordActionState,
     formData: FormData
   ) => Promise<UpdatePasswordActionState>
 }
 
-export const UpdatePasswordForm = ({ code, action }: UpdatePasswordFormProps) => {
+export const UpdatePasswordForm = ({ tokenHash, action }: UpdatePasswordFormProps) => {
   const [state, formAction] = useActionState(action, initialState)
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export const UpdatePasswordForm = ({ code, action }: UpdatePasswordFormProps) =>
     }
   }, [state])
 
-  if (!code || state.status === 'invalid-link') {
+  if (!tokenHash || state.status === 'invalid-link') {
     return (
       <div className="space-y-4">
         <Alert
@@ -109,7 +109,7 @@ export const UpdatePasswordForm = ({ code, action }: UpdatePasswordFormProps) =>
 
   return (
     <form action={formAction}>
-      <input type="hidden" name="code" value={code} />
+      <input type="hidden" name="token_hash" value={tokenHash} />
 
       <FieldGroup>
         <Field data-invalid={Boolean(state.fieldErrors.password)}>

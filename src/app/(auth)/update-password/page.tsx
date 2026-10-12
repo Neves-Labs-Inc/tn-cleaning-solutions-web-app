@@ -12,14 +12,15 @@ import {
 import { createClient } from '@/lib/supabase/server'
 
 type UpdatePasswordPageProps = {
-  searchParams: Promise<{ code?: string | string[] }>
+  searchParams: Promise<{ token_hash?: string | string[] }>
 }
 
 export default async function UpdatePasswordPage({
   searchParams,
 }: UpdatePasswordPageProps) {
-  const rawCode = (await searchParams).code
-  const code = (Array.isArray(rawCode) ? rawCode[0] : rawCode) ?? null
+  const rawTokenHash = (await searchParams).token_hash
+  const tokenHash =
+    (Array.isArray(rawTokenHash) ? rawTokenHash[0] : rawTokenHash) ?? null
 
   return (
     <Card className="sm:py-5">
@@ -32,7 +33,7 @@ export default async function UpdatePasswordPage({
         </CardDescription>
       </CardHeader>
       <CardContent className="sm:px-5">
-        <UpdatePasswordForm code={code} action={updatePasswordAction} />
+        <UpdatePasswordForm tokenHash={tokenHash} action={updatePasswordAction} />
       </CardContent>
     </Card>
   )
@@ -44,7 +45,7 @@ async function updatePasswordAction(
 ): Promise<UpdatePasswordActionState> {
   'use server'
 
-  const code = String(formData.get('code') ?? '')
+  const tokenHash = String(formData.get('token_hash') ?? '')
   const password = String(formData.get('password') ?? '')
   const confirmPassword = String(formData.get('confirmPassword') ?? '')
 
@@ -69,11 +70,18 @@ async function updatePasswordAction(
     }
   } else {
     const client = await createClient()
-    const exchangeError = previousState.sessionEstablished
+    // Verify only on submit: scanners and prefetches would burn the
+    // single-use token if it ran on page load.
+    const verifyError = previousState.sessionEstablished
       ? null
-      : (await client.auth.exchangeCodeForSession(code)).error
+      : (
+          await client.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: 'recovery',
+          })
+        ).error
 
-    if (exchangeError) {
+    if (verifyError) {
       state = {
         status: 'invalid-link',
         sessionEstablished: false,
