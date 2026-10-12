@@ -1,13 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useId, useOptimistic, useState, useTransition } from 'react'
-import { Calendar, CalendarDays, CalendarRange, CheckCircle2, List, ReceiptText, SearchX } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useId } from 'react'
+import { AlertCircle, Calendar, CalendarDays, CalendarRange, CheckCircle2, List, ReceiptText, SearchX } from 'lucide-react'
 
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
+import { Spinner } from '@/components/ui/spinner'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   ALL_APPOINTMENTS_FILTER,
@@ -17,12 +18,10 @@ import {
   type FilterOptions,
 } from '@/lib/appointments/filters'
 import {
+  APPOINTMENTS_PATH,
   appointmentsHref,
   appointmentsInView,
-  createPendingTile,
-  getNavQuery,
-  parseAppointmentsQuery,
-  syncPendingTile,
+  parseAppointmentsSearch,
   type AppointmentsQuery,
   type Overview,
   type ScheduleAppointment,
@@ -38,7 +37,9 @@ import {
   switchLayout,
   toCurrentWeek,
   type Layout,
+  type RangeQuery,
 } from '@/lib/appointments/range'
+import type { RangeState } from '@/hooks/use-appointments-screen'
 import type { NeedsCompletionAppointment } from '@/lib/appointments/needs-completion'
 import type { PaymentMethod } from '@/lib/invoices/ledger'
 import type { NeedsBillingAppointment } from '@/lib/invoices/payment-state-queries'
@@ -47,28 +48,37 @@ import { cn } from '@/lib/utils'
 import AppointmentsCalendar from './appointments-calendar'
 import AppointmentsFilters from './appointments-filters'
 import AppointmentsList from './appointments-list'
+import AppointmentsListSkeleton from './appointments-list-skeleton'
+import AppointmentsMonthGridSkeleton from './appointments-month-grid-skeleton'
 import AppointmentsMonthNav from './appointments-month-nav'
 import AppointmentsNeedsBilling from './appointments-needs-billing'
 import AppointmentsNeedsCompletion from './appointments-needs-completion'
 import AppointmentsOverviewTiles from './appointments-overview-tiles'
 import AppointmentsRangeNav from './appointments-range-nav'
 import AppointmentsWeekGrid from './appointments-week-grid'
+import AppointmentsWeekGridSkeleton from './appointments-week-grid-skeleton'
 
 type AppointmentsViewToggleProps = {
+  // The URL's query: the view, the filters and the target range the nav header shows.
   query: AppointmentsQuery
+  // The range the body shows: the target, or while Show more loads, the range shown so far.
+  range: RangeQuery
+  // Whether the body is a skeleton, or Show more is loading or has failed.
+  rangeState: RangeState
   overview: Overview
-  // The visible range's appointments: the month in the Month layout, from the week start onward otherwise.
+  // The body range's appointments: the month in the Month layout, from the week start onward otherwise.
   appointments: ScheduleAppointment[]
   // Read only for the Needs billing view; empty otherwise.
   needsBilling: NeedsBillingAppointment[]
   // Read only for the Needs completion view; empty otherwise.
   needsCompletion: NeedsCompletionAppointment[]
-  methods: PaymentMethod[]
+  // null until loaded.
+  methods: PaymentMethod[] | null
   filterOptions: FilterOptions
   businessDate: string
+  // Moves the screen to another query in place, as a new history entry.
+  onNavigate: (next: AppointmentsQuery) => void
 }
-
-type RangeState = Pick<AppointmentsQuery, 'layout' | 'from' | 'weeks' | 'month' | 'year'>
 
 const NEW_APPOINTMENT_PATH = '/solutions/appointments/new'
 // The Needs views list every month, so there is no range to name.
@@ -243,22 +253,105 @@ function ScheduleBody({ query, appointments, phrase, businessDate, onClear, cale
   return body
 }
 
-function filterOf({ clientId, jobId, status }: AppointmentsQuery): AppointmentsFilter {
-  return { clientId, jobId, status }
+type RangeSkeletonProps = {
+  layout: Layout
+  month: number
+  year: number
 }
 
-function rangeOf({ layout, from, weeks, month, year }: AppointmentsQuery): RangeState {
-  return { layout, from, weeks, month, year }
+// The skeleton of the layout being loaded: the list on phones, and the grid from md for Week and Month.
+function RangeSkeleton({ layout, month, year }: RangeSkeletonProps): React.ReactNode {
+  if (layout === 'list') return <AppointmentsListSkeleton />
+
+  return (
+    <>
+      <div className="md:hidden">
+        <AppointmentsListSkeleton />
+      </div>
+      <div className="hidden md:block">
+        {layout === 'month' ? <AppointmentsMonthGridSkeleton month={month} year={year} /> : <AppointmentsWeekGridSkeleton />}
+      </div>
+    </>
+  )
+}
+
+type ShowMoreFooterProps = {
+  rangeState: RangeState
+  // Week shows the 7 days on desktop, so Show more is a phone control there.
+  isPhoneOnly: boolean
+  onShowMore: () => void
+}
+
+// Outside the keyed body, so the rows already shown don't replay their entrance. While the new weeks
+// load, skeleton rows sit above the button; if they fail, an inline alert takes the same slot.
+function ShowMoreFooter({ rangeState, isPhoneOnly, onShowMore }: ShowMoreFooterProps): React.ReactNode {
+  const isLoading = rangeState.status === 'loading-more'
+  const isFailed = rangeState.status === 'more-error'
+
+  return (
+    <div className={cn(isPhoneOnly && 'md:hidden')}>
+      {isLoading ? <AppointmentsListSkeleton bands={1} /> : null}
+      {rangeState.status === 'more-error' ? (
+        <div className="px-4 py-3">
+          <Alert variant="destructive" className="animate-in fade-in-0 duration-base ease-out-quart">
+            <AlertCircle aria-hidden="true" />
+            <AlertTitle>Couldn&apos;t load more weeks</AlertTitle>
+            <AlertDescription>The appointments above are still up to date.</AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
+      <div className="flex justify-center border-t p-4">
+        <Button
+          type="button"
+          variant="outline"
+          // Disabled but focusable, so keyboard focus survives the label swap.
+          disabled={isLoading}
+          focusableWhenDisabled
+          aria-busy={isLoading || undefined}
+          className={cn(
+            PRESS_CLASS,
+            'w-full sm:w-auto sm:min-w-40',
+            // focusableWhenDisabled sets aria-disabled, not :disabled, so the Button's own disabled styles never apply.
+            // Dim only the content, not the whole button, so the focus ring keeps its full alpha.
+            'aria-disabled:cursor-default aria-disabled:text-muted-foreground aria-disabled:hover:text-muted-foreground aria-disabled:hover:bg-transparent aria-disabled:active:translate-y-0 aria-disabled:active:scale-100'
+          )}
+          onClick={rangeState.status === 'more-error' ? rangeState.onRetry : onShowMore}
+        >
+          {isLoading ? (
+            <>
+              <Spinner className="size-4" />
+              Loading more…
+            </>
+          ) : isFailed ? (
+            'Try again'
+          ) : (
+            'Show more'
+          )}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function filterOf({ clientId, jobId, status }: AppointmentsQuery): AppointmentsFilter {
+  return { clientId, jobId, status }
 }
 
 function isLayout(value: string | undefined): value is Layout {
   return LAYOUTS.some((layout) => layout === value)
 }
 
+// A primary click with no modifier: the ones a link may handle in place. The rest open a new tab or window.
+function isPlainClick(event: React.MouseEvent): boolean {
+  return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
+}
+
 // The overview tiles and the appointments card: the range's schedule (Week, Month or List on desktop, the list on
 // phones), filtered to Billed or Paid when that tile is active, or the Needs billing or Needs completion list.
 export function AppointmentsViewToggle({
   query,
+  range,
+  rangeState,
   overview,
   appointments,
   needsBilling,
@@ -266,63 +359,50 @@ export function AppointmentsViewToggle({
   methods,
   filterOptions,
   businessDate,
+  onNavigate,
 }: AppointmentsViewToggleProps): React.ReactNode {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [pendingTile, setPendingTile] = useState(() => createPendingTile(query))
-  const [optimisticFilter, setOptimisticFilter] = useOptimistic(filterOf(query))
-  const [optimisticRange, setOptimisticRange] = useOptimistic(rangeOf(query))
   const clientTriggerId = useId()
   const headingId = useId()
 
   const isNeedsBilling = query.view === 'needs-billing'
   const isNeedsCompletion = query.view === 'needs-completion'
   const isStateView = query.view === 'billed' || query.view === 'paid'
-  const visible = appointmentsInView(appointments, query)
+  // The body: the URL's view and filters over the range that has data.
+  const bodyQuery = { ...query, ...range }
+  const visible = appointmentsInView(appointments, bodyQuery)
   // Status doesn't apply to a Needs view, so it neither narrows nor counts as a filter there.
   const isNeedsView = isNeedsBilling || isNeedsCompletion
-  // Next keeps this state across search-param changes, so the pending tile is synced to the URL on render.
-  const syncedTile = syncPendingTile(pendingTile, query)
-  if (syncedTile !== pendingTile) setPendingTile(syncedTile)
-  // A filter or range change still in flight rides along, so the next press doesn't drop it.
-  const navQuery = { ...getNavQuery(syncedTile, query), ...optimisticFilter, ...optimisticRange }
+  // Only the schedule body has a range to wait for; the Needs lists are already loaded.
+  const isBodyLoading = rangeState.status === 'loading' && !isNeedsView
+  const filter = filterOf(query)
 
-  const needsFilter = { ...optimisticFilter, status: 'all' as const }
-  const visibleNeedsBilling = filterNeedsRows(needsBilling, optimisticFilter)
-  const visibleNeedsCompletion = filterNeedsRows(needsCompletion, optimisticFilter)
+  const needsFilter = { ...filter, status: 'all' as const }
+  const visibleNeedsBilling = filterNeedsRows(needsBilling, filter)
+  const visibleNeedsCompletion = filterNeedsRows(needsCompletion, filter)
   const visibleNeedsCount = isNeedsBilling ? visibleNeedsBilling.length : visibleNeedsCompletion.length
   const isNeedsFiltered = isAppointmentsFilterActive(needsFilter) && visibleNeedsCount === 0
 
-  // The header shows the target range at once; the body shows the range the server sent.
-  const isNavMonth = navQuery.layout === 'month'
-  const showThisWeek = !isNavMonth && navQuery.from !== null
+  // The header shows the target range at once; the body shows the range that has data.
+  const isNavMonth = query.layout === 'month'
+  const showThisWeek = !isNavMonth && query.from !== null
   // Phones always get the list, so Week reads as List there.
   const navHeading = (
     <ResponsiveText
-      phone={getRangeCopy(navQuery, businessDate, 'list').heading}
-      desktop={getRangeCopy(navQuery, businessDate).heading}
+      phone={getRangeCopy(query, businessDate, 'list').heading}
+      desktop={getRangeCopy(query, businessDate).heading}
     />
   )
 
-  const isWeek = query.layout === 'week'
-  const isMonth = query.layout === 'month'
-  const phonePhrase = getRangeCopy(query, businessDate, isMonth ? 'month' : 'list').phrase
-  const desktopPhrase = getRangeCopy(query, businessDate).phrase
-  const weekEnd = getWeekEnd(resolveWeekStart(query.from, businessDate))
-  // Week reads the list's extent (the server can't tell the width), so trim it to the 7 days the grid shows.
+  const isWeek = bodyQuery.layout === 'week'
+  const isMonth = bodyQuery.layout === 'month'
+  const phonePhrase = getRangeCopy(bodyQuery, businessDate, isMonth ? 'month' : 'list').phrase
+  const desktopPhrase = getRangeCopy(bodyQuery, businessDate).phrase
+  const weekEnd = getWeekEnd(resolveWeekStart(bodyQuery.from, businessDate))
+  // Week reads the list's extent (one read serves both widths), so trim it to the 7 days the grid shows.
   const desktopVisible = isWeek ? visible.filter((appointment) => appointment.scheduledDate <= weekEnd) : visible
 
-  function handleNavigate(next: AppointmentsQuery): void {
-    // Pushed (not replaced), so Back steps through ranges, layouts and filter changes.
-    startTransition(() => {
-      setOptimisticRange(rangeOf(next))
-      setOptimisticFilter(filterOf(next))
-      router.push(appointmentsHref(next), { scroll: false })
-    })
-  }
-
   function handleFilterChange(patch: Partial<AppointmentsFilter>): void {
-    handleNavigate({ ...navQuery, ...patch })
+    onNavigate({ ...query, ...patch })
   }
 
   function handleClearFilters(): void {
@@ -333,47 +413,52 @@ export function AppointmentsViewToggle({
   }
 
   function handleShowMore(): void {
-    const next = showMore(navQuery)
-    handleNavigate(next)
+    const next = showMore(query)
+    onNavigate(next)
     // At the cap Show more unmounts, so focus moves to the heading instead of falling to body.
     if (!canShowMore(next)) document.getElementById(headingId)?.focus()
   }
 
   function handleThisWeek(): void {
-    handleNavigate(toCurrentWeek(navQuery))
+    onNavigate(toCurrentWeek(query))
     // This week unmounts, so focus moves to the heading, which announces the new range.
     document.getElementById(headingId)?.focus()
   }
 
-  function handleTileClick(event: React.MouseEvent<HTMLDivElement>): void {
-    // A modified click opens a new tab and leaves this page as it is.
-    const isModified = event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0
-    const anchor = (event.target as HTMLElement).closest('a')
-    if (isModified || !anchor) return
+  // The tiles and the Show all links are Links to this screen, so a plain click on one moves the
+  // screen in place. Modified clicks fall through to the Link and open a new tab as usual; links
+  // that leave the screen (rows, New appointment) aren't this path.
+  function handleScreenLinkClick(event: React.MouseEvent<HTMLDivElement>): void {
+    const anchor = event.target instanceof Element ? event.target.closest('a') : null
+    if (anchor === null || !isPlainClick(event)) return
 
-    const params = Object.fromEntries(new URL(anchor.href).searchParams)
-    setPendingTile(createPendingTile(query, parseAppointmentsQuery(params, businessDate)))
+    const url = new URL(anchor.href)
+    if (url.origin !== window.location.origin || url.pathname !== APPOINTMENTS_PATH) return
+
+    // Before the Link's own handler, which skips a click already prevented.
+    event.preventDefault()
+    // Keeps nextjs-toploader's document click listener from starting a bar no navigation will finish.
+    event.stopPropagation()
+    onNavigate(parseAppointmentsSearch(url.searchParams, businessDate))
   }
 
   function handleLayoutChange(value: string[]): void {
     // Pressing the active item again would empty the group; keep the current layout then.
     const [next] = value
-    if (isLayout(next)) handleNavigate(switchLayout(navQuery, next, businessDate))
+    if (isLayout(next)) onNavigate(switchLayout(query, next, businessDate))
   }
 
-  const scheduleProps = { query, businessDate, onClear: handleClearFilters }
+  const scheduleProps = { query: bodyQuery, businessDate, onClear: handleClearFilters }
   const needsFilteredEmpty = isNeedsFiltered ? (
     <FilteredEmpty query={query} phrase={ALL_MONTHS_PHRASE} onClear={handleClearFilters} />
   ) : null
 
   return (
-    <div className="space-y-6">
-      <div onClickCapture={handleTileClick}>
-        <AppointmentsOverviewTiles overview={overview} query={query} />
-      </div>
+    <div className="space-y-6" onClickCapture={handleScreenLinkClick}>
+      <AppointmentsOverviewTiles overview={overview} query={query} />
       <div className="space-y-3">
         <AppointmentsFilters
-          filter={isNeedsView ? needsFilter : optimisticFilter}
+          filter={isNeedsView ? needsFilter : filter}
           clients={filterOptions.clients}
           jobs={filterOptions.jobs}
           clientTriggerId={clientTriggerId}
@@ -384,17 +469,16 @@ export function AppointmentsViewToggle({
         <p aria-live="polite" className="sr-only">
           {isNeedsView ? (
             countLabel(visibleNeedsCount)
+          ) : isBodyLoading ? (
+            'Loading appointments…'
           ) : (
             <ResponsiveText phone={countLabel(visible.length)} desktop={countLabel(desktopVisible.length)} />
           )}
         </p>
         <Card
-          aria-busy={isPending || undefined}
-          className={cn(
-            // Visible overflow, so the date bands can stick under the top bar.
-            'gap-0 overflow-visible p-0 text-sm transition-opacity duration-fast',
-            isPending && 'opacity-60'
-          )}
+          aria-busy={isBodyLoading || undefined}
+          // Visible overflow, so the date bands can stick under the top bar.
+          className="gap-0 overflow-visible p-0 text-sm"
         >
           {isNeedsBilling ? (
             <AppointmentsNeedsBilling
@@ -416,13 +500,13 @@ export function AppointmentsViewToggle({
                 <div className="flex min-w-0 items-center gap-2">
                   <div className="min-w-0 flex-1 md:w-96 md:flex-none">
                     {isNavMonth ? (
-                      <AppointmentsMonthNav query={navQuery} onNavigate={handleNavigate} />
+                      <AppointmentsMonthNav query={query} onNavigate={onNavigate} />
                     ) : (
                       <AppointmentsRangeNav
                         heading={navHeading}
                         headingId={headingId}
-                        onPrev={() => handleNavigate(stepWeek(navQuery, -1, businessDate))}
-                        onNext={() => handleNavigate(stepWeek(navQuery, 1, businessDate))}
+                        onPrev={() => onNavigate(stepWeek(query, -1, businessDate))}
+                        onNext={() => onNavigate(stepWeek(query, 1, businessDate))}
                       />
                     )}
                   </div>
@@ -442,15 +526,15 @@ export function AppointmentsViewToggle({
                   {isStateView ? null : (
                     <ShowCancelledToggle
                       showCancelled={query.showCancelled}
-                      disabled={optimisticFilter.status !== 'all'}
-                      onToggle={() => handleNavigate({ ...navQuery, showCancelled: !navQuery.showCancelled })}
+                      disabled={query.status !== 'all'}
+                      onToggle={() => onNavigate({ ...query, showCancelled: !query.showCancelled })}
                     />
                   )}
                   <ToggleGroup
                     variant="outline"
                     size="sm"
                     aria-label="Layout"
-                    value={[optimisticRange.layout]}
+                    value={[query.layout]}
                     onValueChange={handleLayoutChange}
                     className="hidden md:flex"
                   >
@@ -484,58 +568,55 @@ export function AppointmentsViewToggle({
                 </p>
               ) : null}
 
-              {/* Keyed so a new range, layout or view replays the row entrance. */}
-              <div key={`${query.view}-${query.layout}-${query.from}-${query.year}-${query.month}`}>
-                {query.layout === 'list' ? (
-                  <ScheduleBody {...scheduleProps} appointments={visible} phrase={phonePhrase} />
-                ) : (
-                  <>
-                    <div className="hidden md:block">
-                      <ScheduleBody
-                        {...scheduleProps}
-                        appointments={desktopVisible}
-                        phrase={desktopPhrase}
-                        calendar={
-                          isMonth || desktopVisible.length > 0 ? (
-                            <div className="p-4">
-                              {isMonth ? (
-                                <AppointmentsCalendar
-                                  appointments={visible}
-                                  month={query.month}
-                                  year={query.year}
-                                  businessDate={businessDate}
-                                />
-                              ) : (
-                                <AppointmentsWeekGrid
-                                  appointments={desktopVisible}
-                                  from={resolveWeekStart(query.from, businessDate)}
-                                  businessDate={businessDate}
-                                />
-                              )}
-                            </div>
-                          ) : undefined
-                        }
-                      />
-                    </div>
-                    <div className="md:hidden">
-                      <ScheduleBody {...scheduleProps} appointments={visible} phrase={phonePhrase} />
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Outside the keyed block, so the rows already shown don't replay their entrance. */}
-              {!isMonth && canShowMore(query) ? (
-                <div className={cn('flex justify-center border-t p-4', isWeek && 'md:hidden')}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={cn(PRESS_CLASS, 'w-full sm:w-auto')}
-                    onClick={handleShowMore}
-                  >
-                    Show more
-                  </Button>
+              {isBodyLoading ? (
+                <RangeSkeleton layout={bodyQuery.layout} month={bodyQuery.month} year={bodyQuery.year} />
+              ) : (
+                // Keyed by the range on screen, so rows replay their entrance when new range data lands, not on the click.
+                <div
+                  key={`${bodyQuery.layout}-${bodyQuery.from}-${bodyQuery.year}-${bodyQuery.month}`}
+                  className="animate-in fade-in-0 duration-slow ease-out-quart"
+                >
+                  {bodyQuery.layout === 'list' ? (
+                    <ScheduleBody {...scheduleProps} appointments={visible} phrase={phonePhrase} />
+                  ) : (
+                    <>
+                      <div className="hidden md:block">
+                        <ScheduleBody
+                          {...scheduleProps}
+                          appointments={desktopVisible}
+                          phrase={desktopPhrase}
+                          calendar={
+                            isMonth || desktopVisible.length > 0 ? (
+                              <div className="p-4">
+                                {isMonth ? (
+                                  <AppointmentsCalendar
+                                    appointments={visible}
+                                    month={bodyQuery.month}
+                                    year={bodyQuery.year}
+                                    businessDate={businessDate}
+                                  />
+                                ) : (
+                                  <AppointmentsWeekGrid
+                                    appointments={desktopVisible}
+                                    from={resolveWeekStart(bodyQuery.from, businessDate)}
+                                    businessDate={businessDate}
+                                  />
+                                )}
+                              </div>
+                            ) : undefined
+                          }
+                        />
+                      </div>
+                      <div className="md:hidden">
+                        <ScheduleBody {...scheduleProps} appointments={visible} phrase={phonePhrase} />
+                      </div>
+                    </>
+                  )}
                 </div>
+              )}
+
+              {!isMonth && !isBodyLoading && canShowMore(bodyQuery) ? (
+                <ShowMoreFooter rangeState={rangeState} isPhoneOnly={isWeek} onShowMore={handleShowMore} />
               ) : null}
             </>
           )}

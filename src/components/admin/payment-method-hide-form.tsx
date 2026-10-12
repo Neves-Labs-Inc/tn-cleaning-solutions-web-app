@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
 
 import SubmitButton from "@/components/ui/submit-button";
+import { useInvalidateAppointments } from "@/hooks/use-invalidate-appointments";
 import { setPaymentMethodHidden } from "@/lib/actions/invoices";
 import type { PaymentMethod } from "@/lib/invoices/ledger";
 
@@ -38,6 +39,7 @@ export default function PaymentMethodHideForm({
   onFailedChange,
 }: PaymentMethodHideFormProps): React.ReactNode {
   const willHide = !method.is_hidden;
+  const invalidateAppointments = useInvalidateAppointments();
 
   async function handleSubmit(formData: FormData): Promise<void> {
     onFailedChange(false);
@@ -51,6 +53,7 @@ export default function PaymentMethodHideForm({
     }
 
     if (isOk) {
+      void invalidateAppointments();
       toast.success(
         willHide
           ? `"${method.name}" is hidden from the payment picker.`

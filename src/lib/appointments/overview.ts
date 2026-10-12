@@ -81,7 +81,7 @@ type AppointmentsSearchParams = AppointmentsFilterParams & {
   showCancelled?: SearchParam
 }
 
-const APPOINTMENTS_PATH = '/solutions/appointments'
+export const APPOINTMENTS_PATH = '/solutions/appointments'
 const FILTERED_VIEWS: AppointmentsView[] = ['needs-completion', 'needs-billing', 'billed', 'paid']
 const MONTHS_IN_YEAR = 12
 
@@ -119,6 +119,17 @@ export function parseAppointmentsQuery(
     showCancelled: single(params.showCancelled) === 'true',
     ...parseAppointmentsFilter(params),
   }
+}
+
+// The query a URL's search names; a repeated param stays a list, so it counts as absent.
+export function parseAppointmentsSearch(search: URLSearchParams, businessDate: string): AppointmentsQuery {
+  const params = Object.fromEntries(
+    [...new Set(search.keys())].map((name) => {
+      const values = search.getAll(name)
+      return [name, values.length === 1 ? values[0] : values]
+    })
+  )
+  return parseAppointmentsQuery(params, businessDate)
 }
 
 // Defaults are left out: the schedule, the week layout, the business week and the first 8 weeks. Each
@@ -202,28 +213,6 @@ export function appointmentsInView(
       matchesFilters(appointment, query, showCancelled) &&
       (view === 'schedule' || appointment.paymentState === view)
   )
-}
-
-// A tile click whose navigation may still be in flight, and the URL showing when this was last synced.
-export type PendingTile = { seenHref: string; target: AppointmentsQuery | null }
-
-export function createPendingTile(query: AppointmentsQuery, target: AppointmentsQuery | null = null): PendingTile {
-  return { seenHref: appointmentsHref(query), target }
-}
-
-// Any URL change spends the tile's navigation, landed or abandoned, so a later return to the URL it
-// was clicked from (Back, "Show all") never revives it. Returns the same object when nothing changed.
-export function syncPendingTile(pending: PendingTile, query: AppointmentsQuery): PendingTile {
-  const href = appointmentsHref(query)
-  if (pending.seenHref === href) return pending
-
-  return { seenHref: href, target: null }
-}
-
-// What Prev, Next, This week, the layout toggle and Show cancelled build on: a pending tile's view, so a push made before the tile's
-// navigation lands keeps its ?view=; otherwise the URL.
-export function getNavQuery(pending: PendingTile, query: AppointmentsQuery): AppointmentsQuery {
-  return syncPendingTile(pending, query).target ?? query
 }
 
 // Needs billing's checked rows, read through the current list so a row that left it after a refresh

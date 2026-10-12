@@ -19,6 +19,7 @@ import type { ScheduleAppointment } from "@/lib/appointments/overview";
 import { cn } from "@/lib/utils";
 
 import AppointmentsList from "./appointments-list";
+import AppointmentsNeedsHeader from "./appointments-needs-header";
 import NeedsCompletionBar from "./needs-completion-bar";
 
 type AppointmentsNeedsCompletionProps = {
@@ -64,14 +65,7 @@ export default function AppointmentsNeedsCompletion({
 
   return (
     <>
-      <div className="space-y-1 border-b px-4 py-3">
-        <h2 className="text-lg font-semibold tracking-tight">
-          Needs completion
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          All months, oldest first. Past appointments nobody clocked into.
-        </p>
-      </div>
+      <AppointmentsNeedsHeader view="needs-completion" />
 
       {appointments.length === 0 && filteredEmpty ? (
         filteredEmpty

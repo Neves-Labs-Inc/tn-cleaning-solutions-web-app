@@ -17,6 +17,7 @@ import {
   type AppointmentActionResult,
   updateAppointment,
 } from '@/lib/actions/appointments'
+import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
 import { formatMinutes } from '@/components/admin/time-sheets/format-minutes'
 import { formatRate } from '@/lib/pricing/money'
 import { planCrewChange } from '@/lib/appointments/crew'
@@ -160,6 +161,7 @@ export function AppointmentForm({
   const serverAction = appointment ? updateAppointment.bind(null, appointment.id) : createAppointment
   const [state, formAction, isPending] = useActionState(serverAction, initialState)
   const scheduledDateRef = useRef<HTMLInputElement>(null)
+  const invalidateAppointments = useInvalidateAppointments()
   const fieldErrors = 'fieldErrors' in state ? state.fieldErrors : undefined
   const scheduledDateError = fieldErrors?.scheduled_date
   const formError = 'error' in state ? state.error : ''
@@ -186,6 +188,9 @@ export function AppointmentForm({
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
+    // A saved form never gets a state back: the action redirects to the list. So discard now,
+    // before it runs, so the list never renders cached rows. A refused save costs one skeleton.
+    void invalidateAppointments()
     startTransition(() => formAction(formData))
   }
 

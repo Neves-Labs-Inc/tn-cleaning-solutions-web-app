@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import SubmitButton from '@/components/ui/submit-button'
+import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
 import { recordPayment, updatePayment } from '@/lib/actions/invoices'
 import type { PaymentMethod } from '@/lib/invoices/ledger'
 import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail } from './invoice-detail-context'
@@ -63,6 +64,7 @@ export default function PaymentForm({
 }: PaymentFormProps) {
   const copy = COPY[mode]
   const { showPageError } = useInvoiceDetail()
+  const invalidateAppointments = useInvalidateAppointments()
   const ids = {
     paidDate: useId(),
     reference: useId(),
@@ -102,6 +104,7 @@ export default function PaymentForm({
       const action = mode === 'record' ? recordPayment : updatePayment
       const result = await action(null, formData)
       if (result.success) {
+        void invalidateAppointments()
         toast.success(copy.success)
         onSuccess()
         return

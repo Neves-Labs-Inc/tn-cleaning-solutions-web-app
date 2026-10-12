@@ -1,13 +1,7 @@
+import AppointmentsScreenSkeleton from '@/components/admin/appointments-screen-skeleton'
 import { Skeleton } from '@/components/ui/skeleton'
-import { StatTileSkeleton } from '@/components/ui/stat-tile'
 
-const TILES = 4
-const PHONE_BANDS = 2
-const ROWS_PER_BAND = 3
-const WEEK_DAYS = 7
-
-// Mirrors the loaded page (header, tiles, the filter bar, then the list on phones or the default Week
-// layout from md) so nothing jumps when data arrives. The layout isn't visible here, so Week it is.
+// Mirrors the loaded page: the header, then the screen's own skeleton.
 export default function AppointmentsLoading() {
   return (
     <div className="space-y-6" aria-busy="true">
@@ -19,42 +13,7 @@ export default function AppointmentsLoading() {
         <Skeleton className="h-11 w-full sm:w-44" />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {Array.from({ length: TILES }, (_, tile) => (
-          <StatTileSkeleton key={tile} icon caption fitValue />
-        ))}
-      </div>
-
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2 md:flex md:gap-3">
-          <Skeleton className="col-span-2 h-11 md:h-9 md:w-72" />
-          <Skeleton className="h-11 md:h-9 md:w-56" />
-          <Skeleton className="h-11 md:h-9 md:w-44" />
-        </div>
-        <div className="overflow-hidden rounded-lg bg-card ring-1 ring-foreground/10">
-          <div className="flex h-14 items-center border-b px-4">
-            <Skeleton className="h-5 w-48 md:w-56" />
-          </div>
-          <div className="md:hidden">
-            {Array.from({ length: PHONE_BANDS }, (_, band) => (
-              <div key={band}>
-                <Skeleton className="h-9 rounded-none" />
-                {Array.from({ length: ROWS_PER_BAND }, (_, row) => (
-                  <Skeleton key={row} className="h-16 rounded-none border-t border-background" />
-                ))}
-              </div>
-            ))}
-          </div>
-          <div className="hidden grid-cols-7 gap-px md:grid">
-            {Array.from({ length: WEEK_DAYS }, (_, day) => (
-              <div key={day} className="space-y-px">
-                <Skeleton className="h-14 rounded-none" />
-                <Skeleton className="h-48 rounded-none" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <AppointmentsScreenSkeleton />
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
 import { createClient, type ClientActionResult, updateClient } from '@/lib/actions/clients'
 
 type ClientFormProps = {
@@ -43,10 +44,17 @@ function SubmitButton({ isEditMode }: { isEditMode: boolean }) {
 export function ClientForm({ client }: ClientFormProps) {
   const serverAction = client ? updateClient.bind(null, client.id) : createClient
   const [state, formAction, _isPending] = useActionState(serverAction, initialState)
+  const invalidateAppointments = useInvalidateAppointments()
+
+  // A saved form never gets a result back: the action redirects. So discard at submit, before the
+  // action runs; a refused save costs one skeleton. Not prevented, so the action still dispatches.
+  function handleSubmit() {
+    void invalidateAppointments()
+  }
 
   return (
     <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-      <form action={formAction} className="space-y-5">
+      <form action={formAction} onSubmit={handleSubmit} className="space-y-5">
         {'error' in state && state.error ? (
           <div
             className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"

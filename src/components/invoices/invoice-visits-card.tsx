@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 
 import AddVisitsPicker from './add-visits-picker'
 import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail } from './invoice-detail-context'
-import { submitDraftUpdate } from './submit-draft-update'
+import { useSubmitDraftUpdate } from './submit-draft-update'
 import { formatVisitDate, SetPriceLink, VisitLineSummary } from './visit-line-summary'
 
 type InvoiceVisitsCardProps = {
@@ -147,6 +147,7 @@ export default function InvoiceVisitsCard({
   businessDate,
 }: InvoiceVisitsCardProps) {
   const router = useRouter()
+  const submitDraftUpdate = useSubmitDraftUpdate()
   const { runPageAction, showPageError } = useInvoiceDetail()
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)

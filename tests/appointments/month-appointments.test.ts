@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
-import { listMonthAppointments, listRangeAppointments } from '../../src/lib/appointments/month-appointments.ts'
+import {
+  listAppointmentWeeks,
+  listMonthAppointments,
+  listRangeAppointments,
+} from '../../src/lib/appointments/month-appointments.ts'
 import { createFakeSupabase } from '../invoices/fake-supabase.ts'
 
 const JOB_RATE_CENTS = 4000
@@ -210,3 +214,49 @@ describe('listRangeAppointments', () => {
     assert.ok(appointments.every((row) => row.paymentState === 'paid'))
   })
 })
+
+describe("listAppointmentWeeks", () => {
+  it("reads the span once and files every week, empty ones included", async () => {
+    const { db } = createFakeSupabase({
+      appointments: [
+        appointment({ id: "oct-10", date: "2026-10-10" }),
+        appointment({ id: "oct-11", date: "2026-10-11" }),
+        appointment({ id: "oct-17", date: "2026-10-17" }),
+        appointment({ id: "nov-1", date: "2026-11-01" }),
+        appointment({ id: "nov-8", date: "2026-11-08" }),
+      ],
+    });
+    const appointmentReads: string[] = [];
+    const countingDb = new Proxy(db, {
+      get(target, property, receiver) {
+        if (property !== "from") return Reflect.get(target, property, receiver);
+        return (table: string) => {
+          if (table === "appointments") appointmentReads.push(table);
+          return target.from(table as "appointments");
+        };
+      },
+    });
+
+    const weeks = await listAppointmentWeeks(
+      countingDb,
+      { from: "2026-10-11", to: "2026-11-07" },
+      NOW,
+    );
+
+    assert.equal(appointmentReads.length, 1);
+    assert.deepEqual(
+      Object.fromEntries(
+        Object.entries(weeks).map(([week, rows]) => [
+          week,
+          rows.map((row) => row.id),
+        ]),
+      ),
+      {
+        "2026-10-11": ["oct-11", "oct-17"],
+        "2026-10-18": [],
+        "2026-10-25": [],
+        "2026-11-01": ["nov-1"],
+      },
+    );
+  });
+});

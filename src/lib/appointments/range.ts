@@ -15,11 +15,11 @@ export const MIN_YEAR = 2000
 export const MAX_YEAR = 2100
 // The list reads this many weeks at a time; Show more adds another chunk, up to the cap.
 export const LIST_WEEKS_STEP = 8
-const MAX_LIST_WEEKS = 104
+export const MAX_LIST_WEEKS = 104
 const WEEKS_PATTERN = /^\d{1,3}$/
 
 // What the range-aware parts of the query look like here, so this module needs nothing from overview.ts.
-type RangeQuery = { layout: Layout; from: string | null; weeks: number; month: number; year: number }
+export type RangeQuery = { layout: Layout; from: string | null; weeks: number; month: number; year: number }
 
 export type DateRange = { from: string; to: string | null }
 

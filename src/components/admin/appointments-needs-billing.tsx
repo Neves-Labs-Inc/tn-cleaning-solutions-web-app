@@ -12,12 +12,14 @@ import type { NeedsBillingAppointment } from '@/lib/invoices/payment-state-queri
 import { cn } from '@/lib/utils'
 
 import AppointmentsList from './appointments-list'
+import AppointmentsNeedsHeader from './appointments-needs-header'
 import NeedsBillingBar from './needs-billing-bar'
 
 type AppointmentsNeedsBillingProps = {
   // Every Unbilled appointment, oldest first.
   appointments: NeedsBillingAppointment[]
-  methods: PaymentMethod[]
+  // null while they load; Mark paid waits for them.
+  methods: PaymentMethod[] | null
   businessDate: string
   // Shown instead of the view's own empty state when the filters leave nothing.
   filteredEmpty: React.ReactNode
@@ -87,10 +89,7 @@ export default function AppointmentsNeedsBilling({
 
   return (
     <>
-      <div className="space-y-1 border-b px-4 py-3">
-        <h2 className="text-lg font-semibold tracking-tight">Needs billing</h2>
-        <p className="text-sm text-muted-foreground">All months, oldest first. Pick appointments of one client.</p>
-      </div>
+      <AppointmentsNeedsHeader view="needs-billing" />
 
       {appointments.length === 0 && filteredEmpty ? (
         filteredEmpty
@@ -118,6 +117,7 @@ export default function AppointmentsNeedsBilling({
       <NeedsBillingBar
         selected={selected}
         onClear={() => setSelectedIds([])}
+        isMarkPaidLoading={methods === null}
         onMarkPaid={() =>
           setDialog({
             appointments: selected.map(toMarkPaidAppointment),
@@ -131,7 +131,7 @@ export default function AppointmentsNeedsBilling({
         appointments={dialog.appointments}
         clientId={dialog.clientId}
         clientName={dialog.clientName}
-        methods={methods}
+        methods={methods ?? []}
         businessDate={businessDate}
         onSuccess={() => setSelectedIds([])}
         onClose={() => setDialog(CLOSED_DIALOG)}

@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+
+import { clearBrowserQueryCache } from '@/components/admin/admin-query-provider'
 import {
   BriefcaseBusiness,
   CalendarDays,
@@ -76,8 +78,14 @@ function NavList({
 }
 
 function LogoutButton({ onLogout }: { onLogout: () => Promise<void> }) {
+  // The server action stays the form action so submit works before hydration;
+  // onSubmit only clears the cache and does not preventDefault.
+  function handleSubmit() {
+    clearBrowserQueryCache()
+  }
+
   return (
-    <form action={onLogout}>
+    <form action={onLogout} onSubmit={handleSubmit}>
       <button
         type="submit"
         className="cursor-pointer group flex w-full items-center gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-medium text-neutral-600 transition-[color,background-color,border-color,transform] duration-200 hover:-translate-y-px hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"

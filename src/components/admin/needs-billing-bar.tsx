@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { FilePlus2, TriangleAlert, Wallet } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 import { totalPrices } from '@/lib/appointments/overview'
 import type { NeedsBillingAppointment } from '@/lib/invoices/payment-state-queries'
 import { formatCents } from '@/lib/pricing/money'
@@ -14,6 +15,8 @@ type NeedsBillingBarProps = {
   selected: NeedsBillingAppointment[]
   onClear: () => void
   onMarkPaid: () => void
+  // Payment methods are still loading, so the Mark paid dialog has nothing to offer yet.
+  isMarkPaidLoading?: boolean
 }
 
 const NEW_INVOICE_PATH = '/solutions/invoices/new'
@@ -28,7 +31,12 @@ function createInvoiceHref(selected: NeedsBillingAppointment[]): string {
 }
 
 // The floating bar over the Needs billing list. Always mounted so it can animate in and out.
-export default function NeedsBillingBar({ selected, onClear, onMarkPaid }: NeedsBillingBarProps): React.ReactNode {
+export default function NeedsBillingBar({
+  selected,
+  onClear,
+  onMarkPaid,
+  isMarkPaidLoading = false,
+}: NeedsBillingBarProps): React.ReactNode {
   const isOpen = selected.length > 0
   const total = totalPrices(selected.map((appointment) => appointment.livePriceCents))
   const clientName = selected[0]?.clientName ?? ''
@@ -69,8 +77,14 @@ export default function NeedsBillingBar({ selected, onClear, onMarkPaid }: Needs
           <Button variant="ghost" className={cn(ACTION_CLASS, 'hidden md:inline-flex')} onClick={onClear}>
             Clear
           </Button>
-          <Button variant="outline" className={cn(ACTION_CLASS, 'active:bg-muted')} onClick={onMarkPaid}>
-            <Wallet aria-hidden="true" />
+          <Button
+            variant="outline"
+            className={cn(ACTION_CLASS, 'active:bg-muted')}
+            disabled={isMarkPaidLoading}
+            aria-busy={isMarkPaidLoading || undefined}
+            onClick={onMarkPaid}
+          >
+            {isMarkPaidLoading ? <Spinner className="size-4" /> : <Wallet aria-hidden="true" />}
             Mark paid
           </Button>
           <Button className={ACTION_CLASS} nativeButton={false} render={<Link href={createInvoiceHref(selected)} />}>
