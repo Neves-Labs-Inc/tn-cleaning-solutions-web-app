@@ -60,14 +60,17 @@ export function AppointmentFormSkeleton({ mode }: AppointmentFormSkeletonProps):
               <SkeletonField labelWidth="w-16" />
               <SkeletonField labelWidth="w-20" />
             </div>
-            <SkeletonField labelWidth="w-12">
-              <Skeleton className="h-(--control-height) w-full" />
-              <Skeleton className="h-4 w-24" />
-            </SkeletonField>
+            <SkeletonField labelWidth="w-12" />
             <div className="grid gap-4 sm:grid-cols-3">
               <SkeletonField labelWidth="w-12" />
               <SkeletonField labelWidth="w-16" />
               <SkeletonField labelWidth="w-16" />
+            </div>
+            {/* Calculated total panel: label (20px), formula (leading-6, 24px), caption (text-xs, 16px). */}
+            <div className="space-y-1 rounded-lg border border-border p-3">
+              <Skeleton className="h-5 w-28" />
+              <Skeleton className="h-6 w-64 max-w-full" />
+              <Skeleton className="h-4 w-36" />
             </div>
             <SkeletonField labelWidth="w-24">
               <Skeleton className="h-(--control-height) w-full" />

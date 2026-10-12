@@ -24,7 +24,10 @@ import {
 } from '@/lib/actions/appointments'
 import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
 import { formatMinutes } from '@/components/admin/time-sheets/format-minutes'
-import { formatRate } from '@/lib/pricing/money'
+import CalculatedTotal from '@/components/admin/calculated-total'
+import { estimateAppointmentTotal } from '@/lib/pricing/estimate'
+import { parseDollarsToCents } from '@/lib/pricing/money'
+import type { ClientJobRule } from '@/lib/pricing/resolve'
 import { planCrewChange } from '@/lib/appointments/crew'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
@@ -44,8 +47,9 @@ type AppointmentFormProps = {
     id: string
     name: string
     hourly_rate_cents: number
-    client_rate_cents: number | null
   }>
+  // Non-archived client_job_pricing rules for every client × Job the form offers, keyed `client_id:job_id`.
+  clientJobRules: Record<string, ClientJobRule[]>
   employees: Array<{ id: string; full_name: string }>
   defaultDate?: string
   appointment?: {
@@ -155,6 +159,7 @@ function InvoiceClaimBanner({ claim }: { claim: InvoiceClaim }) {
 export function AppointmentForm({
   clients,
   jobs,
+  clientJobRules,
   employees,
   defaultDate,
   appointment,
@@ -225,6 +230,12 @@ export function AppointmentForm({
   const [selectedLocationId, setSelectedLocationId] = useState(appointment?.location_id ?? '')
   const [selectedJobId, setSelectedJobId] = useState(appointment?.job_id ?? jobs[0]?.id ?? '')
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>(appointment?.assignedEmployeeIds ?? [])
+  const [scheduledDate, setScheduledDate] = useState(appointment?.scheduled_date ?? defaultDate ?? '')
+  const [startTime, setStartTime] = useState(appointment?.scheduled_start_time?.slice(0, 5) ?? '')
+  const [endTime, setEndTime] = useState(appointment?.scheduled_end_time?.slice(0, 5) ?? '')
+  const [priceOverride, setPriceOverride] = useState(
+    appointment?.price_override_cents != null ? (appointment.price_override_cents / 100).toFixed(2) : ''
+  )
   const [isRecurring, setIsRecurring] = useState(false)
   const [editScope, setEditScope] = useState<'occurrence' | 'future'>('occurrence')
 
@@ -251,28 +262,15 @@ export function AppointmentForm({
     [jobs, selectedJobId]
   )
 
-  // The client rate was resolved for the saved client and Job only; any other pick resolves on save.
-  const clientRateIsStale =
-    appointment !== undefined && (selectedClientId !== appointment.client_id || selectedJobId !== appointment.job_id)
-
-  const rateHint = useMemo(() => {
-    let hint: string | null = null
-
-    if (selectedJob) {
-      const clientRate = selectedJob.client_rate_cents
-      const standard = `Rate: ${formatRate(selectedJob.hourly_rate_cents)}`
-
-      if (clientRateIsStale) {
-        hint = `${standard} · this client's negotiated rate, if any, applies on save`
-      } else if (clientRate !== null && clientRate !== selectedJob.hourly_rate_cents) {
-        hint = `${standard} · this client: ${formatRate(clientRate)}`
-      } else {
-        hint = standard
-      }
-    }
-
-    return hint
-  }, [selectedJob, clientRateIsStale])
+  const estimate = estimateAppointmentTotal({
+    jobRateCents: selectedJob?.hourly_rate_cents ?? null,
+    clientRules: clientJobRules[`${selectedClientId}:${selectedJobId}`] ?? [],
+    date: scheduledDate || null,
+    startTime: startTime || null,
+    endTime: endTime || null,
+    cleaners: selectedEmployeeIds.length,
+    overrideCents: parseDollarsToCents(priceOverride),
+  })
 
   const employeeNames = useMemo(
     () => new Map(employees.map((employee) => [employee.id, employee.full_name])),
@@ -387,7 +385,6 @@ export function AppointmentForm({
               </NativeSelectOption>
             ))}
           </NativeSelect>
-          {rateHint ? <FieldDescription>{rateHint}</FieldDescription> : null}
           <FieldError message={fieldErrors?.job_id} />
         </Field>
 
@@ -402,7 +399,8 @@ export function AppointmentForm({
               name="scheduled_date"
               type="date"
               required
-              defaultValue={appointment?.scheduled_date ?? defaultDate ?? ''}
+              value={scheduledDate}
+              onChange={(event) => setScheduledDate(event.target.value)}
               aria-invalid={scheduledDateError ? true : undefined}
               aria-describedby={scheduledDateError ? SCHEDULED_DATE_ERROR_ID : undefined}
             />
@@ -418,7 +416,8 @@ export function AppointmentForm({
               name="scheduled_start_time"
               type="time"
               required
-              defaultValue={appointment?.scheduled_start_time?.slice(0, 5) ?? ''}
+              value={startTime}
+              onChange={(event) => setStartTime(event.target.value)}
             />
             <FieldError message={fieldErrors?.scheduled_start_time} />
           </Field>
@@ -432,15 +431,18 @@ export function AppointmentForm({
               name="scheduled_end_time"
               type="time"
               required
-              defaultValue={appointment?.scheduled_end_time?.slice(0, 5) ?? ''}
+              value={endTime}
+              onChange={(event) => setEndTime(event.target.value)}
             />
             <FieldError message={fieldErrors?.scheduled_end_time} />
           </Field>
         </div>
 
+        <CalculatedTotal estimate={estimate} />
+
         <Field className="min-w-0">
           <FieldLabel htmlFor="price_override" className={LABEL_CLASSES}>
-            Manual price override ($)
+            Total amount override ($)
           </FieldLabel>
           <Input
             id="price_override"
@@ -450,14 +452,11 @@ export function AppointmentForm({
             step="0.01"
             inputMode="decimal"
             enterKeyHint="next"
-            defaultValue={
-              appointment?.price_override_cents != null
-                ? (appointment.price_override_cents / 100).toFixed(2)
-                : ''
-            }
+            value={priceOverride}
+            onChange={(event) => setPriceOverride(event.target.value)}
             placeholder="e.g. 120.00"
           />
-          <FieldDescription>Leave blank to bill this client&apos;s hourly rate for the scheduled time.</FieldDescription>
+          <FieldDescription>Leave blank to bill the calculated total.</FieldDescription>
           <FieldError message={fieldErrors?.price_override} />
         </Field>
 

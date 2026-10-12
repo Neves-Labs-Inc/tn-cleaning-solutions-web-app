@@ -31,6 +31,19 @@ export function formatRate(cents: number): string {
   return `${formatCents(cents)}/h`
 }
 
+const MINUTES_PER_HOUR = 60
+
+// 150 -> "2.5h", 180 -> "3h", 105 -> "1.75h"; 100 -> "1h 40m", 40 -> "40m" (1.67h would not multiply
+// back to the amount, which pricing computes from exact minutes).
+export function formatHours(minutes: number): string {
+  const isExactAtTwoDecimals = (minutes * 100) % MINUTES_PER_HOUR === 0
+  if (isExactAtTwoDecimals) return `${minutes / MINUTES_PER_HOUR}h`
+
+  const whole = Math.floor(minutes / MINUTES_PER_HOUR)
+  const rest = minutes % MINUTES_PER_HOUR
+  return whole === 0 ? `${rest}m` : `${whole}h ${rest}m`
+}
+
 export function durationMinutes(startTime: string, endTime: string): number {
   const [startHour, startMinute] = startTime.split(':').map(Number)
   const [endHour, endMinute] = endTime.split(':').map(Number)
