@@ -31,10 +31,12 @@ After `supabase start` completes, it outputs local credentials. Create `.env.loc
 cp .env.local.example .env.local
 ```
 
-Then update `.env.local` with the values from `supabase start` output:
+Then update `.env.local` with the values from `supabase start` output (run `supabase status` to print them again):
 - `NEXT_PUBLIC_SUPABASE_URL` → API URL (usually http://127.0.0.1:54321)
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` → anon key
-- `SUPABASE_SERVICE_ROLE_KEY` → service_role key
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` → Publishable key (starts with `sb_publishable_`; `PUBLISHABLE_KEY` in `supabase status -o env`)
+- `SUPABASE_SECRET_KEY` → Secret key (starts with `sb_secret_`; `SECRET_KEY` in `supabase status -o env`)
+
+The CLI also prints the legacy anon and service_role JWT keys. The app no longer reads them, so leave them out. The app fails fast with an error naming any of the three variables above that is missing or empty.
 
 ### 3. Apply Migrations
 

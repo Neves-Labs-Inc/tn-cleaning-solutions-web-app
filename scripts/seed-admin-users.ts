@@ -7,19 +7,19 @@ config({ path: resolve(process.cwd(), '.env.local') })
 const localHostnames = ['127.0.0.1', 'localhost']
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY
 
-if (!supabaseUrl || !supabaseServiceKey) {
+if (!supabaseUrl || !supabaseSecretKey) {
   console.error('❌ Missing required environment variables')
   console.error('   NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? '✓' : '✗')
-  console.error('   SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? '✓' : '✗')
+  console.error('   SUPABASE_SECRET_KEY:', supabaseSecretKey ? '✓' : '✗')
   process.exit(1)
 }
 
 const targetHost = URL.parse(supabaseUrl)?.hostname ?? null
 
 // SECURITY — do not remove. This script resets known-plaintext passwords and upserts seed rows
-// with a service-role key, which bypasses RLS. On 2026-09-18 it was run twice against the LIVE
+// with a secret (formerly service-role) key, which bypasses RLS. On 2026-09-18 it was run twice against the LIVE
 // project because `.env.local` points at production and nothing stopped it. The guard fails
 // closed: a URL that will not parse is treated as remote, not as local.
 if (targetHost === null || !localHostnames.includes(targetHost)) {
@@ -27,17 +27,17 @@ if (targetHost === null || !localHostnames.includes(targetHost)) {
   console.error(`   NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl}`)
   console.error(`   resolved host: ${targetHost ?? '<unparseable>'}`)
   console.error(`   allowed hosts: ${localHostnames.join(', ')}`)
-  console.error('   This script resets passwords and writes rows with a service-role key.')
+  console.error('   This script resets passwords and writes rows with a secret (formerly service-role) key.')
   console.error('   Take the URL and secret key from `npx supabase status` and pass them in:')
   console.error(
-    '   NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SERVICE_ROLE_KEY=<local secret> npm run seed:admin'
+    '   NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SECRET_KEY=<local secret> npm run seed:admin'
   )
   process.exit(1)
 }
 
 console.log(`🎯 Seed target: ${supabaseUrl} (host ${targetHost})\n`)
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+const supabase = createClient(supabaseUrl, supabaseSecretKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,
