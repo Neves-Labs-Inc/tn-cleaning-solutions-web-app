@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, TriangleAlert } from 'lucide-react'
 import type { PostgrestError } from '@supabase/supabase-js'
 
+import { AppointmentFormLoadError } from '@/components/admin/appointment-form-load-error'
 import { AppointmentForm, type InvoiceClaim } from '@/components/admin/appointment-form'
 import { AppointmentScheduleContext } from '@/components/admin/new-appointment-schedule-context'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -211,9 +212,7 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
         />
 
         {loadErrorMessage ? (
-          <Alert variant="destructive">
-            <AlertDescription>{loadErrorMessage}</AlertDescription>
-          </Alert>
+          <AppointmentFormLoadError title="Couldn't load this appointment" description={loadErrorMessage} />
         ) : !canEdit(typedAppointment.status) ? (
           <Alert role="status" className={WARNING_ALERT_CLASSES}>
             <TriangleAlert aria-hidden="true" />
@@ -248,7 +247,7 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
   )
 }
 
-const CREW_CLOCKS_ERROR_MESSAGE = "Couldn't load this appointment's clocks. Refresh the page to try again."
+const CREW_CLOCKS_ERROR_MESSAGE = "Couldn't load this appointment's clocks. Try again."
 
 const WARNING_ALERT_CLASSES = 'border-status-warning-border bg-status-warning text-status-warning-foreground'
 

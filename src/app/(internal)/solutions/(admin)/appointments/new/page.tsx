@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
+import { AppointmentFormLoadError } from '@/components/admin/appointment-form-load-error'
 import { AppointmentForm } from '@/components/admin/appointment-form'
 import { AppointmentScheduleContext } from '@/components/admin/new-appointment-schedule-context'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/ui/page-header'
 import { toBusinessWallClock } from '@/lib/schedule'
@@ -91,9 +91,7 @@ export default async function NewAppointmentPage({ searchParams }: NewAppointmen
 
         <div>
           {loadError ? (
-            <Alert variant="destructive">
-              <AlertDescription>{loadError.message}</AlertDescription>
-            </Alert>
+            <AppointmentFormLoadError title="Couldn't load the appointment form" description={loadError.message} />
           ) : (
             <AppointmentForm
               clients={(clients ?? []).map((client) => ({
