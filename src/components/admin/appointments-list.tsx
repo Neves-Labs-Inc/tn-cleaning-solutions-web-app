@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 
 import { Checkbox } from '@/components/ui/checkbox'
@@ -123,11 +123,19 @@ export default function AppointmentsList({
   selection,
 }: AppointmentsListProps): React.ReactNode {
   const lockedHintId = useId()
+  // Decided once per row on first sight, so rows shifting up after a removal don't replay the entry.
+  const [seenEntries, setSeenEntries] = useState(new Map<string, number | null>())
   const isSelectable = selection !== undefined
   const businessYear = businessDate.slice(0, 4)
   const byDate = [...Map.groupBy(appointments, (appointment) => appointment.scheduledDate)]
   // Each row's position in the whole list, for the entrance stagger.
   const rowIndex = new Map(appointments.map((appointment, index) => [appointment.id, index]))
+
+  const entryIndexes = new Map(seenEntries)
+  for (const [id, index] of rowIndex) {
+    if (!entryIndexes.has(id)) entryIndexes.set(id, index < ANIMATED_ROWS ? index : null)
+  }
+  if (entryIndexes.size !== seenEntries.size) setSeenEntries(entryIndexes)
 
   return (
     <div>
@@ -147,8 +155,8 @@ export default function AppointmentsList({
           />
           <ul className="divide-y">
             {items.map((appointment) => {
-              const index = rowIndex.get(appointment.id) ?? 0
-              const isAnimated = index < ANIMATED_ROWS
+              const entryIndex = entryIndexes.get(appointment.id) ?? null
+              const isAnimated = entryIndex !== null
               const isLocked = selection !== undefined && isLockedRow(appointment.clientId, selection.lockedClientId)
               const tone = appointmentCardTone(appointment)
 
@@ -161,7 +169,7 @@ export default function AppointmentsList({
                     isAnimated && 'animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-backwards duration-base',
                     isLocked && 'opacity-60'
                   )}
-                  style={isAnimated ? { animationDelay: `${index * ROW_STAGGER_MS}ms` } : undefined}
+                  style={isAnimated ? { animationDelay: `${entryIndex * ROW_STAGGER_MS}ms` } : undefined}
                 >
                   {selection ? (
                     <label className="flex min-h-11 min-w-11 shrink-0 items-center justify-center pl-2">

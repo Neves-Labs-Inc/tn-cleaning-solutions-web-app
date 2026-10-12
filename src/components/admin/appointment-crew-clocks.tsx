@@ -144,6 +144,7 @@ export default function AppointmentCrewClocks({
             footer={
               <CrewAdminNotes
                 assignmentId={session.id}
+                appointmentId={session.appointmentId}
                 initialNotes={adminNotes}
               />
             }
