@@ -10,6 +10,7 @@ import {
   invoiceStatusBadge,
   lineStateBadge,
   NOT_CLOCKED_BADGE,
+  OVERRIDDEN_BADGE,
   paymentStateBadge,
 } from "./status-badge-tones";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ export {
   invoiceStatusBadge,
   lineStateBadge,
   NOT_CLOCKED_BADGE,
+  OVERRIDDEN_BADGE,
   paymentStateBadge,
 };
 

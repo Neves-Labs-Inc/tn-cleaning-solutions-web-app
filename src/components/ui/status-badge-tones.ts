@@ -43,6 +43,9 @@ export const NOT_CLOCKED_BADGE: StatusBadgeSpec = { tone: 'warning', label: 'Not
 
 export const ARCHIVED_BADGE: StatusBadgeSpec = { tone: 'neutral', label: 'Archived' }
 
+// A draft line whose total was set by hand. Informational, like the time sheets' Edited pill.
+export const OVERRIDDEN_BADGE: StatusBadgeSpec = { tone: 'neutral', label: 'Overridden', icon: Pencil }
+
 export function invoiceStatusBadge(status: InvoiceEffectiveStatus): StatusBadgeSpec {
   return INVOICE_STATUS_BADGES[status]
 }
