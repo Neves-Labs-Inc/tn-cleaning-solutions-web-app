@@ -90,7 +90,7 @@ export function useBulkIssue(rows: LedgerListRow[], onDone: () => void): BulkIss
     dueDate,
     changeDueDate,
     error,
-    isDueDateInvalid: errorCode === 'due_before_issue',
+    isDueDateInvalid: errorCode === 'due_before_issue' || errorCode === 'invalid_due_date',
     isPending,
     skips,
     dismissSkips: () => setSkips(null),

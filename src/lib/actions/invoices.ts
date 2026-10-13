@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { messageFor, type LedgerErrorCode } from '@/lib/invoices/errors'
+import { readOptionalDate } from '@/lib/invoices/form-input'
 import { BULK_ISSUE_LIMIT } from '@/lib/invoices/view'
 import {
   InvoiceLedger,
@@ -26,7 +27,6 @@ export type InvoiceActionResult<T = null> =
 
 const INVOICES_PATH = '/solutions/invoices'
 const APPOINTMENTS_PATH = '/solutions/appointments'
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 // Caps on what a form can post: a bulk issue runs a few queries per draft in series.
 const MAX_IDS = BULK_ISSUE_LIMIT
@@ -58,6 +58,8 @@ async function requireAdmin(): Promise<{ ledger: InvoiceLedger } | { refusal: Re
 }
 
 // Every parser returns undefined for input it rejects, which the action refuses as invalid_input.
+// A bad date is the exception: it gets its own code so the form can show it under the field, which is
+// why payment and draftDetails hand back the refusal itself. invalid_input wins when both apply.
 
 function text(formData: FormData, name: string, maxLength: number): string | undefined {
   const value = String(formData.get(name) ?? '').trim()
@@ -80,26 +82,20 @@ function ids(formData: FormData, name: string): string[] | undefined {
   return isValid ? values : undefined
 }
 
-// A blank date is null.
-function optionalDate(formData: FormData, name: string): string | null | undefined {
-  const value = String(formData.get(name) ?? '').trim()
-  if (!value) return null
-  return ISO_DATE.test(value) ? value : undefined
-}
-
 // A checkbox or switch posts "on" when checked and nothing when not.
 function flag(formData: FormData, name: string): boolean {
   return ['on', 'true'].includes(String(formData.get(name) ?? ''))
 }
 
-function payment(formData: FormData): PaymentInput | undefined {
-  const paidDate = optionalDate(formData, 'paid_date')
+function payment(formData: FormData): { input: PaymentInput } | { refusal: Refusal } {
+  const paidDate = readOptionalDate(formData, 'paid_date')
   // A blank method is passed through: SQL refuses it with method_required.
   const method = text(formData, 'payment_method', MAX_SHORT_TEXT_LENGTH)
   const reference = optionalText(formData, 'payment_reference', MAX_SHORT_TEXT_LENGTH)
-  if (paidDate === undefined || method === undefined || reference === undefined) return undefined
+  if (method === undefined || reference === undefined) return { refusal: refuse('invalid_input') }
+  if (paidDate === undefined) return { refusal: refuse('invalid_paid_date') }
 
-  return { paidDate, method, reference }
+  return { input: { paidDate, method, reference } }
 }
 
 // Each appointment's amount is posted as amount_<appointment id>, in dollars. One that is blank,
@@ -114,14 +110,15 @@ function markPaidLines(formData: FormData, appointmentIds: string[]): MarkPaidIn
 
 // Only the details form's Save posts write_details. A line change doesn't, so a page with stale
 // details can't overwrite a due date or notes saved elsewhere: null leaves them as stored.
-function draftDetails(formData: FormData): DraftInput | null | undefined {
-  if (!flag(formData, 'write_details')) return null
+function draftDetails(formData: FormData): { details: DraftInput | null } | { refusal: Refusal } {
+  if (!flag(formData, 'write_details')) return { details: null }
 
-  const dueDate = optionalDate(formData, 'due_date')
+  const dueDate = readOptionalDate(formData, 'due_date')
   const notes = optionalText(formData, 'notes', MAX_NOTES_LENGTH)
-  if (dueDate === undefined || notes === undefined) return undefined
+  if (notes === undefined) return { refusal: refuse('invalid_input') }
+  if (dueDate === undefined) return { refusal: refuse('invalid_due_date') }
 
-  return { dueDate, notes }
+  return { details: { dueDate, notes } }
 }
 
 // Called only with an id the parser accepted as a UUID, so the detail path is never free text.
@@ -161,9 +158,10 @@ async function readTouched(
 export async function createInvoice(_previous: unknown, formData: FormData): Promise<InvoiceActionResult<{ id: string }>> {
   const clientId = id(formData, 'client_id')
   const appointmentIds = ids(formData, 'appointment_ids')
-  const dueDate = optionalDate(formData, 'due_date')
+  const dueDate = readOptionalDate(formData, 'due_date')
   const notes = optionalText(formData, 'notes', MAX_NOTES_LENGTH)
-  if (!clientId || !appointmentIds || dueDate === undefined || notes === undefined) return refuse('invalid_input')
+  if (!clientId || !appointmentIds || notes === undefined) return refuse('invalid_input')
+  if (dueDate === undefined) return refuse('invalid_due_date')
 
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
@@ -184,9 +182,10 @@ export async function updateDraft(
   const invoiceId = id(formData, 'invoice_id')
   const addAppointmentIds = ids(formData, 'add_appointment_ids')
   const removeAppointmentIds = ids(formData, 'remove_appointment_ids')
-  const details = draftDetails(formData)
-  const isValid = invoiceId && addAppointmentIds && removeAppointmentIds && details !== undefined
-  if (!isValid) return refuse('invalid_input')
+  const parsedDetails = draftDetails(formData)
+  if (!invoiceId || !addAppointmentIds || !removeAppointmentIds) return refuse('invalid_input')
+  if ('refusal' in parsedDetails) return parsedDetails.refusal
+  const { details } = parsedDetails
 
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
@@ -233,8 +232,9 @@ export async function issueInvoice(
   formData: FormData
 ): Promise<InvoiceActionResult<{ invoiceNumber: string }>> {
   const invoiceId = id(formData, 'invoice_id')
-  const dueDate = optionalDate(formData, 'due_date')
-  if (!invoiceId || dueDate === undefined) return refuse('invalid_input')
+  const dueDate = readOptionalDate(formData, 'due_date')
+  if (!invoiceId) return refuse('invalid_input')
+  if (dueDate === undefined) return refuse('invalid_due_date')
 
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
@@ -249,8 +249,9 @@ export async function issueInvoice(
 
 export async function bulkIssueInvoices(_previous: unknown, formData: FormData): Promise<InvoiceActionResult<BulkIssueOutcome>> {
   const invoiceIds = ids(formData, 'invoice_ids')
-  const dueDate = optionalDate(formData, 'due_date')
-  if (!invoiceIds || invoiceIds.length === 0 || dueDate === undefined) return refuse('invalid_input')
+  const dueDate = readOptionalDate(formData, 'due_date')
+  if (!invoiceIds || invoiceIds.length === 0) return refuse('invalid_input')
+  if (dueDate === undefined) return refuse('invalid_due_date')
 
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
@@ -281,8 +282,10 @@ export async function voidInvoice(_previous: unknown, formData: FormData): Promi
 
 export async function recordPayment(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
   const invoiceId = id(formData, 'invoice_id')
-  const input = payment(formData)
-  if (!invoiceId || !input) return refuse('invalid_input')
+  const parsedPayment = payment(formData)
+  if (!invoiceId) return refuse('invalid_input')
+  if ('refusal' in parsedPayment) return parsedPayment.refusal
+  const { input } = parsedPayment
 
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
@@ -303,8 +306,10 @@ export async function markAppointmentsPaid(
 ): Promise<InvoiceActionResult<{ invoiceId: string; invoiceNumber: string }>> {
   const clientId = id(formData, 'client_id')
   const appointmentIds = ids(formData, 'appointment_ids')
-  const input = payment(formData)
-  if (!clientId || !appointmentIds || !input) return refuse('invalid_input')
+  const parsedPayment = payment(formData)
+  if (!clientId || !appointmentIds) return refuse('invalid_input')
+  if ('refusal' in parsedPayment) return parsedPayment.refusal
+  const { input } = parsedPayment
   if (appointmentIds.length === 0) return refuse('empty_lines')
 
   // Auth before parsing amounts, so an anonymous caller can't make the server do that work.
@@ -328,8 +333,10 @@ export async function markAppointmentsPaid(
 
 export async function updatePayment(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
   const invoiceId = id(formData, 'invoice_id')
-  const input = payment(formData)
-  if (!invoiceId || !input) return refuse('invalid_input')
+  const parsedPayment = payment(formData)
+  if (!invoiceId) return refuse('invalid_input')
+  if ('refusal' in parsedPayment) return parsedPayment.refusal
+  const { input } = parsedPayment
 
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
