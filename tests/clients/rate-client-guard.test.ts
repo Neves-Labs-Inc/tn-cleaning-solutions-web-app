@@ -64,9 +64,9 @@ describe("getRateEditRefusal", () => {
   it("refuses when the rate lookup fails", async () => {
     const { db } = createFakeSupabase({}, undefined, ["client_job_pricing"]);
 
-    assert.equal(
-      await getRateEditRefusal(db, { pricingId: "rate-active" }),
-      "connection reset",
+    await assert.rejects(
+      getRateEditRefusal(db, { pricingId: "rate-active" }),
+      /Couldn't read rate rate-active: connection reset/,
     );
   });
 });

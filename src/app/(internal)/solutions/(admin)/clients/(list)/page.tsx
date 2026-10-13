@@ -57,6 +57,7 @@ export default async function ClientsPage({
     ]);
 
   const owed = owedInvoices ? owedByClient(owedInvoices) : null;
+  if (clientsError) console.error('Failed to load clients', clientsError);
   const rows = (clients ?? []).map((client) => toOverviewRow(client, owed));
 
   return (
@@ -78,7 +79,7 @@ export default async function ClientsPage({
       {clientsError ? (
         <ClientsLoadError
           title="Couldn't load clients"
-          description={clientsError.message}
+          description="Something went wrong loading clients. Try again."
         />
       ) : (
         <ClientsOverviewList

@@ -7,6 +7,8 @@ import { type ClientJobPricingFieldErrors, parseNewRateForm, parseRateChangeForm
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createSupabaseClient } from '@/lib/supabase/server'
 
+const SAVE_RATE_ERROR = "Couldn't save the rate. Try again."
+
 export type ClientJobPricingActionResult =
   | { success: true; data: { id: string } }
   | { success: false; error: string; fieldErrors?: ClientJobPricingFieldErrors }
@@ -67,12 +69,13 @@ export async function createClientJobPricing(
       .single()
 
     if (error) {
-      return toWriteFailure(error.message)
+      return toWriteFailure('create', clientId, error.message)
     }
 
     pricingId = data.id
-  } catch {
-    return { success: false, error: 'Failed to create pricing rule.' }
+  } catch (error) {
+    console.error('Rate create failed', clientId, error)
+    return { success: false, error: SAVE_RATE_ERROR }
   }
 
   revalidateClientJobPricingPaths(clientId)
@@ -132,7 +135,7 @@ export async function updateClientJobPricing(
       .maybeSingle()
 
     if (error) {
-      return toWriteFailure(error.message)
+      return toWriteFailure('update', pricingId, error.message)
     }
 
     if (!data) {
@@ -140,8 +143,9 @@ export async function updateClientJobPricing(
     }
 
     clientId = data.client_id
-  } catch {
-    return { success: false, error: 'Failed to update pricing rule.' }
+  } catch (error) {
+    console.error('Rate update failed', pricingId, error)
+    return { success: false, error: SAVE_RATE_ERROR }
   }
 
   revalidateClientJobPricingPaths(clientId)
@@ -177,7 +181,8 @@ async function requireAdminRole(): Promise<{ success: true } | { success: false;
   } = await supabase.auth.getUser()
 
   if (error) {
-    return { success: false, error: error.message }
+    console.error('Admin check failed', error)
+    return { success: false, error: 'Not authenticated' }
   }
 
   if (!user) {
@@ -191,7 +196,11 @@ async function requireAdminRole(): Promise<{ success: true } | { success: false;
   return { success: true }
 }
 
-function toWriteFailure(message: string): ClientJobPricingActionResult {
+function toWriteFailure(
+  operation: 'create' | 'update',
+  id: string,
+  message: string
+): ClientJobPricingActionResult {
   if (isUniqueConstraintError(message)) {
     return {
       success: false,
@@ -200,16 +209,24 @@ function toWriteFailure(message: string): ClientJobPricingActionResult {
     }
   }
 
-  return { success: false, error: message }
+  console.error(`Rate ${operation} failed`, id, message)
+  return { success: false, error: SAVE_RATE_ERROR }
 }
 
-function toArchiveFailure(message: string, isArchived: boolean): ClientJobPricingActionResult {
+function toArchiveFailure(
+  pricingId: string,
+  message: string,
+  isArchived: boolean
+): ClientJobPricingActionResult {
   let error: string
 
   if (!isArchived && isUniqueConstraintError(message)) {
     error = 'An active rate for this job already starts on that date. Archive or edit that rate first.'
   } else {
-    error = message
+    console.error(`Rate ${isArchived ? 'archive' : 'restore'} failed`, pricingId, message)
+    error = isArchived
+      ? "Couldn't archive the rate. Try again."
+      : "Couldn't restore the rate. Try again."
   }
 
   return { success: false, error }
@@ -253,7 +270,7 @@ async function setClientJobPricingArchived(
     .maybeSingle()
 
   if (error) {
-    return toArchiveFailure(error.message, isArchived)
+    return toArchiveFailure(pricingId, error.message, isArchived)
   }
 
   if (!data) {

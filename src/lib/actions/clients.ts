@@ -40,6 +40,9 @@ type ParsedLocationInput = {
   notes: string | null
 }
 
+const CREATE_CLIENT_ERROR = "Couldn't create the client. Try again."
+const ADD_LOCATION_ERROR = "Couldn't add the location. Try again."
+
 async function requireAdminRole(): Promise<{ success: true } | { success: false; error: string }> {
   const supabase = await createSupabaseClient()
   const {
@@ -48,7 +51,8 @@ async function requireAdminRole(): Promise<{ success: true } | { success: false;
   } = await supabase.auth.getUser()
 
   if (error) {
-    return { success: false, error: error.message }
+    console.error('Admin check failed', error)
+    return { success: false, error: 'Not authenticated' }
   }
 
   if (!user) {
@@ -172,12 +176,14 @@ export async function createClient(
       .single()
 
     if (error) {
-      return { success: false, error: error.message }
+      console.error('Client create failed', error)
+      return { success: false, error: CREATE_CLIENT_ERROR }
     }
 
     createdId = data.id
-  } catch {
-    return { success: false, error: 'Failed to create client.' }
+  } catch (error) {
+    console.error('Client create failed', error)
+    return { success: false, error: CREATE_CLIENT_ERROR }
   }
 
   revalidatePath('/solutions/clients')
@@ -229,7 +235,8 @@ export async function updateClient(
       .maybeSingle()
 
     if (error) {
-      return { success: false, error: error.message }
+      console.error('Client update failed', id, error)
+      return { success: false, error: "Couldn't save the client. Try again." }
     }
 
     if (!data) {
@@ -263,7 +270,8 @@ export async function archiveClient(id: string): Promise<ClientActionResult> {
     .eq('id', id)
 
   if (error) {
-    return { success: false, error: error.message }
+    console.error('Client archive failed', id, error)
+    return { success: false, error: "Couldn't archive the client. Try again." }
   }
 
   revalidatePath('/solutions/clients')
@@ -288,7 +296,8 @@ export async function restoreClient(id: string): Promise<ClientActionResult> {
     .eq('id', id)
 
   if (error) {
-    return { success: false, error: error.message }
+    console.error('Client restore failed', id, error)
+    return { success: false, error: "Couldn't restore the client. Try again." }
   }
 
   revalidatePath('/solutions/clients')
@@ -336,7 +345,8 @@ export async function addLocation(
     .maybeSingle()
 
   if (clientError) {
-    return { success: false, error: clientError.message }
+    console.error('Location add failed to look up client', clientId, clientError)
+    return { success: false, error: ADD_LOCATION_ERROR }
   }
 
   if (!client) {
@@ -359,12 +369,14 @@ export async function addLocation(
       .single()
 
     if (error) {
-      return { success: false, error: error.message }
+      console.error('Location add failed', clientId, error)
+      return { success: false, error: ADD_LOCATION_ERROR }
     }
 
     locationId = data.id
-  } catch {
-    return { success: false, error: 'Failed to add location.' }
+  } catch (error) {
+    console.error('Location add failed', clientId, error)
+    return { success: false, error: ADD_LOCATION_ERROR }
   }
 
   revalidatePath('/solutions/clients')

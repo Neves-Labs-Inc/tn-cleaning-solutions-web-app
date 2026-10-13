@@ -93,3 +93,34 @@ describe("parseRateChangeForm", () => {
     });
   });
 });
+
+describe("rate dates", () => {
+  const parsers = [
+    ["parseNewRateForm", parseNewRateForm],
+    ["parseRateChangeForm", parseRateChangeForm],
+  ] as const;
+
+  for (const [name, parse] of parsers) {
+    for (const date of ["2026-02-31", "2026-13-01", "2025-02-29"]) {
+      it(`${name} rejects ${date}, which isn't a real date`, () => {
+        const result = parse(
+          form({ job_id: "job", hourly_rate_cents: "55.00", effective_from: date }),
+        );
+
+        assert.equal(result.success, false);
+        assert.equal(
+          !result.success && result.fieldErrors.effective_from,
+          "Enter a valid date.",
+        );
+      });
+    }
+
+    it(`${name} accepts a leap day`, () => {
+      const result = parse(
+        form({ job_id: "job", hourly_rate_cents: "55.00", effective_from: "2028-02-29" }),
+      );
+
+      assert.equal(result.success, true);
+    });
+  }
+});

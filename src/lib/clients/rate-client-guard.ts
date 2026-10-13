@@ -7,7 +7,7 @@ const RATE_NOT_FOUND_MESSAGE = "Pricing rule not found.";
 
 export type RateTarget = { clientId: string } | { pricingId: string };
 
-// The refusal message, or null when the rate's client can be edited. A rate is found by its id;
+// The refusal message, or null when the rate's client can be edited. Throws if the lookup fails. A rate is found by its id;
 // a new rate names its client directly.
 export async function getRateEditRefusal(
   db: SupabaseClient<Database>,
@@ -21,10 +21,12 @@ export async function getRateEditRefusal(
     .eq("id", target.pricingId)
     .maybeSingle();
 
-  let refusal: string | null;
   if (error) {
-    refusal = error.message;
-  } else if (!rate) {
+    throw new Error(`Couldn't read rate ${target.pricingId}: ${error.message}`);
+  }
+
+  let refusal: string | null;
+  if (!rate) {
     refusal = RATE_NOT_FOUND_MESSAGE;
   } else {
     refusal = await getEditRefusal(db, rate.client_id);
