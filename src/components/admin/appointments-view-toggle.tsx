@@ -30,6 +30,7 @@ import {
 import {
   canShowMore,
   getRangeCopy,
+  getReadRange,
   getWeekEnd,
   LAYOUTS,
   resolveWeekStart,
@@ -248,7 +249,9 @@ function ScheduleBody({ query, appointments, phrase, businessDate, onClear, cale
   } else if (isEmpty) {
     body = <RangeEmpty phrase={phrase} />
   } else {
-    body = <AppointmentsList appointments={appointments} businessDate={businessDate} />
+    // Month's list is a phone's brief stop before the List replaces it, so only whole-week ranges split into weeks.
+    const range = query.layout === 'month' ? undefined : getReadRange(query, businessDate)
+    body = <AppointmentsList appointments={appointments} businessDate={businessDate} range={range} />
   }
   return body
 }
@@ -261,12 +264,13 @@ type RangeSkeletonProps = {
 
 // The skeleton of the layout being loaded: the list on phones, and the grid from md for Week and Month.
 function RangeSkeleton({ layout, month, year }: RangeSkeletonProps): React.ReactNode {
-  if (layout === 'list') return <AppointmentsListSkeleton />
+  if (layout === 'list') return <AppointmentsListSkeleton weekHeader />
 
   return (
     <>
       <div className="md:hidden">
-        <AppointmentsListSkeleton />
+        {/* Phones always land on the week-grouped list (Month is replaced by it there). */}
+        <AppointmentsListSkeleton weekHeader />
       </div>
       <div className="hidden md:block">
         {layout === 'month' ? <AppointmentsMonthGridSkeleton month={month} year={year} /> : <AppointmentsWeekGridSkeleton />}
@@ -290,7 +294,7 @@ function ShowMoreFooter({ rangeState, isPhoneOnly, onShowMore }: ShowMoreFooterP
 
   return (
     <div className={cn(isPhoneOnly && 'md:hidden')}>
-      {isLoading ? <AppointmentsListSkeleton bands={1} /> : null}
+      {isLoading ? <AppointmentsListSkeleton bands={1} weekHeader /> : null}
       {rangeState.status === 'more-error' ? (
         <div className="px-4 py-3">
           <Alert variant="destructive" className="animate-in fade-in-0 duration-base ease-out-quart">

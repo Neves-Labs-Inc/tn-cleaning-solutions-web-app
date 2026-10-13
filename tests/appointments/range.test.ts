@@ -5,7 +5,9 @@ import { appointmentsHref, parseAppointmentsQuery, type AppointmentsQuery } from
 import {
   canShowMore,
   getRangeCopy,
+  getPhoneQuery,
   getReadRange,
+  getWeekLabel,
   showMore,
   stepWeek,
   switchLayout,
@@ -259,5 +261,44 @@ describe('getRangeCopy', () => {
       heading: 'March 2025',
       phrase: 'in March 2025',
     })
+  })
+})
+
+describe('getWeekLabel', () => {
+  it('names a week inside one month by its days', () => {
+    assert.equal(getWeekLabel('2026-10-11', BUSINESS_DATE), 'Oct 11 – 17')
+  })
+
+  it('names both months of a week crossing a month end', () => {
+    assert.equal(getWeekLabel('2026-09-27', BUSINESS_DATE), 'Sep 27 – Oct 3')
+  })
+
+  it('adds both years to a week crossing the year end', () => {
+    assert.equal(getWeekLabel('2026-12-27', BUSINESS_DATE), 'Dec 27, 2026 – Jan 2, 2027')
+  })
+
+  it('adds the year to a week wholly in the next year', () => {
+    assert.equal(getWeekLabel('2027-01-03', BUSINESS_DATE), 'Jan 3 – 9, 2027')
+  })
+})
+
+describe('getPhoneQuery', () => {
+  const NOVEMBER = { ...THIS_WEEK, layout: 'month' as const, month: 11 }
+
+  it('opens the business week in the List from the business month', () => {
+    assert.deepEqual(getPhoneQuery({ ...NOVEMBER, month: 10 }, BUSINESS_DATE), { ...THIS_WEEK, layout: 'list' })
+  })
+
+  it("opens the List from the week containing another month's 1st", () => {
+    assert.deepEqual(getPhoneQuery(NOVEMBER, BUSINESS_DATE), { ...THIS_WEEK, layout: 'list', from: '2026-11-01' })
+    assert.equal(getPhoneQuery({ ...NOVEMBER, month: 12 }, BUSINESS_DATE).from, '2026-11-29')
+  })
+
+  it('leaves the Week and List layouts as they are', () => {
+    const week = { ...THIS_WEEK, from: '2026-11-15' }
+    const list = { ...THIS_WEEK, layout: 'list' as const, weeks: 24 }
+
+    assert.deepEqual(getPhoneQuery(week, BUSINESS_DATE), week)
+    assert.deepEqual(getPhoneQuery(list, BUSINESS_DATE), list)
   })
 })

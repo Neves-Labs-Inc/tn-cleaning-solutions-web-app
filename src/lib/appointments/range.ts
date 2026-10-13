@@ -113,6 +113,11 @@ export function switchLayout<Query extends RangeQuery>(query: Query, layout: Lay
   return next
 }
 
+// Phones have no Month layout (no toggle to leave it), so a Month query opens the List as the toggle would.
+export function getPhoneQuery<Query extends RangeQuery>(query: Query, businessDate: string): Query {
+  return query.layout === 'month' ? switchLayout(query, 'list', businessDate) : query
+}
+
 export function getMonthRange(month: number, year: number): DateRange {
   const firstDay = new Date(year, month - 1, 1)
   return { from: toDate(firstDay), to: toDate(endOfMonth(firstDay)) }
@@ -147,6 +152,17 @@ function weekHeading(start: Date, end: Date): string {
   const startLabel = format(start, isSameYear ? 'MMM d' : 'MMM d, yyyy')
   const endLabel = format(end, isSameMonth ? 'd, yyyy' : 'MMM d, yyyy')
   return `${startLabel} – ${endLabel}`
+}
+
+// The phone list's week header: "Oct 11 – 17" or "Sep 27 – Oct 3" in the business year, else with years like
+// the desktop week heading.
+export function getWeekLabel(weekStart: string, businessDate: string): string {
+  const { year: businessYear } = businessMonthOf(businessDate)
+  const start = toDay(weekStart)
+  const end = toDay(getWeekEnd(weekStart))
+  const isBusinessYear = start.getFullYear() === businessYear && end.getFullYear() === businessYear
+  const isSameMonth = start.getMonth() === end.getMonth()
+  return isBusinessYear ? `${format(start, 'MMM d')} – ${format(end, isSameMonth ? 'd' : 'MMM d')}` : weekHeading(start, end)
 }
 
 // The heading and the phrase empty states use ("No appointments {phrase}") for a layout's range.

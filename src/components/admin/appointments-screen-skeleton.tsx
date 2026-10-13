@@ -48,12 +48,13 @@ function ScheduleCardSkeleton({
           <Skeleton className="hidden h-9 w-49 md:block" />
         </div>
       </div>
+      {/* Phones always land on the week-grouped list (Month is replaced by it there). */}
       {query?.layout === "list" ? (
-        <AppointmentsListSkeleton />
+        <AppointmentsListSkeleton weekHeader />
       ) : (
         <>
           <div className="md:hidden">
-            <AppointmentsListSkeleton />
+            <AppointmentsListSkeleton weekHeader />
           </div>
           <div className="hidden md:block">
             {query?.layout === "month" ? (

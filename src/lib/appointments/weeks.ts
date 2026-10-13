@@ -198,3 +198,29 @@ export function parseWeeksSpan(
   const isValidLength = weekCount >= 1 && weekCount <= MAX_SPAN_WEEKS;
   return isValidLength ? getWeeksSpan([first, last]) : null;
 }
+
+// One Sunday week of a list, for the phone list's week sections.
+export type WeekGroup = {
+  weekStart: string;
+  weekEnd: string;
+  appointments: ScheduleAppointment[];
+};
+
+// Every week of the range in order, empty weeks included, each with its rows in input order.
+// Rows outside the range are dropped.
+export function groupByWeek(
+  appointments: ScheduleAppointment[],
+  range: DateRange,
+): WeekGroup[] {
+  const isInRange = ({ scheduledDate }: ScheduleAppointment): boolean =>
+    scheduledDate >= range.from &&
+    (range.to === null || scheduledDate <= range.to);
+  const byWeek = Map.groupBy(appointments.filter(isInRange), (appointment) =>
+    getWeekStart(appointment.scheduledDate),
+  );
+  return weeksForRange(range).map((weekStart) => ({
+    weekStart,
+    weekEnd: getWeekEnd(weekStart),
+    appointments: byWeek.get(weekStart) ?? [],
+  }));
+}
