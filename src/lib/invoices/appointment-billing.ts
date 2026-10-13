@@ -37,7 +37,6 @@ export type AppointmentBilling = {
 
 type BillingAppointment = PriceableAppointment & {
   status: AppointmentStatus;
-  completed_at: string | null;
 };
 
 type PriceLoad = { price: BillingPrice; livePriceCents: number | null };
@@ -99,11 +98,7 @@ export async function loadAppointmentBilling(
       loadPrice(db, appointment),
     ]);
     billing = {
-      state: paymentStateOf({
-        status: appointment.status,
-        completed_at: appointment.completed_at,
-        claim,
-      }),
+      state: paymentStateOf({ status: appointment.status, claim }),
       claim,
       claimTotalCents: totalCents,
       methods,

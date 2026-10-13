@@ -16,6 +16,7 @@ import {
   canRestore,
   canUndoComplete,
   completedDateError,
+  isCompletedByClocks,
   type AppointmentStatus,
 } from '@/lib/appointments/lifecycle'
 import { completeAppointments } from '@/lib/appointments/needs-completion'
@@ -1170,6 +1171,10 @@ async function setManuallyCompleted(id: string, manuallyCompleted: boolean): Pro
     return { success: false, error: 'This appointment is cancelled. Restore it first.' }
   }
 
+  if (manuallyCompleted && isCompletedByClocks(appointment)) {
+    return { success: false, error: 'This appointment is already completed.' }
+  }
+
   if (manuallyCompleted && !canMarkComplete(appointment)) {
     return { success: false, error: 'This appointment is already marked complete.' }
   }
@@ -1179,13 +1184,15 @@ async function setManuallyCompleted(id: string, manuallyCompleted: boolean): Pro
   }
 
   // The flag change makes the trigger re-derive the status from the flag and the clocks.
+  // Marking also refuses a visit that completed by its clocks mid-submit.
+  const excludedStatuses = manuallyCompleted ? '(cancelled,completed)' : '(cancelled)'
   const { data, error } = await createAdminClient()
     .from('appointments')
     .update({ manually_completed: manuallyCompleted })
     .eq('id', id)
     .eq('is_archived', false)
     .eq('manually_completed', !manuallyCompleted)
-    .neq('status', 'cancelled')
+    .not('status', 'in', excludedStatuses)
     .select('id')
     .maybeSingle()
 

@@ -12,8 +12,7 @@ type Db = SupabaseClient<Database>;
 // where that embed is empty. It runs in the database, so no id list travels in the URL.
 export const LIVE_CLAIM_EMBED = "live:invoice_appointments ( appointment_id )";
 
-// Completed after launch and still completed (completed_at isn't cleared when a visit is reopened),
-// not archived, no Live claim. Unpriced visits are included and tagged.
+// Currently completed, not archived, no Live claim, whatever its completed_at. Unpriced visits are included and tagged.
 export function unbilledQuery(
   db: Db,
   columns: string,
@@ -28,7 +27,6 @@ export function unbilledQuery(
     .eq("live.is_archived", false)
     .is("live.cancelled_at", null)
     .is("live", null)
-    .not("completed_at", "is", null)
     .eq("status", "completed")
     .eq("is_archived", false);
   return scopeToClient(query, "client_id", options.clientId);

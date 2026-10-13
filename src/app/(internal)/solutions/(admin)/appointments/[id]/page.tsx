@@ -5,7 +5,10 @@ import { notFound } from 'next/navigation'
 import AppointmentCrewClocks from '@/components/admin/appointment-crew-clocks'
 import { AppointmentsReturnLink } from '@/components/admin/appointments-return-link'
 import BillingCard from '@/components/admin/billing-card'
-import AppointmentLifecycleActions, { CompletedByAdminHint } from '@/components/admin/appointment-lifecycle-actions'
+import AppointmentLifecycleActions, {
+  CompletedByAdminHint,
+  CompletedByClocksHint,
+} from '@/components/admin/appointment-lifecycle-actions'
 import { BillingMismatchNote } from '@/components/invoices/visit-line-summary'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -34,7 +37,6 @@ type AppointmentDetailPageProps = {
 
 type AppointmentDetailRow = PriceableAppointment & {
   status: AppointmentStatus
-  completed_at: string | null
   manually_completed: boolean
   notes: string
   is_archived: boolean
@@ -88,7 +90,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
     .select(
       `
         ${APPOINTMENT_PRICE_COLUMNS},
-        status, completed_at, manually_completed, notes, is_archived,
+        status, manually_completed, notes, is_archived,
         clients!inner ( id, name, phone, email ),
         jobs!inner ( id, name, estimated_duration_minutes, description ),
         client_locations ( id, label, address ),
@@ -145,6 +147,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
           <StatusBadge tone={statusBadge.tone} icon={statusBadge.icon}>{statusBadge.label}</StatusBadge>
 
           <CompletedByAdminHint status={appointment.status} manuallyCompleted={appointment.manually_completed} />
+          <CompletedByClocksHint status={appointment.status} manuallyCompleted={appointment.manually_completed} />
         </div>
 
         <AppointmentLifecycleActions

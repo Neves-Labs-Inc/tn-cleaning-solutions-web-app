@@ -9,6 +9,7 @@ import {
   canRestore,
   canUndoComplete,
   completedDateError,
+  isCompletedByClocks,
   type AppointmentStatus,
 } from '../../src/lib/appointments/lifecycle.ts'
 
@@ -64,16 +65,32 @@ describe('completedDateError', () => {
 })
 
 describe('canMarkComplete', () => {
-  it('allows a non-cancelled appointment that is not manually completed', () => {
+  it('allows only a scheduled or in-progress appointment that is not manually completed', () => {
     assert.deepEqual(
       STATUSES.map((status) => canMarkComplete({ status, manually_completed: false })),
-      [true, true, true, false]
+      [true, true, false, false]
     )
   })
 
   it('refuses every status once manually completed', () => {
     assert.deepEqual(
       STATUSES.map((status) => canMarkComplete({ status, manually_completed: true })),
+      [false, false, false, false]
+    )
+  })
+})
+
+describe('isCompletedByClocks', () => {
+  it('is true only for a completed appointment that is not manually completed', () => {
+    assert.deepEqual(
+      STATUSES.map((status) => isCompletedByClocks({ status, manually_completed: false })),
+      [false, false, true, false]
+    )
+  })
+
+  it('is false for every status once manually completed', () => {
+    assert.deepEqual(
+      STATUSES.map((status) => isCompletedByClocks({ status, manually_completed: true })),
       [false, false, false, false]
     )
   })

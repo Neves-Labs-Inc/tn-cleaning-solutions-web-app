@@ -15,21 +15,18 @@ export type PaymentClaim = {
 
 type PaymentStateInput = {
   status: AppointmentStatus;
-  completed_at: string | null;
   claim: PaymentClaim | null;
 };
 
-// completed_at is only set for completions after launch, so an older completed appointment with
-// no claim has no state rather than counting as Unbilled.
+// A completed appointment with no Live claim is Unbilled, whenever it was completed.
 export function paymentStateOf({
   status,
-  completed_at,
   claim,
 }: PaymentStateInput): PaymentState | null {
   let state: PaymentState | null = null;
   if (claim) {
     state = claim.status === "paid" ? "paid" : "billed";
-  } else if (status === "completed" && completed_at !== null) {
+  } else if (status === "completed") {
     state = "unbilled";
   }
   return state;

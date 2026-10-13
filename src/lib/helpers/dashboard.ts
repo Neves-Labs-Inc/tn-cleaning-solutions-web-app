@@ -1,4 +1,7 @@
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
+import { isMissedClock, isNotClocked } from '../appointments/overview.ts'
+import { appointmentDisplayBadge } from '../../components/ui/status-badge-tones.ts'
+import type { StatusBadgeSpec } from '../../components/ui/status-badge'
 
 export type { AppointmentStatus }
 
@@ -91,20 +94,15 @@ export function formatTime(value: string): string {
     }).format(date)
 }
 
-export function appointmentStatusBadgeClasses(status: AppointmentStatus): string {
-    if (status === 'in_progress') {
-        return 'border border-status-progress-border bg-status-progress text-status-progress-foreground'
-    }
+// The pill every appointment surface paints, so the dashboard agrees with the Appointments screen.
+export function todayAppointmentBadge(row: TodayAppointmentRow, now: Date): StatusBadgeSpec {
+    const clockCheck = { status: row.status, scheduledDate: row.scheduled_date, endTime: row.scheduled_end_time }
 
-    if (status === 'completed') {
-        return 'border border-neutral-200 bg-neutral-100 text-neutral-700'
-    }
-
-    if (status === 'cancelled') {
-        return 'border border-red-200 bg-red-50 text-red-600'
-    }
-
-    return 'border border-blue-200 bg-blue-50 text-blue-700'
+    return appointmentDisplayBadge({
+        status: row.status,
+        isNotClocked: isNotClocked(clockCheck, now),
+        isMissedClock: isMissedClock(clockCheck, now),
+    })
 }
 
 export function assignedEmployeeNames(row: TodayAppointmentRow): string {

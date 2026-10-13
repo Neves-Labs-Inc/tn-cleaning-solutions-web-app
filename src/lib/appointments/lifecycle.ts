@@ -36,7 +36,12 @@ export function completedDateError({ status, scheduledDate, businessDate }: Comp
 }
 
 export function canMarkComplete({ status, manually_completed }: LifecycleState): boolean {
-  return status !== 'cancelled' && !manually_completed
+  return status !== 'cancelled' && status !== 'completed' && !manually_completed
+}
+
+// Completed by its clocks, so there is no admin completion to undo and no Mark complete to offer.
+export function isCompletedByClocks({ status, manually_completed }: LifecycleState): boolean {
+  return status === 'completed' && !manually_completed
 }
 
 // Cancel leaves the flag set, so a cancelled row must still return false.

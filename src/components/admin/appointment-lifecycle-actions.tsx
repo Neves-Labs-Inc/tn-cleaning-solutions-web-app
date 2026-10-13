@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { AlertCircle, CheckCircle2, Pencil, RotateCcw, Undo2, UserCheck, XCircle } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ClockCheck, Pencil, RotateCcw, Undo2, UserCheck, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -24,6 +24,7 @@ import {
   canMarkComplete,
   canRestore,
   canUndoComplete,
+  isCompletedByClocks,
   type AppointmentStatus,
 } from '@/lib/appointments/lifecycle'
 
@@ -49,6 +50,7 @@ const COPY = {
 } satisfies Record<string, ActionCopy>
 
 const HINT_TEXT = "Completed by admin. Clock changes won't change the status until you undo it."
+const CLOCKS_HINT_TEXT = 'Completed by clocks. Change the clocks on the Time sheet to reopen.'
 
 // A cancelled row keeps its flag, but the hint would be noise next to a Cancelled badge.
 export function CompletedByAdminHint({
@@ -61,6 +63,20 @@ export function CompletedByAdminHint({
     <p className="flex items-start gap-1.5 text-pretty text-sm text-muted-foreground animate-in fade-in-0 duration-base ease-out-quart">
       <UserCheck className="mt-1 size-4 shrink-0" aria-hidden="true" />
       {HINT_TEXT}
+    </p>
+  )
+}
+
+export function CompletedByClocksHint({
+  status,
+  manuallyCompleted,
+}: Pick<AppointmentLifecycleActionsProps, 'status' | 'manuallyCompleted'>) {
+  if (!isCompletedByClocks({ status, manually_completed: manuallyCompleted })) return null
+
+  return (
+    <p className="flex items-start gap-1.5 text-pretty text-sm text-muted-foreground animate-in fade-in-0 duration-base ease-out-quart">
+      <ClockCheck className="mt-1 size-4 shrink-0" aria-hidden="true" />
+      {CLOCKS_HINT_TEXT}
     </p>
   )
 }
@@ -81,6 +97,9 @@ export default function AppointmentLifecycleActions({
   const showCancel = canCancel(status)
   // Without Edit the lifecycle button is alone in its row, so it fills it instead of sitting in half.
   const lifecycleSpan = !showEdit ? 'col-span-2 md:col-span-1' : ''
+  const hasLifecycleButton = canMarkComplete(lifecycle) || canUndoComplete(lifecycle) || canRestore(status)
+  // Edit alone in its row (a clock-completed visit) fills it, mirroring lifecycleSpan.
+  const editSpan = hasLifecycleButton ? '' : 'col-span-2 md:col-span-1'
 
   async function run(copy: ActionCopy, action: (id: string) => Promise<AppointmentActionResult>) {
     setError(null)
@@ -111,7 +130,7 @@ export default function AppointmentLifecycleActions({
     <div className="w-full space-y-3 lg:w-auto">
       <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center md:justify-end">
         {showEdit ? (
-          <Button variant="outline" className="w-full md:w-auto" render={<Link href={editHref} />} nativeButton={false}>
+          <Button variant="outline" className={`w-full md:w-auto ${editSpan}`} render={<Link href={editHref} />} nativeButton={false}>
             <Pencil aria-hidden="true" />
             Edit
           </Button>
