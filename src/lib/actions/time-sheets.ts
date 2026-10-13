@@ -9,6 +9,7 @@ import {
   type SessionClocksCorrection,
 } from "@/lib/time-sheets/clock-corrections";
 import { MAX_CLOCK_TEXT_LENGTH } from "@/lib/time-sheets/clock-draft";
+import { isInstantOrNull } from "@/lib/time-sheets/clock-input";
 import { UNKNOWN_CLOCK_ERROR, type ClockError } from "@/lib/time-sheets/errors";
 
 // Thin by design: check the input's shape, call the SQL function through the user-session client
@@ -28,13 +29,6 @@ const REVALIDATED_PATHS = [
 
 function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID.test(value);
-}
-
-function isInstantOrNull(value: unknown): value is string | null {
-  return (
-    value === null ||
-    (typeof value === "string" && !Number.isNaN(Date.parse(value)))
-  );
 }
 
 function isShortText(value: unknown): value is string {

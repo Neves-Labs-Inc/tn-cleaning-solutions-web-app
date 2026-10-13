@@ -162,3 +162,38 @@ describe("draftToInstants", () => {
     });
   });
 });
+
+describe("impossible draft dates and times", () => {
+  const impossibleDate: ClockDraft = {
+    clockIn: { date: "2026-02-31", time: "09:00" },
+    clockOut: { date: VISIT_DATE, time: "" },
+  };
+  const impossibleTime = draft("25:00", "");
+  const noClocks = { clockIn: null, clockOut: null };
+
+  it("reads an impossible clock-in as not entered", () => {
+    assert.deepEqual(validateClockDraft(impossibleDate, "add", unclocked, MID_VISIT), {
+      clockIn: "Enter a clock-in",
+    });
+    assert.deepEqual(validateClockDraft(impossibleTime, "add", unclocked, MID_VISIT), {
+      clockIn: "Enter a clock-in",
+    });
+  });
+
+  it("converts no instant for an impossible field", () => {
+    assert.deepEqual(draftToInstants(impossibleDate, noClocks), noClocks);
+    assert.deepEqual(draftToInstants(impossibleTime, noClocks), noClocks);
+  });
+
+  it("converts a leap-day draft to the right Eastern instant", () => {
+    const leap: ClockDraft = {
+      clockIn: { date: "2028-02-29", time: "10:00" },
+      clockOut: { date: "2028-02-29", time: "" },
+    };
+
+    assert.deepEqual(draftToInstants(leap, noClocks), {
+      clockIn: "2028-02-29T15:00:00.000Z",
+      clockOut: null,
+    });
+  });
+});
