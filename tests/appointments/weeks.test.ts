@@ -8,6 +8,7 @@ import type {
 import { getReadRange } from "../../src/lib/appointments/range.ts";
 import {
   bucketByWeek,
+  groupByWeek,
   getWeeksSpan,
   groupWeekReads,
   MAX_SPAN_WEEKS,
@@ -402,5 +403,122 @@ describe("neighbourWeeks", () => {
       "2027-01-24",
       "2027-01-31",
     ]);
+  });
+});
+
+describe("groupByWeek", () => {
+  function shapeOf(
+    groups: ReturnType<typeof groupByWeek>,
+  ): [string, string, string[]][] {
+    return groups.map((group) => [
+      group.weekStart,
+      group.weekEnd,
+      idsOf(group.appointments),
+    ]);
+  }
+
+  it("keeps a week crossing a month end as one group", () => {
+    const groups = groupByWeek(
+      [visit("sep", "2026-09-29"), visit("oct", "2026-10-02")],
+      { from: "2026-09-27", to: "2026-10-03" },
+    );
+
+    assert.deepEqual(shapeOf(groups), [
+      ["2026-09-27", "2026-10-03", ["sep", "oct"]],
+    ]);
+  });
+
+  it("keeps a week crossing a year end as one group", () => {
+    const groups = groupByWeek(
+      [visit("dec", "2026-12-28"), visit("jan", "2027-01-02")],
+      { from: "2026-12-27", to: "2027-01-02" },
+    );
+
+    assert.deepEqual(shapeOf(groups), [
+      ["2026-12-27", "2027-01-02", ["dec", "jan"]],
+    ]);
+  });
+
+  it("starts the weeks holding a DST change on their Sunday and keeps their Saturday rows", () => {
+    const groups = groupByWeek(
+      [
+        visit("march-sunday", "2026-03-08"),
+        visit("march-saturday", "2026-03-14", "23:00:00"),
+        visit("november-sunday", "2026-11-01"),
+        visit("november-saturday", "2026-11-07", "23:00:00"),
+      ],
+      { from: "2026-03-08", to: "2026-11-07" },
+    );
+    const byStart = new Map(groups.map((group) => [group.weekStart, group]));
+
+    assert.deepEqual(
+      idsOf(byStart.get("2026-03-08")?.appointments ?? []),
+      ["march-sunday", "march-saturday"],
+    );
+    assert.equal(byStart.get("2026-03-08")?.weekEnd, "2026-03-14");
+    assert.deepEqual(
+      idsOf(byStart.get("2026-11-01")?.appointments ?? []),
+      ["november-sunday", "november-saturday"],
+    );
+    assert.equal(byStart.get("2026-11-01")?.weekEnd, "2026-11-07");
+  });
+
+  it("includes the empty weeks, in order", () => {
+    const groups = groupByWeek([visit("late", "2026-10-28")], {
+      from: "2026-10-11",
+      to: "2026-10-31",
+    });
+
+    assert.deepEqual(shapeOf(groups), [
+      ["2026-10-11", "2026-10-17", []],
+      ["2026-10-18", "2026-10-24", []],
+      ["2026-10-25", "2026-10-31", ["late"]],
+    ]);
+  });
+
+  it("keeps the input order within a week", () => {
+    const groups = groupByWeek(
+      [
+        visit("b", "2026-10-12", "08:00:00"),
+        visit("a", "2026-10-12", "10:00:00"),
+        visit("c", "2026-10-11", "09:00:00"),
+      ],
+      { from: "2026-10-11", to: "2026-10-17" },
+    );
+
+    assert.deepEqual(idsOf(groups[0].appointments), ["b", "a", "c"]);
+  });
+
+  it("drops rows outside the range", () => {
+    const groups = groupByWeek(
+      [
+        visit("before", "2026-10-10"),
+        visit("inside", "2026-10-13"),
+        visit("after", "2026-10-18"),
+      ],
+      { from: "2026-10-11", to: "2026-10-17" },
+    );
+
+    assert.deepEqual(shapeOf(groups), [
+      ["2026-10-11", "2026-10-17", ["inside"]],
+    ]);
+  });
+
+  it("gives eight groups for an eight-week range", () => {
+    const groups = groupByWeek([], { from: "2026-10-11", to: "2026-12-05" });
+
+    assert.deepEqual(
+      groups.map((group) => group.weekStart),
+      [
+        "2026-10-11",
+        "2026-10-18",
+        "2026-10-25",
+        "2026-11-01",
+        "2026-11-08",
+        "2026-11-15",
+        "2026-11-22",
+        "2026-11-29",
+      ],
+    );
   });
 });

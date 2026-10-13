@@ -6,11 +6,13 @@ import { AlertCircle, CalendarCheck, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import ResponsiveDialog from '@/components/ui/responsive-dialog'
 import SubmitButton from '@/components/ui/submit-button'
 import type { ClaimableVisit } from '@/lib/invoices/queries'
+import { cn } from '@/lib/utils'
 
 import { ClaimableVisitList } from './claimable-visit-list'
 import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail } from './invoice-detail-context'
@@ -97,7 +99,7 @@ export default function AddVisitsPicker({
         ref={triggerRef}
         type="button"
         variant="outline"
-        className="w-full cursor-pointer transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] md:w-auto"
+        className={cn(PRESS_CLASS_NAME, 'w-full cursor-pointer md:w-auto')}
         onClick={handleOpen}
       >
         <Plus aria-hidden="true" />

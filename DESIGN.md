@@ -376,13 +376,13 @@ Rules: one axis per chart; single-series charts use `--chart-1` with no legend; 
 | `--ease-out-quart` | `cubic-bezier(0.25, 1, 0.5, 1)` | every enter |
 | `--ease-in-quart` | `cubic-bezier(0.5, 0, 0.75, 0)` | every exit |
 
-Exits are **faster than enters**: exit = enter × 0.7 (sheet in 200ms, out 140ms; dialog in 200ms, out 140ms; toast in 200ms, out 150ms). Animate only `transform` and `opacity` (plus `background-color`/`color`/`border-color` for state changes). Never animate `width`/`height`; collapse with `grid-template-rows: 0fr → 1fr` (Tailwind `grid-rows-[0fr]`/`grid-rows-[1fr]`) if needed.
+Exits are **faster than enters**: exit = enter × 0.7 (sheet in 200ms, out 140ms; dialog in 200ms, out 140ms; toast in 200ms, out 150ms). Animate only `transform` and `opacity` (plus the individual `scale`/`translate`/`rotate` properties: Tailwind v4 `scale-*`/`translate-*` set those, not `transform`, so a transition list must name them; `background-color`/`color`/`border-color` for state changes). Never animate `width`/`height`; collapse with `grid-template-rows: 0fr → 1fr` (Tailwind `grid-rows-[0fr]`/`grid-rows-[1fr]`) if needed.
 
 **Per interaction**:
 
 | Element | Hover (`md:` only, `hover:`) | Press (`active:`) | Focus-visible | Transition |
 |---|---|---|---|---|
-| Primary button | `hover:bg-primary/90` | `active:scale-[0.98]` (transform, 120ms) | `ring-2 ring-ring/50 ring-offset-2 ring-offset-background` | `transition-[background-color,transform,box-shadow] duration-fast` |
+| Primary button | `hover:bg-primary/90` | `active:scale-[0.98]` (scale, 120ms) | `ring-2 ring-ring/50 ring-offset-2 ring-offset-background` | `transition-[background-color,scale,translate,box-shadow] duration-fast` (use `PRESS_CLASS_NAME` from `components/admin/detail-page/press.ts`) |
 | Outline/ghost button | `hover:bg-muted` | `active:bg-muted active:scale-[0.98]` | same ring | same |
 | Card link / list row | `md:hover:ring-foreground/20` | `active:bg-muted` (no translate on phones) | ring inside (`focus-visible:ring-2 ring-inset`) | `transition-[background-color,box-shadow] duration-fast` |
 | Tab bar item | — | `active:bg-muted` | ring inset | icon `transition-colors duration-fast`; active indicator (2px top bar) `transition-transform duration-base ease-out-quart` sliding between tabs |

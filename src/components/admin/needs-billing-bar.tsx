@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { FilePlus2, TriangleAlert, Wallet } from 'lucide-react'
 
+import { OUTLINE_PRESS_CLASS_NAME, PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { totalPrices } from '@/lib/appointments/overview'
@@ -20,7 +21,6 @@ type NeedsBillingBarProps = {
 }
 
 const NEW_INVOICE_PATH = '/solutions/invoices/new'
-const ACTION_CLASS = 'transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]'
 
 function createInvoiceHref(selected: NeedsBillingAppointment[]): string {
   const params = new URLSearchParams({
@@ -69,17 +69,17 @@ export default function NeedsBillingBar({
               </p>
             ) : null}
           </div>
-          <Button variant="ghost" className={cn(ACTION_CLASS, 'md:hidden')} onClick={onClear}>
+          <Button variant="ghost" className={cn(PRESS_CLASS_NAME, 'md:hidden')} onClick={onClear}>
             Clear
           </Button>
         </div>
         <div className="grid grid-cols-2 gap-2 md:flex md:shrink-0 md:items-center">
-          <Button variant="ghost" className={cn(ACTION_CLASS, 'hidden md:inline-flex')} onClick={onClear}>
+          <Button variant="ghost" className={cn(PRESS_CLASS_NAME, 'hidden md:inline-flex')} onClick={onClear}>
             Clear
           </Button>
           <Button
             variant="outline"
-            className={cn(ACTION_CLASS, 'active:bg-muted')}
+            className={OUTLINE_PRESS_CLASS_NAME}
             disabled={isMarkPaidLoading}
             aria-busy={isMarkPaidLoading || undefined}
             onClick={onMarkPaid}
@@ -87,7 +87,7 @@ export default function NeedsBillingBar({
             {isMarkPaidLoading ? <Spinner className="size-4" /> : <Wallet aria-hidden="true" />}
             Mark paid
           </Button>
-          <Button className={ACTION_CLASS} nativeButton={false} render={<Link href={createInvoiceHref(selected)} />}>
+          <Button className={PRESS_CLASS_NAME} nativeButton={false} render={<Link href={createInvoiceHref(selected)} />}>
             <FilePlus2 aria-hidden="true" />
             Create invoice
           </Button>

@@ -5,6 +5,7 @@ import { useId } from 'react'
 import { AlertCircle, Calendar, CalendarDays, CalendarRange, CheckCircle2, List, ReceiptText, SearchX } from 'lucide-react'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -29,6 +30,7 @@ import {
 import {
   canShowMore,
   getRangeCopy,
+  getReadRange,
   getWeekEnd,
   LAYOUTS,
   resolveWeekStart,
@@ -83,7 +85,6 @@ type AppointmentsViewToggleProps = {
 const NEW_APPOINTMENT_PATH = '/solutions/appointments/new'
 // The Needs views list every month, so there is no range to name.
 const ALL_MONTHS_PHRASE = 'across all months'
-const PRESS_CLASS = 'transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]'
 const TOGGLE_ITEM_CLASS = 'h-8 cursor-pointer px-2.5 text-xs transition-colors duration-fast hover:bg-muted data-pressed:bg-muted data-pressed:text-foreground'
 
 type ResponsiveTextProps = {
@@ -116,7 +117,7 @@ function ShowCancelledToggle({ showCancelled, disabled, onToggle }: ShowCancelle
       variant="outline"
       aria-pressed={showCancelled}
       disabled={disabled}
-      className={cn(PRESS_CLASS, showCancelled && 'bg-muted text-foreground')}
+      className={cn(PRESS_CLASS_NAME, showCancelled && 'bg-muted text-foreground')}
       onClick={onToggle}
     >
       {showCancelled ? 'Hide cancelled' : 'Show cancelled'}
@@ -134,7 +135,7 @@ function ThisWeekButton({ className, onClick }: ThisWeekButtonProps): React.Reac
     <Button
       type="button"
       variant="outline"
-      className={cn(PRESS_CLASS, 'animate-in fade-in-0 duration-fast ease-out-quart', className)}
+      className={cn(PRESS_CLASS_NAME, 'animate-in fade-in-0 duration-fast ease-out-quart', className)}
       onClick={onClick}
     >
       This week
@@ -163,7 +164,7 @@ function PaymentStateEmpty({ query, phrase }: PaymentStateEmptyProps): React.Rea
       <EmptyContent>
         <Button
           variant="outline"
-          className={PRESS_CLASS}
+          className={PRESS_CLASS_NAME}
           nativeButton={false}
           render={<Link href={appointmentsHref({ ...query, view: 'schedule' })} />}
         >
@@ -184,7 +185,7 @@ function RangeEmpty({ phrase }: { phrase: string }): React.ReactNode {
         <EmptyTitle>No appointments {phrase}</EmptyTitle>
       </EmptyHeader>
       <EmptyContent>
-        <Button variant="outline" className={PRESS_CLASS} nativeButton={false} render={<Link href={NEW_APPOINTMENT_PATH} />}>
+        <Button variant="outline" className={PRESS_CLASS_NAME} nativeButton={false} render={<Link href={NEW_APPOINTMENT_PATH} />}>
           New appointment
         </Button>
       </EmptyContent>
@@ -215,7 +216,7 @@ function FilteredEmpty({ query, phrase, onClear }: FilteredEmptyProps): React.Re
         <EmptyDescription>Nothing {phrase} matches these filters.</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button type="button" variant="outline" className={PRESS_CLASS} onClick={onClear}>
+        <Button type="button" variant="outline" className={PRESS_CLASS_NAME} onClick={onClear}>
           Clear filters
         </Button>
       </EmptyContent>
@@ -248,7 +249,9 @@ function ScheduleBody({ query, appointments, phrase, businessDate, onClear, cale
   } else if (isEmpty) {
     body = <RangeEmpty phrase={phrase} />
   } else {
-    body = <AppointmentsList appointments={appointments} businessDate={businessDate} />
+    // Month's list is a phone's brief stop before the List replaces it, so only whole-week ranges split into weeks.
+    const range = query.layout === 'month' ? undefined : getReadRange(query, businessDate)
+    body = <AppointmentsList appointments={appointments} businessDate={businessDate} range={range} />
   }
   return body
 }
@@ -261,12 +264,13 @@ type RangeSkeletonProps = {
 
 // The skeleton of the layout being loaded: the list on phones, and the grid from md for Week and Month.
 function RangeSkeleton({ layout, month, year }: RangeSkeletonProps): React.ReactNode {
-  if (layout === 'list') return <AppointmentsListSkeleton />
+  if (layout === 'list') return <AppointmentsListSkeleton weekHeader />
 
   return (
     <>
       <div className="md:hidden">
-        <AppointmentsListSkeleton />
+        {/* Phones always land on the week-grouped list (Month is replaced by it there). */}
+        <AppointmentsListSkeleton weekHeader />
       </div>
       <div className="hidden md:block">
         {layout === 'month' ? <AppointmentsMonthGridSkeleton month={month} year={year} /> : <AppointmentsWeekGridSkeleton />}
@@ -290,7 +294,7 @@ function ShowMoreFooter({ rangeState, isPhoneOnly, onShowMore }: ShowMoreFooterP
 
   return (
     <div className={cn(isPhoneOnly && 'md:hidden')}>
-      {isLoading ? <AppointmentsListSkeleton bands={1} /> : null}
+      {isLoading ? <AppointmentsListSkeleton bands={1} weekHeader /> : null}
       {rangeState.status === 'more-error' ? (
         <div className="px-4 py-3">
           <Alert variant="destructive" className="animate-in fade-in-0 duration-base ease-out-quart">
@@ -309,7 +313,7 @@ function ShowMoreFooter({ rangeState, isPhoneOnly, onShowMore }: ShowMoreFooterP
           focusableWhenDisabled
           aria-busy={isLoading || undefined}
           className={cn(
-            PRESS_CLASS,
+            PRESS_CLASS_NAME,
             'w-full sm:w-auto sm:min-w-40',
             // focusableWhenDisabled sets aria-disabled, not :disabled, so the Button's own disabled styles never apply.
             // Dim only the content, not the whole button, so the focus ring keeps its full alpha.

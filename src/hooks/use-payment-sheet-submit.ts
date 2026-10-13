@@ -33,6 +33,7 @@ type PaymentSheetSubmitOptions<T> = {
 
 const FIELD_CODES: Record<string, string> = {
   paid_date_future: "paidDate",
+  invalid_paid_date: "paidDate",
   method_required: "method",
 };
 

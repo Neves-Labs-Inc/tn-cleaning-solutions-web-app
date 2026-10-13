@@ -328,7 +328,7 @@ export async function getReceivablesTotals(db: Db, clientId: string | null = nul
 }
 
 // What a client still owes: issued, unarchived. Their totals are the view's Billed amounts.
-async function loadOwedInvoices(db: Db, clientId: string | null): Promise<InvoiceListRow[]> {
+export async function loadOwedInvoices(db: Db, clientId: string | null): Promise<InvoiceListRow[]> {
   const rows = await readAllPages((from, to) =>
     scopeToClient(
       db.from('invoices_with_status').select(INVOICE_LIST_COLUMNS).eq('status', 'issued').eq('is_archived', false),

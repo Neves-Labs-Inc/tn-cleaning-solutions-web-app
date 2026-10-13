@@ -1,5 +1,6 @@
 'use client'
 
+import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -159,7 +160,7 @@ export function ClaimableVisitList({
         <Button
           type="button"
           variant="ghost"
-          className="cursor-pointer transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] active:bg-muted"
+          className={cn(OUTLINE_PRESS_CLASS_NAME, 'cursor-pointer')}
           disabled={disabled || isLoading || visits.length === 0}
           onClick={handleToggleAll}
         >

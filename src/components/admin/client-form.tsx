@@ -2,12 +2,18 @@
 
 import Link from 'next/link'
 import { unstable_rethrow } from 'next/navigation'
-import { useActionState } from 'react'
-import { useFormStatus } from 'react-dom'
+import { startTransition, useActionState, useEffect, useRef, useState } from 'react'
+import { AlertCircle } from 'lucide-react'
 
+import { SheetButtons, SHEET_BUTTON_CLASS } from '@/components/invoices/sheet-buttons'
+import { cn } from '@/lib/utils'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import SubmitButton from '@/components/ui/submit-button'
 import { Textarea } from '@/components/ui/textarea'
 import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { createClient, type ClientActionResult, updateClient } from '@/lib/actions/clients'
@@ -22,6 +28,12 @@ type ClientFormProps = {
     notes: string | null
     is_active: boolean
   }
+  // Dialog mode: the form sits in a ResponsiveDialog, and these replace the page's redirect and Cancel link.
+  dialog?: {
+    onSuccess: () => void
+    onCancel: () => void
+    onPendingChange: (isPending: boolean) => void
+  }
 }
 
 const initialState: ClientActionResult = {
@@ -29,27 +41,20 @@ const initialState: ClientActionResult = {
   error: '',
 }
 
-function SubmitButton({ isEditMode }: { isEditMode: boolean }) {
-  const { pending } = useFormStatus()
+const SAVE_FAILED_MESSAGE = "Couldn't save the client. Try again."
+const NAME_ERROR_ID = 'client-name-error'
+const EMAIL_ERROR_ID = 'client-email-error'
 
-  return (
-    <Button
-      type="submit"
-      disabled={pending}
-      className="h-10 rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white hover:bg-emerald-700"
-    >
-      {pending ? 'Saving...' : isEditMode ? 'Save changes' : 'Create client'}
-    </Button>
-  )
-}
-
-export function ClientForm({ client }: ClientFormProps) {
+export function ClientForm({ client, dialog }: ClientFormProps) {
   const appointmentsCache = useAppointmentsCache()
   const saveAction = client ? updateClient.bind(null, client.id) : createClient
+  const [isActive, setIsActive] = useState(client?.is_active ?? true)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const emailRef = useRef<HTMLInputElement>(null)
 
-  // A saved form never gets a result back: the action redirects. So patch the cache before the
-  // action runs; the code after the await only runs when the save is refused, and undoes the
-  // rename, so rows never show a name that wasn't saved.
+  // Patch the cache before the action runs so rows show the new name at once; a refused or failed
+  // save undoes the rename, so rows never show a name that wasn't saved. Create redirects on success,
+  // so the code after its await only runs when the save is refused.
   async function handleSave(previous: ClientActionResult, formData: FormData): Promise<ClientActionResult> {
     const name = String(formData.get('name') ?? '').trim()
     const isRenamed = client !== undefined && name !== client.name
@@ -58,132 +63,158 @@ export function ClientForm({ client }: ClientFormProps) {
       appointmentsCache.rename({ kind: 'client', id: client.id, name })
     }
 
-    // After the rename: setQueryData clears the stale mark, so refresh last.
-    void appointmentsCache.refresh([appointmentsKeys.filterOptions])
-
-    try {
-      const result = await saveAction(previous, formData)
-      if (isRenamed && 'error' in result && result.error) {
-        appointmentsCache.rename({ kind: 'client', id: client.id, name: client.name })
-      }
-      return result
-    } catch (error) {
-      // A redirect is the success path and rethrows here; any other throw means nothing was saved.
-      unstable_rethrow(error)
-      if (isRenamed) {
-        appointmentsCache.rename({ kind: 'client', id: client.id, name: client.name })
-      }
-      throw error
+    // Create's success is a redirect, so nothing after the await runs for it: refresh the filter first.
+    if (client === undefined) {
+      void appointmentsCache.refresh([appointmentsKeys.filterOptions])
     }
+
+    let result: ClientActionResult
+    try {
+      result = await saveAction(previous, formData)
+    } catch (error) {
+      // A redirect is create's success path and rethrows here; any other throw means nothing was saved.
+      unstable_rethrow(error)
+      console.error('Client save failed', client?.id, error)
+      result = { success: false, error: SAVE_FAILED_MESSAGE }
+    }
+
+    if (result.success) {
+      // After the rename: setQueryData clears the stale mark, so refresh last.
+      void appointmentsCache.refresh([appointmentsKeys.filterOptions])
+      dialog?.onSuccess()
+    } else if (isRenamed) {
+      appointmentsCache.rename({ kind: 'client', id: client.id, name: client.name })
+    }
+    return result
   }
 
-  const [state, formAction, _isPending] = useActionState(handleSave, initialState)
+  const [state, formAction, isPending] = useActionState(handleSave, initialState)
+  const fieldErrors = 'fieldErrors' in state ? state.fieldErrors : undefined
+  const formError = !state.success && !fieldErrors ? state.error : ''
 
-  return (
-    <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-      <form action={formAction} className="space-y-5">
-        {'error' in state && state.error ? (
-          <div
-            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
-            role="alert"
-            aria-live="polite"
-          >
-            {state.error}
-          </div>
-        ) : null}
+  // A refused save puts focus on the first field to fix.
+  useEffect(() => {
+    if (fieldErrors?.name) {
+      nameRef.current?.focus()
+    } else if (fieldErrors?.email) {
+      emailRef.current?.focus()
+    }
+  }, [fieldErrors])
 
-        <div className="space-y-1.5">
-          <Label htmlFor="name" className="text-sm font-medium text-neutral-700">
-            Name
-          </Label>
+  // Dispatched by hand rather than through <form action>: React resets an action form's fields after
+  // every submit, and a refused save must keep what the admin typed.
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (isPending) return
+    const formData = new FormData(event.currentTarget)
+    startTransition(() => formAction(formData))
+  }
+
+  const form = (
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+      <Field data-invalid={Boolean(fieldErrors?.name)}>
+        <FieldLabel htmlFor="client-name">Name</FieldLabel>
+        <Input
+          ref={nameRef}
+          id="client-name"
+          name="name"
+          type="text"
+          required
+          autoComplete="off"
+          defaultValue={client?.name ?? ''}
+          aria-invalid={Boolean(fieldErrors?.name)}
+          aria-describedby={fieldErrors?.name ? NAME_ERROR_ID : undefined}
+          placeholder="Johnson Family"
+        />
+        {fieldErrors?.name ? <FieldError id={NAME_ERROR_ID}>{fieldErrors.name}</FieldError> : null}
+      </Field>
+
+      <div className="grid gap-5 sm:grid-cols-2 sm:gap-4">
+        <Field data-invalid={Boolean(fieldErrors?.email)}>
+          <FieldLabel htmlFor="client-email">Email</FieldLabel>
           <Input
-            id="name"
-            name="name"
-            type="text"
-            required
-            defaultValue={client?.name ?? ''}
-            aria-invalid={'fieldErrors' in state && Boolean(state.fieldErrors?.name)}
-            aria-describedby={'fieldErrors' in state && state.fieldErrors?.name ? 'name-error' : undefined}
-            className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-            placeholder="Johnson Family"
+            ref={emailRef}
+            id="client-email"
+            name="email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            enterKeyHint="next"
+            defaultValue={client?.email ?? ''}
+            aria-invalid={Boolean(fieldErrors?.email)}
+            aria-describedby={fieldErrors?.email ? EMAIL_ERROR_ID : undefined}
+            placeholder="client@example.com"
           />
-          {'fieldErrors' in state && state.fieldErrors?.name ? (
-            <p id="name-error" className="text-xs text-red-600">
-              {state.fieldErrors.name}
-            </p>
-          ) : null}
-        </div>
+          {fieldErrors?.email ? <FieldError id={EMAIL_ERROR_ID}>{fieldErrors.email}</FieldError> : null}
+        </Field>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-sm font-medium text-neutral-700">
-              Email
-            </Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              defaultValue={client?.email ?? ''}
-              aria-invalid={'fieldErrors' in state && Boolean(state.fieldErrors?.email)}
-              aria-describedby={'fieldErrors' in state && state.fieldErrors?.email ? 'email-error' : undefined}
-              className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-              placeholder="client@example.com"
-            />
-            {'fieldErrors' in state && state.fieldErrors?.email ? (
-              <p id="email-error" className="text-xs text-red-600">
-                {state.fieldErrors.email}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="phone" className="text-sm font-medium text-neutral-700">
-              Phone
-            </Label>
-            <Input
-              id="phone"
-              name="phone"
-              type="tel"
-              defaultValue={client?.phone ?? ''}
-              className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-              placeholder="(615) 555-0100"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="notes" className="text-sm font-medium text-neutral-700">
-            Notes
-          </Label>
-          <Textarea
-            id="notes"
-            name="notes"
-            defaultValue={client?.notes ?? ''}
-            className="min-h-28 rounded-xl border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-            placeholder="Preferred arrival windows, gate codes, pets, or special instructions."
+        <Field>
+          <FieldLabel htmlFor="client-phone">Phone</FieldLabel>
+          <Input
+            id="client-phone"
+            name="phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            defaultValue={client?.phone ?? ''}
+            placeholder="(416) 555-0100"
           />
-        </div>
+        </Field>
+      </div>
 
-        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-3">
-          <input
-            type="checkbox"
-            name="is_active"
-            defaultChecked={client?.is_active ?? true}
-            className="size-4 rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500"
+      <Field>
+        <FieldLabel htmlFor="client-notes">Notes</FieldLabel>
+        <Textarea
+          id="client-notes"
+          name="notes"
+          defaultValue={client?.notes ?? ''}
+          placeholder="Preferred arrival windows, gate codes, pets, or special instructions."
+        />
+      </Field>
+
+      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-foreground">
+        <Checkbox checked={isActive} onCheckedChange={setIsActive} />
+        Client is active
+      </label>
+      {/* The checkbox has no name: the action reads is_active === 'on', so post exactly that. */}
+      {isActive ? <input type="hidden" name="is_active" value="on" /> : null}
+
+      {formError ? (
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription>{formError}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {dialog ? (
+        <SheetButtons onCancel={dialog.onCancel} onPendingChange={dialog.onPendingChange} isPending={isPending}>
+          <SubmitButton
+            className={SHEET_BUTTON_CLASS}
+            label="Save changes"
+            pendingLabel="Saving…"
+            isPending={isPending}
           />
-          <span className="text-sm text-neutral-700">Client is active</span>
-        </label>
-
-        <div className="flex items-center justify-end gap-3 border-t border-neutral-100 pt-4">
-          <Link
-            href={client ? `/solutions/clients/${client.id}` : '/solutions/clients'}
-            className="inline-flex h-10 items-center rounded-full border border-neutral-200 bg-white px-4 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
+        </SheetButtons>
+      ) : (
+        <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
+          <Button
+            variant="outline"
+            className={cn(SHEET_BUTTON_CLASS, 'active:bg-muted')}
+            render={<Link href="/solutions/clients" />}
+            nativeButton={false}
           >
             Cancel
-          </Link>
-          <SubmitButton isEditMode={Boolean(client)} />
+          </Button>
+          <SubmitButton
+            className={SHEET_BUTTON_CLASS}
+            label="Create client"
+            pendingLabel="Saving…"
+            isPending={isPending}
+          />
         </div>
-      </form>
-    </section>
+      )}
+    </form>
   )
+
+  return dialog ? form : <Card className="p-4 sm:p-6">{form}</Card>
 }

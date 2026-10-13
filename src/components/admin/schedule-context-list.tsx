@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { CalendarX2, CircleAlert, Plus } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { OUTLINE_PRESS_CLASS_NAME } from "@/components/admin/detail-page/press";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -31,8 +32,10 @@ type ScheduleRowProps = {
 const SKELETON_ROWS = 4;
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 const YEAR_OPTIONS = Array.from({ length: 101 }, (_, index) => 2000 + index);
-const ACTION_CLASSES =
-  "transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] active:bg-muted focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+const ACTION_CLASSES = cn(
+  OUTLINE_PRESS_CLASS_NAME,
+  "focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+);
 
 function formatLocation(appointment: ContextAppointmentRow): string | null {
   const label = appointment.client_locations?.label?.trim();

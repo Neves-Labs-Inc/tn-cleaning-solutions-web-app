@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { AlertCircle, ArrowRight, CircleCheck, Plus, ReceiptText } from 'lucide-react'
 
 import AutomaticInvoicingSwitch from '@/components/admin/automatic-invoicing-switch'
+import { OUTLINE_PRESS_CLASS_NAME, PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
+import TabToolbar from '@/components/admin/detail-page/tab-toolbar'
 import UnbilledVisitList from '@/components/invoices/unbilled-visit-list'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -35,7 +37,7 @@ function BillingError({ clientId }: { clientId: string }) {
 				<Button
 					variant="outline"
 					className="text-foreground"
-					render={<Link href={`/solutions/clients/${clientId}`} />}
+					render={<Link href={`/solutions/clients/${clientId}?tab=billing`} />}
 					nativeButton={false}
 				>
 					Try again
@@ -134,27 +136,32 @@ function UnbilledVisits({ receivables }: { receivables: Receivables }) {
 
 export function BillingSection({ client, receivables, businessDate }: BillingSectionProps) {
 	return (
-		<section
-			aria-labelledby="billing-heading"
-			className="space-y-4 animate-in fade-in-0 duration-slow"
-		>
-			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-				<h2 id="billing-heading" className="text-lg font-semibold tracking-tight">
-					Billing
-				</h2>
-				<div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-					<Button
-						className="sm:order-last"
-						render={<Link href={`/solutions/invoices/new?client=${client.id}`} />} nativeButton={false}>
-						<Plus aria-hidden="true" data-icon="inline-start" />
-						New invoice
-					</Button>
-					<Button variant="outline" render={<Link href="/solutions/invoices/receivables" />} nativeButton={false}>
-						Receivables
-						<ArrowRight aria-hidden="true" data-icon="inline-end" />
-					</Button>
-				</div>
-			</div>
+		// The Billing tab labels this panel, so it has no heading of its own.
+		<div className="space-y-4">
+			<TabToolbar
+				description="Invoices and balances for this client."
+				action={
+					<>
+						<Button
+							className={`sm:order-last ${PRESS_CLASS_NAME}`}
+							render={<Link href={`/solutions/invoices/new?client=${client.id}`} />}
+							nativeButton={false}
+						>
+							<Plus aria-hidden="true" data-icon="inline-start" />
+							New invoice
+						</Button>
+						<Button
+							variant="outline"
+							className={OUTLINE_PRESS_CLASS_NAME}
+							render={<Link href="/solutions/invoices/receivables" />}
+							nativeButton={false}
+						>
+							Receivables
+							<ArrowRight aria-hidden="true" data-icon="inline-end" />
+						</Button>
+					</>
+				}
+			/>
 
 			{receivables === null ? (
 				<>
@@ -179,6 +186,6 @@ export function BillingSection({ client, receivables, businessDate }: BillingSec
 					</div>
 				</>
 			)}
-		</section>
+		</div>
 	)
 }

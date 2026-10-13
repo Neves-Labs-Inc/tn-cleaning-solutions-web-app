@@ -1,5 +1,6 @@
 'use client'
 
+import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { SearchableSelect } from '@/components/ui/searchable-select'
@@ -35,7 +36,6 @@ const STATUS_OPTIONS: Array<{ value: AppointmentStatusFilter; label: string }> =
 
 // The primitive's select has no pointer or hover border of its own; the class lands on its wrapper.
 const SELECT_CLASS = '[&>select]:cursor-pointer md:[&>select:hover]:border-foreground/30'
-const PRESS_CLASS = 'transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]'
 
 function byName(a: FilterOption, b: FilterOption): number {
   return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
@@ -111,10 +111,7 @@ export default function AppointmentsFilters({
         <Button
           type="button"
           variant="ghost"
-          className={cn(
-            'col-span-2 justify-self-end animate-in fade-in-0 ease-out-quart active:bg-muted',
-            PRESS_CLASS
-          )}
+          className={cn(OUTLINE_PRESS_CLASS_NAME, 'col-span-2 justify-self-end animate-in fade-in-0')}
           onClick={onClear}
         >
           Clear filters

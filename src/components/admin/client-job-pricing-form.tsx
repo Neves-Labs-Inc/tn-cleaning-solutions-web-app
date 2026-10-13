@@ -1,197 +1,269 @@
-'use client'
+"use client";
 
-import Link from 'next/link'
-import { useActionState } from 'react'
-import { useFormStatus } from 'react-dom'
+import { AlertCircle } from "lucide-react";
+import {
+  startTransition,
+  useActionState,
+  useEffect,
+  useRef,
+} from "react";
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
+import {
+  SHEET_BUTTON_CLASS,
+  SheetButtons,
+} from "@/components/invoices/sheet-buttons";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  FieldTitle,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from "@/components/ui/native-select";
+import SubmitButton from "@/components/ui/submit-button";
+import { Textarea } from "@/components/ui/textarea";
+import { useAppointmentsCache } from "@/hooks/use-appointments-cache";
 import {
   type ClientJobPricingActionResult,
   createClientJobPricing,
   updateClientJobPricing,
-} from '@/lib/actions/client-job-pricing'
-import { formatRate } from '@/lib/pricing/money'
-import { getBusinessDate } from '@/lib/schedule'
+} from "@/lib/actions/client-job-pricing";
+import { formatRate } from "@/lib/pricing/money";
 
-export type ClientJobPricingFormProps = {
-  clientId: string
-  jobs: Array<{ id: string; name: string; hourly_rate_cents: number }>
+export type PricingJob = { id: string; name: string; hourly_rate_cents: number };
+
+type ClientJobPricingFormProps = {
+  clientId: string;
+  jobs: PricingJob[];
+  businessDate: string;
   pricing?: {
-    id: string
-    job_id: string
-    hourly_rate_cents: number
-    effective_from: string
-    notes: string | null
-  }
-}
-
-type FieldName = 'job_id' | 'hourly_rate_cents' | 'effective_from'
+    id: string;
+    job_id: string;
+    // Shown read-only: a rate's job can't change, and it may be archived.
+    job_name: string;
+    hourly_rate_cents: number;
+    effective_from: string;
+    notes: string | null;
+  };
+  onSuccess: () => void;
+  onCancel: () => void;
+  onPendingChange: (isPending: boolean) => void;
+};
 
 const initialState: ClientJobPricingActionResult = {
   success: false,
-  error: '',
+  error: "",
+};
+
+const SAVE_FAILED_MESSAGE = "Couldn't save the rate. Try again.";
+const JOB_ERROR_ID = "pricing-job-error";
+const RATE_HELP_ID = "pricing-rate-help";
+const RATE_ERROR_ID = "pricing-rate-error";
+const DATE_HELP_ID = "pricing-date-help";
+const DATE_ERROR_ID = "pricing-date-error";
+
+function joinIds(...ids: Array<string | false>): string | undefined {
+  const present = ids.filter((id): id is string => Boolean(id));
+  return present.length > 0 ? present.join(" ") : undefined;
 }
 
-const fieldClassName =
-  'h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20'
-
-const labelClassName = 'text-sm font-medium text-neutral-700'
-
-export function ClientJobPricingForm({ clientId, jobs, pricing }: ClientJobPricingFormProps) {
-  const serverAction = pricing
+// Lives inside a ResponsiveDialog: the sheet is the surface, so no card of its own.
+export function ClientJobPricingForm({
+  clientId,
+  jobs,
+  businessDate,
+  pricing,
+  onSuccess,
+  onCancel,
+  onPendingChange,
+}: ClientJobPricingFormProps): React.ReactNode {
+  const appointmentsCache = useAppointmentsCache();
+  const jobRef = useRef<HTMLSelectElement>(null);
+  const rateRef = useRef<HTMLInputElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
+  const isEditMode = pricing !== undefined;
+  const saveAction = pricing
     ? updateClientJobPricing.bind(null, pricing.id)
-    : createClientJobPricing.bind(null, clientId)
-  const [state, formAction] = useActionState(serverAction, initialState)
-  const appointmentsCache = useAppointmentsCache()
+    : createClientJobPricing.bind(null, clientId);
 
-  // A saved form never gets a result back: the action redirects. So refresh at submit, before the
-  // action runs; cached rows stay and update in the background. Not prevented, so the action still
-  // dispatches.
-  function handleSubmit() {
-    void appointmentsCache.refresh()
+  async function handleSave(
+    previous: ClientJobPricingActionResult,
+    formData: FormData,
+  ): Promise<ClientJobPricingActionResult> {
+    let result: ClientJobPricingActionResult;
+    try {
+      result = await saveAction(previous, formData);
+    } catch (error) {
+      console.error("Rate save failed", pricing?.id ?? clientId, error);
+      result = { success: false, error: SAVE_FAILED_MESSAGE };
+    }
+
+    if (result.success) {
+      // Appointment prices follow the rate in force, so cached prices are stale now.
+      void appointmentsCache.refresh();
+      onSuccess();
+    }
+    return result;
   }
-  const fieldErrors = 'fieldErrors' in state ? state.fieldErrors : undefined
+
+  const [state, formAction, isPending] = useActionState(
+    handleSave,
+    initialState,
+  );
+  const fieldErrors = "fieldErrors" in state ? state.fieldErrors : undefined;
+  const formError = !state.success && !fieldErrors ? state.error : "";
+
+  // A refused save puts focus on the first field to fix.
+  useEffect(() => {
+    if (fieldErrors?.job_id) {
+      jobRef.current?.focus();
+    } else if (fieldErrors?.hourly_rate_cents) {
+      rateRef.current?.focus();
+    } else if (fieldErrors?.effective_from) {
+      dateRef.current?.focus();
+    }
+  }, [fieldErrors]);
+
+  // Dispatched by hand rather than through <form action>: React resets an action form's fields
+  // after every submit, and a refused save must keep what the admin typed.
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    if (isPending) return;
+    const formData = new FormData(event.currentTarget);
+    startTransition(() => formAction(formData));
+  }
 
   return (
-    <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-      <form action={formAction} onSubmit={handleSubmit} className="space-y-5">
-        {'error' in state && state.error ? (
-          <div
-            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
-            role="alert"
-            aria-live="polite"
-          >
-            {state.error}
-          </div>
-        ) : null}
-
-        <div className="space-y-1.5">
-          <Label htmlFor="job_id" className={labelClassName}>
-            Job
-          </Label>
-          <select
-            id="job_id"
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+      {pricing ? (
+        <Field>
+          <FieldTitle>Job</FieldTitle>
+          <p className="text-sm break-words text-foreground">
+            {pricing.job_name}
+          </p>
+        </Field>
+      ) : (
+        <Field data-invalid={Boolean(fieldErrors?.job_id)}>
+          <FieldLabel htmlFor="pricing-job">Job</FieldLabel>
+          <NativeSelect
+            ref={jobRef}
+            id="pricing-job"
             name="job_id"
             required
-            defaultValue={pricing?.job_id ?? ''}
+            className="w-full"
+            defaultValue=""
             aria-invalid={Boolean(fieldErrors?.job_id)}
-            aria-describedby={describedBy('job_id', fieldErrors?.job_id)}
-            className={`${fieldClassName} w-full border outline-none focus-visible:ring-3`}
+            aria-describedby={fieldErrors?.job_id ? JOB_ERROR_ID : undefined}
           >
-            <option value="" disabled>
+            <NativeSelectOption value="" disabled>
               Select a job
-            </option>
+            </NativeSelectOption>
             {jobs.map((job) => (
-              <option key={job.id} value={job.id}>
+              <NativeSelectOption key={job.id} value={job.id}>
                 {job.name} — standard {formatRate(job.hourly_rate_cents)}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
-          <FieldError field="job_id" message={fieldErrors?.job_id} />
-        </div>
+          </NativeSelect>
+          {fieldErrors?.job_id ? (
+            <FieldError id={JOB_ERROR_ID}>{fieldErrors.job_id}</FieldError>
+          ) : null}
+        </Field>
+      )}
 
-        <div className="space-y-1.5">
-          <Label htmlFor="hourly_rate_cents" className={labelClassName}>
-            Rate ($/hour)
-          </Label>
-          <Input
-            id="hourly_rate_cents"
-            name="hourly_rate_cents"
-            type="number"
-            min="0"
-            step="0.01"
-            inputMode="decimal"
-            required
-            defaultValue={pricing ? (pricing.hourly_rate_cents / 100).toFixed(2) : ''}
-            aria-invalid={Boolean(fieldErrors?.hourly_rate_cents)}
-            aria-describedby={describedBy('hourly_rate_cents', fieldErrors?.hourly_rate_cents, true)}
-            className={fieldClassName}
-          />
-          <p id="hourly_rate_cents-help" className="text-xs text-neutral-500">
-            Charged per scheduled hour for this client&apos;s appointments on this job.
-          </p>
-          <FieldError field="hourly_rate_cents" message={fieldErrors?.hourly_rate_cents} />
-        </div>
+      <Field data-invalid={Boolean(fieldErrors?.hourly_rate_cents)}>
+        <FieldLabel htmlFor="pricing-rate">Rate ($/hour)</FieldLabel>
+        <Input
+          ref={rateRef}
+          id="pricing-rate"
+          name="hourly_rate_cents"
+          type="number"
+          min="0"
+          step="0.01"
+          inputMode="decimal"
+          enterKeyHint="next"
+          required
+          defaultValue={
+            pricing ? (pricing.hourly_rate_cents / 100).toFixed(2) : ""
+          }
+          aria-invalid={Boolean(fieldErrors?.hourly_rate_cents)}
+          aria-describedby={joinIds(
+            RATE_HELP_ID,
+            Boolean(fieldErrors?.hourly_rate_cents) && RATE_ERROR_ID,
+          )}
+        />
+        <FieldDescription id={RATE_HELP_ID}>
+          Charged per scheduled hour for this client&apos;s appointments on
+          this job.
+        </FieldDescription>
+        {fieldErrors?.hourly_rate_cents ? (
+          <FieldError id={RATE_ERROR_ID}>
+            {fieldErrors.hourly_rate_cents}
+          </FieldError>
+        ) : null}
+      </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="effective_from" className={labelClassName}>
-            Effective from
-          </Label>
-          <Input
-            id="effective_from"
-            name="effective_from"
-            type="date"
-            required
-            defaultValue={pricing?.effective_from ?? todayDateString()}
-            aria-invalid={Boolean(fieldErrors?.effective_from)}
-            aria-describedby={describedBy('effective_from', fieldErrors?.effective_from, true)}
-            className={fieldClassName}
-          />
-          <p id="effective_from-help" className="text-xs text-neutral-500">
-            Applies to appointments scheduled on or after this date. Earlier appointments keep the previous rate.
-          </p>
-          <FieldError field="effective_from" message={fieldErrors?.effective_from} />
-        </div>
+      <Field data-invalid={Boolean(fieldErrors?.effective_from)}>
+        <FieldLabel htmlFor="pricing-date">Effective from</FieldLabel>
+        <Input
+          ref={dateRef}
+          id="pricing-date"
+          name="effective_from"
+          type="date"
+          enterKeyHint="next"
+          required
+          defaultValue={pricing?.effective_from ?? businessDate}
+          aria-invalid={Boolean(fieldErrors?.effective_from)}
+          aria-describedby={joinIds(
+            DATE_HELP_ID,
+            Boolean(fieldErrors?.effective_from) && DATE_ERROR_ID,
+          )}
+        />
+        <FieldDescription id={DATE_HELP_ID}>
+          Applies to appointments scheduled on or after this date. Earlier
+          appointments keep the previous rate.
+        </FieldDescription>
+        {fieldErrors?.effective_from ? (
+          <FieldError id={DATE_ERROR_ID}>
+            {fieldErrors.effective_from}
+          </FieldError>
+        ) : null}
+      </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="notes" className={labelClassName}>
-            Notes
-          </Label>
-          <Textarea
-            id="notes"
-            name="notes"
-            defaultValue={pricing?.notes ?? ''}
-            className="min-h-28 rounded-xl border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-            placeholder="e.g. Loyalty rate agreed Sept 2026"
-          />
-        </div>
+      <Field>
+        <FieldLabel htmlFor="pricing-notes">Notes</FieldLabel>
+        <Textarea
+          id="pricing-notes"
+          name="notes"
+          enterKeyHint="done"
+          defaultValue={pricing?.notes ?? ""}
+          placeholder="e.g. Loyalty rate agreed Sept 2026"
+        />
+      </Field>
 
-        <div className="flex items-center justify-end gap-3 border-t border-neutral-100 pt-4">
-          <Link
-            href={`/solutions/clients/${clientId}/pricing`}
-            className="inline-flex h-10 items-center rounded-full border border-neutral-200 bg-white px-4 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
-          >
-            Cancel
-          </Link>
-          <SubmitButton isEditMode={Boolean(pricing)} />
-        </div>
-      </form>
-    </section>
-  )
-}
+      {formError ? (
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription>{formError}</AlertDescription>
+        </Alert>
+      ) : null}
 
-function SubmitButton({ isEditMode }: { isEditMode: boolean }) {
-  const { pending } = useFormStatus()
-
-  return (
-    <Button
-      type="submit"
-      disabled={pending}
-      className="h-10 rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white hover:bg-emerald-700"
-    >
-      {pending ? 'Saving...' : isEditMode ? 'Save changes' : 'Add rate'}
-    </Button>
-  )
-}
-
-function FieldError({ field, message }: { field: FieldName; message?: string }) {
-  return message ? (
-    <p id={`${field}-error`} className="text-xs text-red-600">
-      {message}
-    </p>
-  ) : null
-}
-
-function describedBy(field: FieldName, message?: string, hasHelp = false) {
-  const ids = [hasHelp ? `${field}-help` : null, message ? `${field}-error` : null].filter(Boolean)
-
-  return ids.length > 0 ? ids.join(' ') : undefined
-}
-
-function todayDateString() {
-  return getBusinessDate(new Date())
+      <SheetButtons
+        onCancel={onCancel}
+        onPendingChange={onPendingChange}
+        isPending={isPending}
+      >
+        <SubmitButton
+          className={SHEET_BUTTON_CLASS}
+          label={isEditMode ? "Save changes" : "Add rate"}
+          pendingLabel={isEditMode ? "Saving…" : "Adding…"}
+          isPending={isPending}
+        />
+      </SheetButtons>
+    </form>
+  );
 }

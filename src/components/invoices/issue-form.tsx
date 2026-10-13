@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import SubmitButton from '@/components/ui/submit-button'
 import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { issueInvoice } from '@/lib/actions/invoices'
+import type { LedgerErrorCode } from '@/lib/invoices/errors'
 import { formatCents } from '@/lib/pricing/money'
 
 import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail } from './invoice-detail-context'
@@ -28,6 +29,8 @@ type IssueFormProps = {
 }
 
 const ERROR_TITLE = "Couldn't issue this draft"
+// Refusals about the due date itself show under the field instead of in the alert.
+const DUE_DATE_CODES: LedgerErrorCode[] = ['due_before_issue', 'invalid_due_date']
 
 export default function IssueForm({
   invoiceId,
@@ -69,7 +72,7 @@ export default function IssueForm({
         return
       }
 
-      if (result.code === 'due_before_issue') {
+      if (DUE_DATE_CODES.includes(result.code)) {
         setDueDateError(result.error)
         document.getElementById(dueDateId)?.focus()
       } else {

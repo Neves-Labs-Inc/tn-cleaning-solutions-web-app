@@ -2,6 +2,7 @@
 
 import { CheckCircle2, TriangleAlert } from "lucide-react";
 
+import { PRESS_CLASS_NAME } from "@/components/admin/detail-page/press";
 import { Button } from "@/components/ui/button";
 import type { NeedsCompletionAppointment } from "@/lib/appointments/needs-completion";
 import { totalPrices } from "@/lib/appointments/overview";
@@ -14,9 +15,6 @@ type NeedsCompletionBarProps = {
   onClear: () => void;
   onMarkComplete: () => void;
 };
-
-const ACTION_CLASS =
-  "transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]";
 
 // The floating bar over the Needs completion list. Always mounted so it can animate in and out.
 // Its shell mirrors NeedsBillingBar's; keep the two in sync.
@@ -67,7 +65,7 @@ export default function NeedsCompletionBar({
           </div>
           <Button
             variant="ghost"
-            className={cn(ACTION_CLASS, "md:hidden")}
+            className={cn(PRESS_CLASS_NAME, "md:hidden")}
             onClick={onClear}
           >
             Clear
@@ -76,12 +74,12 @@ export default function NeedsCompletionBar({
         <div className="grid grid-cols-1 gap-2 md:flex md:shrink-0 md:items-center">
           <Button
             variant="ghost"
-            className={cn(ACTION_CLASS, "hidden md:inline-flex")}
+            className={cn(PRESS_CLASS_NAME, "hidden md:inline-flex")}
             onClick={onClear}
           >
             Clear
           </Button>
-          <Button className={ACTION_CLASS} onClick={onMarkComplete}>
+          <Button className={PRESS_CLASS_NAME} onClick={onMarkComplete}>
             <CheckCircle2 aria-hidden="true" />
             Mark complete
           </Button>

@@ -4,9 +4,11 @@ import { Plus } from 'lucide-react'
 
 import AppointmentsScreen from '@/components/admin/appointments-screen'
 import AppointmentsScreenSkeleton from '@/components/admin/appointments-screen-skeleton'
+import { PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/ui/page-header'
 import { getBusinessDate } from '@/lib/schedule'
+import { cn } from '@/lib/utils'
 
 // Reads no data: the screen reads through the admin layout's client cache, so coming Back shows
 // what it already has instead of reading it all again.
@@ -20,7 +22,7 @@ export default function AppointmentsPage() {
         description="Plan, assign, and track appointments across your team."
         action={
           <Button
-            className="w-full transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] sm:w-auto"
+            className={cn(PRESS_CLASS_NAME, 'w-full sm:w-auto')}
             nativeButton={false}
             render={<Link href="/solutions/appointments/new" />}
           >

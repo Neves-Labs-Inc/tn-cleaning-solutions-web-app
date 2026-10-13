@@ -1,4 +1,5 @@
 // Relative import: node --test runs this file without the @/ alias.
+import { isCalendarDate } from "../dates/calendar.ts";
 import { getBusinessDate } from "../schedule/business-time.ts";
 
 // Dates here are calendar days (yyyy-MM-dd) with no time zone; the arithmetic runs in UTC so the
@@ -19,7 +20,6 @@ export type WeekRangeParams = {
   to?: string | string[];
 };
 
-const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DAYS_PER_WEEK = 7;
 const MONDAY = 1;
@@ -52,11 +52,12 @@ function formatDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+// Date.UTC reads years 0-99 as 1900-1999, so earlier years would shift; none is a real time sheet.
+const MIN_DAY = "0100-01-01";
+
 // False for malformed strings and for days that don't exist ("2026-02-30").
 function isRealDay(value: string | undefined): value is string {
-  if (value === undefined || !DAY_PATTERN.test(value)) return false;
-
-  return formatDay(toUtcDate(value)) === value;
+  return value !== undefined && isCalendarDate(value) && value >= MIN_DAY;
 }
 
 function addDays(day: string, days: number): string {

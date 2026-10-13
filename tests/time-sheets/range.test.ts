@@ -24,6 +24,12 @@ describe("resolveWeekRange", () => {
     assert.deepEqual([range.from, range.to], ["2026-10-05", "2026-10-11"]);
   });
 
+  it("falls back to the current week for years Date.UTC would map to the 1900s", () => {
+    const range = resolveWeekRange({ from: "0050-01-01", to: "0050-01-07" }, NOW);
+
+    assert.deepEqual([range.from, range.to], ["2026-10-12", "2026-10-18"]);
+  });
+
   it("accepts a valid past week", () => {
     const range = resolveWeekRange({ from: "2026-09-28", to: "2026-10-04" }, NOW);
 

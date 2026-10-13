@@ -4,8 +4,10 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
 import { AppointmentFormLoadError } from '@/components/admin/appointment-form-load-error'
+import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/ui/page-header'
+import { cn } from '@/lib/utils'
 
 export default function NewAppointmentError({
   unstable_retry,
@@ -18,7 +20,7 @@ export default function NewAppointmentError({
       <div className="space-y-3">
         <Button
           variant="ghost"
-          className="-ml-3 transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] active:bg-muted"
+          className={cn(OUTLINE_PRESS_CLASS_NAME, '-ml-3')}
           nativeButton={false}
           render={<Link href="/solutions/appointments" />}
         >

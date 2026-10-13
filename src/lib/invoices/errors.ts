@@ -27,6 +27,8 @@ export const LEDGER_ONLY_CODES = [
   'method_name_taken',
   'not_draft',
   'line_not_on_draft',
+  'invalid_due_date',
+  'invalid_paid_date',
 ] as const
 
 export type InvoiceErrorCode = (typeof INVOICE_ERROR_CODES)[number]
@@ -58,6 +60,8 @@ const MESSAGES: Record<Exclude<LedgerErrorCode, 'unknown'>, string> = {
   method_name_taken: 'A payment method with that name already exists.',
   not_draft: 'This invoice is no longer a draft. Refresh and try again.',
   line_not_on_draft: 'This appointment is no longer on this draft. Refresh and try again.',
+  invalid_due_date: 'Enter a valid date.',
+  invalid_paid_date: 'Enter a valid date.',
 }
 
 export function messageFor(code: Exclude<LedgerErrorCode, 'unknown'>): string {

@@ -1,4 +1,5 @@
 // Relative imports: node --test runs this file without the @/ alias.
+import { isCalendarDate, isClockTime } from "../dates/calendar.ts";
 import {
   fromBusinessWallClock,
   getBusinessDate,
@@ -31,8 +32,6 @@ type DraftCheck = {
   hasFailed: boolean;
 };
 
-const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_PATTERN = /^\d{2}:\d{2}$/;
 const CLOSE_NEEDS_CLOCK_OUT = "Enter a clock-out to close the shift";
 const NEEDS_CLOCK_IN = "Enter a clock-in";
 
@@ -53,7 +52,7 @@ function toDraftField(instant: string | null, fallbackDate: string): DraftField 
 
 // Null for an empty time; a malformed field also reads as empty (the inputs never send one).
 function toInstant(field: DraftField): Date | null {
-  if (!DAY_PATTERN.test(field.date) || !TIME_PATTERN.test(field.time)) return null;
+  if (!isCalendarDate(field.date) || !isClockTime(field.time)) return null;
 
   const [year, month, day] = field.date.split("-").map(Number);
   const [hour, minute] = field.time.split(":").map(Number);

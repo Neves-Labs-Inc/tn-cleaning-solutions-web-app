@@ -50,6 +50,7 @@ export default function ResponsiveDialog({
   // The element focused when the sheet opened: the fallback return target. Captured in a layout
   // effect, before the drawer's content mounts and takes focus.
   const openerRef = useRef<HTMLElement | null>(null);
+  const drawerContentRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
     if (open) openerRef.current = document.activeElement as HTMLElement | null;
@@ -74,6 +75,13 @@ export default function ResponsiveDialog({
     }
   }
 
+  // DESIGN.md §10.2: no autofocus on phone forms, so the keyboard doesn't pop over the sheet. Focus
+  // still moves into the drawer, onto the sheet itself, so Tab enters the form and close can return it.
+  function handleDrawerOpenAutoFocus(event: Event): void {
+    event.preventDefault();
+    drawerContentRef.current?.focus({ preventScroll: true });
+  }
+
   // Radix warns about a missing description; opting out explicitly is the supported way to have none.
   const describedByProps = description ? {} : { "aria-describedby": undefined };
 
@@ -87,7 +95,14 @@ export default function ResponsiveDialog({
         direction="bottom"
         autoFocus
       >
-        <DrawerContent onCloseAutoFocus={handleCloseAutoFocus} {...describedByProps}>
+        <DrawerContent
+          ref={drawerContentRef}
+          onOpenAutoFocus={handleDrawerOpenAutoFocus}
+          onCloseAutoFocus={handleCloseAutoFocus}
+          // Focused programmatically on open, so it must not draw a ring (Radix gives it tabIndex -1).
+          className="outline-none"
+          {...describedByProps}
+        >
           <DrawerHeader className="group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
             <DrawerTitle>{title}</DrawerTitle>
             {description ? <DrawerDescription>{description}</DrawerDescription> : null}

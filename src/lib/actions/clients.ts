@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+import { ClientLocations, type LocationRef, type Result } from '@/lib/clients/client-locations'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createSupabaseClient } from '@/lib/supabase/server'
 
@@ -39,6 +40,9 @@ type ParsedLocationInput = {
   notes: string | null
 }
 
+const CREATE_CLIENT_ERROR = "Couldn't create the client. Try again."
+const ADD_LOCATION_ERROR = "Couldn't add the location. Try again."
+
 async function requireAdminRole(): Promise<{ success: true } | { success: false; error: string }> {
   const supabase = await createSupabaseClient()
   const {
@@ -47,7 +51,8 @@ async function requireAdminRole(): Promise<{ success: true } | { success: false;
   } = await supabase.auth.getUser()
 
   if (error) {
-    return { success: false, error: error.message }
+    console.error('Admin check failed', error)
+    return { success: false, error: 'Not authenticated' }
   }
 
   if (!user) {
@@ -171,12 +176,14 @@ export async function createClient(
       .single()
 
     if (error) {
-      return { success: false, error: error.message }
+      console.error('Client create failed', error)
+      return { success: false, error: CREATE_CLIENT_ERROR }
     }
 
     createdId = data.id
-  } catch {
-    return { success: false, error: 'Failed to create client.' }
+  } catch (error) {
+    console.error('Client create failed', error)
+    return { success: false, error: CREATE_CLIENT_ERROR }
   }
 
   revalidatePath('/solutions/clients')
@@ -228,19 +235,21 @@ export async function updateClient(
       .maybeSingle()
 
     if (error) {
-      return { success: false, error: error.message }
+      console.error('Client update failed', id, error)
+      return { success: false, error: "Couldn't save the client. Try again." }
     }
 
     if (!data) {
       return { success: false, error: 'Client not found.' }
     }
-  } catch {
-    return { success: false, error: 'Failed to update client.' }
+  } catch (error) {
+    console.error('Client update failed', id, error)
+    return { success: false, error: "Couldn't save the client. Try again." }
   }
 
+  // The edit dialog stays on the client page, so it gets a result back instead of a redirect.
   revalidatePath('/solutions/clients')
-  redirect('/solutions/clients')
-
+  revalidatePath(`/solutions/clients/${id}`)
   return { success: true, data: { id } }
 }
 
@@ -261,7 +270,8 @@ export async function archiveClient(id: string): Promise<ClientActionResult> {
     .eq('id', id)
 
   if (error) {
-    return { success: false, error: error.message }
+    console.error('Client archive failed', id, error)
+    return { success: false, error: "Couldn't archive the client. Try again." }
   }
 
   revalidatePath('/solutions/clients')
@@ -286,7 +296,8 @@ export async function restoreClient(id: string): Promise<ClientActionResult> {
     .eq('id', id)
 
   if (error) {
-    return { success: false, error: error.message }
+    console.error('Client restore failed', id, error)
+    return { success: false, error: "Couldn't restore the client. Try again." }
   }
 
   revalidatePath('/solutions/clients')
@@ -334,7 +345,8 @@ export async function addLocation(
     .maybeSingle()
 
   if (clientError) {
-    return { success: false, error: clientError.message }
+    console.error('Location add failed to look up client', clientId, clientError)
+    return { success: false, error: ADD_LOCATION_ERROR }
   }
 
   if (!client) {
@@ -357,12 +369,14 @@ export async function addLocation(
       .single()
 
     if (error) {
-      return { success: false, error: error.message }
+      console.error('Location add failed', clientId, error)
+      return { success: false, error: ADD_LOCATION_ERROR }
     }
 
     locationId = data.id
-  } catch {
-    return { success: false, error: 'Failed to add location.' }
+  } catch (error) {
+    console.error('Location add failed', clientId, error)
+    return { success: false, error: ADD_LOCATION_ERROR }
   }
 
   revalidatePath('/solutions/clients')
@@ -406,96 +420,19 @@ export async function updateLocation(
     return parsed
   }
 
-  const supabase = await createSupabaseClient()
-  const { data: existingLocation, error: existingLocationError } = await supabase
-    .from('client_locations')
-    .select('id, client_id, is_archived')
-    .eq('id', locationId)
-    .maybeSingle()
-
-  if (existingLocationError) {
-    return { success: false, error: existingLocationError.message }
-  }
-
-  if (!existingLocation || existingLocation.is_archived) {
-    return { success: false, error: 'Location not found.' }
-  }
-
-  try {
-    const adminClient = createAdminClient()
-    const { data, error } = await adminClient
-      .from('client_locations')
-      .update({
-        label: parsed.data.label,
-        address: parsed.data.address,
-        notes: parsed.data.notes,
-      })
-      .eq('id', locationId)
-      .eq('is_archived', false)
-      .select('id')
-      .maybeSingle()
-
-    if (error) {
-      return { success: false, error: error.message }
-    }
-
-    if (!data) {
-      return { success: false, error: 'Location not found.' }
-    }
-  } catch {
-    return { success: false, error: 'Failed to update location.' }
-  }
-
-  revalidatePath('/solutions/clients')
-  return {
-    success: true,
-    data: { id: locationId, clientId: existingLocation.client_id },
-  }
+  const locations = await createClientLocations()
+  return settleLocationChange(await locations.update(locationId, parsed.data))
 }
 
 export async function archiveLocation(locationId: string): Promise<LocationActionResult> {
-  if (!locationId) {
-    return { success: false, error: 'Location id is required.' }
-  }
-
-  const authResult = await requireAdminRole()
-  if (!authResult.success) {
-    return { success: false, error: authResult.error }
-  }
-
-  const supabase = await createSupabaseClient()
-  const { data: existingLocation, error: existingLocationError } = await supabase
-    .from('client_locations')
-    .select('id, client_id')
-    .eq('id', locationId)
-    .maybeSingle()
-
-  if (existingLocationError) {
-    return { success: false, error: existingLocationError.message }
-  }
-
-  if (!existingLocation) {
-    return { success: false, error: 'Location not found.' }
-  }
-
-  const adminClient = createAdminClient()
-  const { error } = await adminClient
-    .from('client_locations')
-    .update({ is_archived: true })
-    .eq('id', locationId)
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  revalidatePath('/solutions/clients')
-  return {
-    success: true,
-    data: { id: locationId, clientId: existingLocation.client_id },
-  }
+  return setLocationArchived(locationId, true)
 }
 
 export async function restoreLocation(locationId: string): Promise<LocationActionResult> {
+  return setLocationArchived(locationId, false)
+}
+
+async function setLocationArchived(locationId: string, isArchived: boolean): Promise<LocationActionResult> {
   if (!locationId) {
     return { success: false, error: 'Location id is required.' }
   }
@@ -505,34 +442,19 @@ export async function restoreLocation(locationId: string): Promise<LocationActio
     return { success: false, error: authResult.error }
   }
 
-  const supabase = await createSupabaseClient()
-  const { data: existingLocation, error: existingLocationError } = await supabase
-    .from('client_locations')
-    .select('id, client_id')
-    .eq('id', locationId)
-    .maybeSingle()
+  const locations = await createClientLocations()
+  return settleLocationChange(await locations.setArchived(locationId, isArchived))
+}
 
-  if (existingLocationError) {
-    return { success: false, error: existingLocationError.message }
-  }
+async function createClientLocations(): Promise<ClientLocations> {
+  return new ClientLocations(await createSupabaseClient(), createAdminClient())
+}
 
-  if (!existingLocation) {
-    return { success: false, error: 'Location not found.' }
-  }
-
-  const adminClient = createAdminClient()
-  const { error } = await adminClient
-    .from('client_locations')
-    .update({ is_archived: false })
-    .eq('id', locationId)
-
-  if (error) {
-    return { success: false, error: error.message }
+function settleLocationChange(result: Result<LocationRef>): LocationActionResult {
+  if (!result.value) {
+    return { success: false, error: result.error ?? 'Failed to change location.' }
   }
 
   revalidatePath('/solutions/clients')
-  return {
-    success: true,
-    data: { id: locationId, clientId: existingLocation.client_id },
-  }
+  return { success: true, data: result.value }
 }

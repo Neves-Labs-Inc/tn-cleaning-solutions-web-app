@@ -34,6 +34,7 @@ type FieldName = 'paidDate' | 'method'
 
 const FIELD_CODES: Record<string, FieldName> = {
   paid_date_future: 'paidDate',
+  invalid_paid_date: 'paidDate',
   method_required: 'method',
 }
 

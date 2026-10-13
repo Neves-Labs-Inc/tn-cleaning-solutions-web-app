@@ -3,6 +3,7 @@
 import { addMonths, format } from 'date-fns'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
+import { PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import type { AppointmentsQuery } from '@/lib/appointments/overview'
 
@@ -11,8 +12,6 @@ type AppointmentsMonthNavProps = {
   // The caller navigates, so it can show the pending month.
   onNavigate: (target: AppointmentsQuery) => void
 }
-
-const BUTTON_CLASS = 'transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]'
 
 export default function AppointmentsMonthNav({ query, onNavigate }: AppointmentsMonthNavProps): React.ReactNode {
   const monthDate = new Date(query.year, query.month - 1, 1)
@@ -24,12 +23,12 @@ export default function AppointmentsMonthNav({ query, onNavigate }: Appointments
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="outline" className={BUTTON_CLASS} onClick={() => handleStep(-1)}>
+      <Button variant="outline" className={PRESS_CLASS_NAME} onClick={() => handleStep(-1)}>
         <ChevronLeft aria-hidden="true" />
         Prev
       </Button>
       <h2 className="min-w-0 flex-1 text-center text-sm font-semibold">{format(monthDate, 'MMMM yyyy')}</h2>
-      <Button variant="outline" className={BUTTON_CLASS} onClick={() => handleStep(1)}>
+      <Button variant="outline" className={PRESS_CLASS_NAME} onClick={() => handleStep(1)}>
         Next
         <ChevronRight aria-hidden="true" />
       </Button>

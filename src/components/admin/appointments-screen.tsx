@@ -8,6 +8,7 @@ import AppointmentsScreenSkeleton from "@/components/admin/appointments-screen-s
 import { AppointmentsViewToggle } from "@/components/admin/appointments-view-toggle";
 import { useAppointmentsScreen } from "@/hooks/use-appointments-screen";
 import { useBusinessDate } from "@/hooks/use-business-date";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useNeighbourPrefetch } from "@/hooks/use-neighbour-prefetch";
 import { resolveFilterOptions } from "@/lib/appointments/filters";
 import { browserListStorage, rememberListHref } from "@/lib/appointments/list-return";
@@ -16,6 +17,7 @@ import {
   parseAppointmentsSearch,
   type AppointmentsQuery,
 } from "@/lib/appointments/overview";
+import { getPhoneQuery } from "@/lib/appointments/range";
 
 type AppointmentsScreenProps = {
   businessDate: string;
@@ -30,6 +32,16 @@ export default function AppointmentsScreen({
   const query = parseAppointmentsSearch(useSearchParams(), businessDate);
   const screen = useAppointmentsScreen(query, businessDate);
   const currentHref = appointmentsHref(query);
+  const isMobile = useIsMobile();
+  const phoneHref = appointmentsHref(getPhoneQuery(query, businessDate));
+  // Phones have no way out of Month, so it becomes the List, on load and when the viewport
+  // shrinks. Replaced (not pushed), so Back never bounces into Month. The server snapshot is
+  // desktop, so this runs after hydration.
+  useEffect(() => {
+    if (isMobile && phoneHref !== currentHref) {
+      window.history.replaceState(null, "", phoneHref);
+    }
+  }, [isMobile, phoneHref, currentHref]);
   // Remembered per tab so the ways back to the list (detail, New, save, sidebar) restore this state.
   useEffect(() => {
     rememberListHref(browserListStorage(), currentHref);

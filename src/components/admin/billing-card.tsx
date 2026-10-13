@@ -11,6 +11,7 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
+import { OUTLINE_PRESS_CLASS_NAME, PRESS_CLASS_NAME } from "@/components/admin/detail-page/press";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import PaymentStatePill from "@/components/ui/payment-state-pill";
@@ -44,9 +45,8 @@ type BillingCardProps = {
 const NEW_INVOICE_PATH = "/solutions/invoices/new";
 const INVOICES_PATH = "/solutions/invoices";
 const CARD_CLASS = "gap-4 p-4 text-sm sm:p-5";
-const ACTION_CLASS =
-  "w-full transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]";
-const OUTLINE_ACTION_CLASS = cn(ACTION_CLASS, "active:bg-muted");
+const ACTION_CLASS = cn(PRESS_CLASS_NAME, "w-full");
+const OUTLINE_ACTION_CLASS = cn(OUTLINE_PRESS_CLASS_NAME, "w-full");
 
 function createInvoiceHref(clientId: string, appointmentId: string): string {
   const params = new URLSearchParams({ client: clientId, visits: appointmentId });
