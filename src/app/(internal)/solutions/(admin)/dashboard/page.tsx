@@ -7,8 +7,8 @@ import { toBusinessWallClock } from '@/lib/schedule'
 import {
     formatDateLabel,
     formatTime,
-    appointmentStatusBadgeClasses,
     assignedEmployeeNames,
+    todayAppointmentBadge,
     relationName,
     relationLocation,
 } from '@/lib/helpers/dashboard'
@@ -19,6 +19,7 @@ import type {
 import { countUnbilledVisits, getReceivablesTotals } from '@/lib/invoices/queries'
 import type { ReceivablesTotals } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
+import StatusBadge from '@/components/ui/status-badge'
 import StatTile from '@/components/ui/stat-tile'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { buttonVariants } from '@/components/ui/button'
@@ -168,6 +169,7 @@ export default async function DashboardPage() {
                                 const clientName = relationName(appointment.clients)
                                 const jobName = relationName(appointment.jobs)
                                 const location = relationLocation(appointment.client_locations)
+                                const badge = todayAppointmentBadge(appointment, new Date())
 
                                 return (
                                     <Link
@@ -180,13 +182,7 @@ export default async function DashboardPage() {
                                                 <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 sm:px-2.5 sm:py-1 text-[0.7rem] sm:text-xs font-semibold text-emerald-700 whitespace-nowrap">
                                                     {formatTime(appointment.scheduled_start_time)} - {formatTime(appointment.scheduled_end_time)}
                                                 </span>
-                                                <span
-                                                    className={`inline-flex rounded-full px-2.5 py-1 text-[0.65rem] sm:text-xs font-semibold uppercase tracking-wide shrink-0 ${appointmentStatusBadgeClasses(
-                                                        appointment.status,
-                                                    )}`}
-                                                >
-                                                    {appointment.status.replace('_', ' ')}
-                                                </span>
+                                                <StatusBadge tone={badge.tone} icon={badge.icon}>{badge.label}</StatusBadge>
                                             </div>
                                             <div className="min-w-0">
                                                 <p className="truncate text-sm font-semibold text-neutral-950">{jobName}</p>
