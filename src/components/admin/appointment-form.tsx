@@ -7,6 +7,7 @@ import { AlertCircle, Info, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { OUTLINE_PRESS_CLASS_NAME, PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -30,6 +31,7 @@ import { parseDollarsToCents } from '@/lib/pricing/money'
 import type { ClientJobRule } from '@/lib/pricing/resolve'
 import { browserListStorage, listReturnHref } from '@/lib/appointments/list-return'
 import { planCrewChange } from '@/lib/appointments/crew'
+import { cn } from '@/lib/utils'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
 // One live assignment's clocks, for the crew field's removal warnings.
@@ -94,7 +96,6 @@ const RECURRENCE_HEADING_ID = 'recurrence-settings-heading'
 // Visual 20px (DESIGN §8); the indicator dot is sized up to match.
 const RADIO_CLASSES = 'mt-0.5 size-5 [&_[data-slot=radio-group-indicator]]:size-5'
 const LABEL_CLASSES = 'text-sm text-foreground'
-const PRESS_CLASSES = 'transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]'
 const ENTER_CLASSES = 'animate-in fade-in-0 slide-in-from-top-1 duration-base ease-out-quart'
 const CHOICE_ROW_CLASSES =
   '-mx-2 flex min-h-11 cursor-pointer items-start gap-3 rounded-md px-2 py-2.5 transition-colors duration-fast active:bg-muted has-[:focus-visible]:bg-muted/50 md:hover:bg-muted/50'
@@ -662,7 +663,7 @@ export function AppointmentForm({
             <Button
               variant="outline"
               size="lg"
-              className={`active:bg-muted ${PRESS_CLASSES} aria-disabled:pointer-events-none aria-disabled:opacity-50`}
+              className={cn(OUTLINE_PRESS_CLASS_NAME, 'aria-disabled:pointer-events-none aria-disabled:opacity-50')}
               nativeButton={false}
               aria-disabled={isLocked || undefined}
               tabIndex={isLocked ? -1 : undefined}
@@ -675,7 +676,7 @@ export function AppointmentForm({
               pendingLabel="Saving…"
               isPending={isLocked}
               size="lg"
-              className={`w-full md:w-auto ${PRESS_CLASSES}`}
+              className={cn(PRESS_CLASS_NAME, 'w-full md:w-auto')}
             />
           </div>
         </div>

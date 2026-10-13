@@ -2,12 +2,14 @@ import Link from 'next/link'
 import { ArrowLeft, ReceiptText } from 'lucide-react'
 
 import { CreateInvoiceForm } from '@/components/invoices/create-invoice-form'
+import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import PageHeader from '@/components/ui/page-header'
 import { listBillableClients, listClaimableVisits } from '@/lib/invoices/queries'
 import { getBusinessDate } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
+import { cn } from '@/lib/utils'
 
 type NewInvoicePageProps = {
   searchParams: Promise<{ client?: string | string[]; visits?: string | string[] }>
@@ -38,7 +40,7 @@ export default async function NewInvoicePage({ searchParams }: NewInvoicePagePro
       <div className="space-y-3">
         <Button
           variant="ghost"
-          className="-ml-3 transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] active:bg-muted"
+          className={cn(OUTLINE_PRESS_CLASS_NAME, '-ml-3')}
           nativeButton={false}
           render={<Link href="/solutions/invoices" />}
         >

@@ -7,6 +7,7 @@ import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
@@ -299,7 +300,7 @@ export function CreateInvoiceForm({
               <Button
                 variant="outline"
                 size="lg"
-                className="hidden transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] md:inline-flex lg:w-full"
+                className={cn(PRESS_CLASS_NAME, 'hidden md:inline-flex lg:w-full')}
                 nativeButton={false}
                 render={<Link href={INVOICES_PATH} />}
               >
@@ -309,7 +310,7 @@ export function CreateInvoiceForm({
                 label="Create draft"
                 pendingLabel="Creating…"
                 size="lg"
-                className="w-full transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] sm:w-auto lg:w-full"
+                className={cn(PRESS_CLASS_NAME, 'w-full sm:w-auto lg:w-full')}
               />
             </div>
           </div>

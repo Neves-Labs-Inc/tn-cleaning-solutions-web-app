@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import ConfirmDialog from '@/components/ui/confirm-dialog'
 import ResponsiveDialog from '@/components/ui/responsive-dialog'
@@ -91,7 +92,7 @@ const DIRECT_ACTIONS = {
 
 type DirectAction = keyof typeof DIRECT_ACTIONS
 
-const PRESS = 'cursor-pointer transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]'
+const PRESS = cn(PRESS_CLASS_NAME, 'cursor-pointer')
 
 function isDirect(action: DetailAction): action is DirectAction {
   return action in DIRECT_ACTIONS

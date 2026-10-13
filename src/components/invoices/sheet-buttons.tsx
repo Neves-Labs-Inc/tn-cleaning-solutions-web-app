@@ -3,9 +3,13 @@
 import { useEffect } from 'react'
 import { useFormStatus } from 'react-dom'
 
+import { OUTLINE_PRESS_CLASS_NAME, PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
-export const SHEET_BUTTON_CLASS = 'w-full active:scale-[0.98] sm:w-auto'
+const SHEET_LAYOUT_CLASS = 'w-full sm:w-auto'
+
+export const SHEET_BUTTON_CLASS = cn(PRESS_CLASS_NAME, SHEET_LAYOUT_CLASS)
 
 type SheetButtonsProps = {
   onCancel: () => void
@@ -31,7 +35,7 @@ export function SheetButtons({ onCancel, onPendingChange, isPending, children }:
 
   return (
     <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
-      <Button type="button" variant="outline" className={SHEET_BUTTON_CLASS} disabled={pending} onClick={onCancel}>
+      <Button type="button" variant="outline" className={cn(OUTLINE_PRESS_CLASS_NAME, SHEET_LAYOUT_CLASS)} disabled={pending} onClick={onCancel}>
         Cancel
       </Button>
       {children}

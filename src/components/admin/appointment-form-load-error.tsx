@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation'
 import { AlertCircle } from 'lucide-react'
 
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
+import { cn } from '@/lib/utils'
 
 type AppointmentFormLoadErrorProps = {
   title: string
@@ -43,7 +45,7 @@ export function AppointmentFormLoadError({
         <Button
           type="button"
           variant="outline"
-          className="transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] active:bg-muted md:hover:bg-muted"
+          className={cn(OUTLINE_PRESS_CLASS_NAME, 'md:hover:bg-muted')}
           disabled={isPending}
           aria-busy={isPending || undefined}
           onClick={handleRetry}

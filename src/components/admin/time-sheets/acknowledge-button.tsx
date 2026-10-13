@@ -1,5 +1,6 @@
 "use client";
 
+import { PRESS_CLASS_NAME } from "@/components/admin/detail-page/press";
 import { Button } from "@/components/ui/button";
 import type { SessionRowView } from "@/lib/time-sheets/drilldown-days";
 
@@ -28,7 +29,7 @@ export default function AcknowledgeButton({
       size={layout === "row" ? "sm" : "default"}
       aria-expanded={isOpen}
       {...{ [ACKNOWLEDGE_BUTTON_ATTRIBUTE]: view.id }}
-      className="transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]"
+      className={PRESS_CLASS_NAME}
       // Clicking again while open does nothing; Cancel closes the panel.
       onClick={isOpen ? undefined : onOpen}
     >

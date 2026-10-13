@@ -418,7 +418,6 @@ What the current UI does that this system forbids. Design briefs for the overhau
 12. **Back button** does `router.back()` with pill styling. → explicit `href` ghost button (§7.1).
 13. **Bare `<input>`** in `work-sessions-list.tsx` search; `focus:` instead of `focus-visible:`. → `InputGroup`.
 14. **Chart tokens** `--chart-1..5` are five rose steps. → §12 palette.
-15. **Press transitions that animate nothing**: ~29 files still use `transition-[background-color,transform,box-shadow]`, so `active:scale-*` snaps instead of easing under Tailwind v4. → `PRESS_CLASS_NAME` (§13) as each file is touched.
 15. **Fonts**: Geist Sans loaded and unused; `--font-heading` = `--font-sans` (fine, keep one family). → drop Geist Sans.
 16. **Admin `StatCard`** builds class names by string interpolation (`hover:border-${…}`), which Tailwind cannot see. → `stat-tile.tsx` with fixed classes.
 17. **Viewport**: no `viewport` export, no `viewportFit: 'cover'`, no safe-area padding anywhere. → §6.

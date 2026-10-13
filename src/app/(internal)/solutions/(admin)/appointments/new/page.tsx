@@ -4,11 +4,13 @@ import { AppointmentsReturnLink } from '@/components/admin/appointments-return-l
 import { AppointmentFormLoadError } from '@/components/admin/appointment-form-load-error'
 import { AppointmentForm } from '@/components/admin/appointment-form'
 import { AppointmentScheduleContext } from '@/components/admin/new-appointment-schedule-context'
+import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/ui/page-header'
 import { fetchClientJobRules } from '@/lib/pricing/lookup'
 import { toBusinessWallClock } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
+import { cn } from '@/lib/utils'
 
 type NewAppointmentPageProps = {
   searchParams: Promise<{ date?: string | string[]; month?: string | string[]; year?: string | string[] }>
@@ -88,7 +90,7 @@ export default async function NewAppointmentPage({ searchParams }: NewAppointmen
       <div className="space-y-3">
         <Button
           variant="ghost"
-          className="-ml-3 transition-[background-color,transform,box-shadow] duration-fast ease-out-quart active:scale-[0.98] active:bg-muted"
+          className={cn(OUTLINE_PRESS_CLASS_NAME, '-ml-3')}
           nativeButton={false}
           render={<AppointmentsReturnLink />}
         >

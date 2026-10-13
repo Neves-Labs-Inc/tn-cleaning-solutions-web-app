@@ -10,6 +10,7 @@ import AppointmentLifecycleActions, {
   CompletedByClocksHint,
 } from '@/components/admin/appointment-lifecycle-actions'
 import { BillingMismatchNote } from '@/components/invoices/visit-line-summary'
+import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
@@ -130,7 +131,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
         <div className="min-w-0 space-y-3">
           <Button
             variant="ghost"
-            className="-ml-3 w-fit transition-[background-color,transform,box-shadow] duration-fast ease-out-quart active:scale-[0.98] active:bg-muted"
+            className={cn(OUTLINE_PRESS_CLASS_NAME, '-ml-3 w-fit')}
             render={<AppointmentsReturnLink />}
             nativeButton={false}
           >

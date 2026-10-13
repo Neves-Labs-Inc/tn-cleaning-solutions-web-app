@@ -8,6 +8,7 @@ import InvoiceBadges from '@/components/invoices/invoice-badges'
 import { InvoiceDetailProvider } from '@/components/invoices/invoice-detail-context'
 import InvoiceVisitsCard from '@/components/invoices/invoice-visits-card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
@@ -111,7 +112,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
           <Button
             variant="ghost"
             size="sm"
-            className="-ml-3 min-h-11 transition-[background-color,transform,box-shadow] md:min-h-0 duration-fast active:scale-[0.98] active:bg-muted"
+            className={cn(OUTLINE_PRESS_CLASS_NAME, '-ml-3 min-h-11 md:min-h-0')}
             nativeButton={false}
             render={<Link href={INVOICES_PATH} />}
           >

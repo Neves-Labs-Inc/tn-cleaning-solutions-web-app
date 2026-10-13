@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ArrowLeft, CalendarOff, FileText, TriangleAlert, Wallet } from 'lucide-react'
 
+import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/ui/page-header'
 import StatTile from '@/components/ui/stat-tile'
@@ -9,6 +10,7 @@ import { clientBalances, groupUnbilled, overdueInvoices } from '@/lib/invoices/v
 import { formatCents } from '@/lib/pricing/money'
 import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createClient } from '@/lib/supabase/server'
+import { cn } from '@/lib/utils'
 import { ByClientSection, OverdueSection, UnbilledSection } from './sections'
 
 const INVOICES_PATH = '/solutions/invoices'
@@ -37,7 +39,7 @@ export default async function ReceivablesPage() {
       <div className="space-y-2">
         <Button
           variant="ghost"
-          className="-ml-3 transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] active:bg-muted"
+          className={cn(OUTLINE_PRESS_CLASS_NAME, '-ml-3')}
           nativeButton={false}
           render={<Link href={INVOICES_PATH} />}
         >

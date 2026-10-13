@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CalendarDays, ChevronUp } from "lucide-react";
 
 import { ScheduleContextBody } from "@/components/admin/schedule-context-list";
+import { OUTLINE_PRESS_CLASS_NAME } from "@/components/admin/detail-page/press";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -15,6 +16,7 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import { useScheduleContext } from "@/hooks/use-schedule-context";
+import { cn } from "@/lib/utils";
 
 type AppointmentScheduleContextProps = {
   initialMonth: number;
@@ -52,7 +54,10 @@ export function AppointmentScheduleContext({
           <DrawerTrigger asChild>
             <Button
               variant="outline"
-              className="w-full justify-between transition-[background-color,transform,box-shadow] duration-fast focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background active:scale-[0.98] active:bg-muted"
+              className={cn(
+                OUTLINE_PRESS_CLASS_NAME,
+                "w-full justify-between focus-visible:ring-ring/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+              )}
             >
               <span className="flex min-w-0 items-center gap-2">
                 <CalendarDays aria-hidden="true" />

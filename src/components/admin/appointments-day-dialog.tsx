@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { format, parseISO } from 'date-fns'
 import { Plus } from 'lucide-react'
 
+import { PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import ResponsiveDialog from '@/components/ui/responsive-dialog'
 import { appointmentCardTone, CARD_TINT_CLASSES } from '@/components/ui/status-badge'
@@ -69,7 +70,7 @@ export default function AppointmentsDayDialog({
       )}
       <div className="sticky bottom-0 -mx-4 mt-3 border-t bg-popover px-4 pt-3 pb-1">
         <Button
-          className="w-full cursor-pointer transition-[background-color,transform,box-shadow] duration-fast hover:bg-primary/90 active:scale-[0.98]"
+          className={cn(PRESS_CLASS_NAME, 'w-full cursor-pointer hover:bg-primary/90')}
           nativeButton={false}
           render={<Link href={`/solutions/appointments/new?date=${date}`} />}
         >

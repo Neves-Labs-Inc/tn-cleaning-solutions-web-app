@@ -3,6 +3,7 @@
 import { CircleAlert } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { OUTLINE_PRESS_CLASS_NAME, PRESS_CLASS_NAME } from "@/components/admin/detail-page/press";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -25,8 +26,8 @@ type PendingSubmitProps = {
 const CLEARED_HINT =
   "Saving clears both clocks. The session goes back to Missing clock.";
 const REASON_PLACEHOLDER = "e.g. Forgot to clock out";
-export const PRESS_FEEDBACK =
-  "transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]";
+// Kept for the time-sheet buttons outside this file.
+export const PRESS_FEEDBACK = PRESS_CLASS_NAME;
 
 // Both labels share one grid cell, so the button keeps its width while the spinner shows.
 function PendingSubmit({
@@ -39,7 +40,7 @@ function PendingSubmit({
       type="submit"
       disabled={isPending}
       aria-busy={isPending}
-      className={cn(PRESS_FEEDBACK, "md:hover:bg-primary/90", className)}
+      className={cn(PRESS_CLASS_NAME, "md:hover:bg-primary/90", className)}
     >
       <span className="grid [&>*]:col-start-1 [&>*]:row-start-1">
         <span
@@ -146,8 +147,8 @@ export default function ClockFormFooter({
           disabled={isPending}
           onClick={correction.cancel}
           className={cn(
-            PRESS_FEEDBACK,
-            "active:bg-muted md:hover:bg-muted",
+            OUTLINE_PRESS_CLASS_NAME,
+            "md:hover:bg-muted",
             isCard && "min-w-0 flex-1 md:flex-none",
           )}
         >
@@ -160,7 +161,7 @@ export default function ClockFormFooter({
             disabled={isPending}
             onClick={correction.clear}
             className={cn(
-              PRESS_FEEDBACK,
+              PRESS_CLASS_NAME,
               // Overrides the ghost hover so a tap on a phone leaves no fill.
               "text-destructive hover:bg-transparent hover:text-destructive md:hover:bg-destructive/10",
               "focus-visible:ring-destructive/20",

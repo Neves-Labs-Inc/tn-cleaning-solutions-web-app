@@ -7,6 +7,7 @@ import { AppointmentFormLoadError } from '@/components/admin/appointment-form-lo
 import { AppointmentForm, type InvoiceClaim } from '@/components/admin/appointment-form'
 import { AppointmentScheduleContext } from '@/components/admin/new-appointment-schedule-context'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/ui/page-header'
 import {
@@ -21,6 +22,7 @@ import { formatCents, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
 import { canEdit, type AppointmentStatus } from '@/lib/appointments/lifecycle'
 import { getClockedMinutes } from '@/lib/time-sheets/session-view'
+import { cn } from '@/lib/utils'
 
 type EditAppointmentPageProps = {
   params: Promise<{ id: string }>
@@ -188,7 +190,7 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
       <div className="space-y-3">
         <Button
           variant="ghost"
-          className="-ml-3 transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98] active:bg-muted"
+          className={cn(OUTLINE_PRESS_CLASS_NAME, '-ml-3')}
           nativeButton={false}
           render={<Link href={`/solutions/appointments/${id}`} />}
         >

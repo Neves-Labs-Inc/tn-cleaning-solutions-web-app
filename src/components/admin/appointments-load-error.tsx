@@ -3,6 +3,7 @@
 import { AlertCircle } from 'lucide-react'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 
@@ -27,7 +28,7 @@ export default function AppointmentsLoadError({
       </Alert>
       <Button
         variant="outline"
-        className="transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]"
+        className={PRESS_CLASS_NAME}
         disabled={isRetrying}
         aria-busy={isRetrying || undefined}
         onClick={onRetry}

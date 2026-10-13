@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
+import { PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 
 type AppointmentsRangeNavProps = {
@@ -14,8 +15,6 @@ type AppointmentsRangeNavProps = {
   onNext: () => void
 }
 
-const BUTTON_CLASS = 'transition-[background-color,transform,box-shadow] duration-fast active:scale-[0.98]'
-
 // Prev / heading / Next for the Week and List layouts. This week is placed by the caller, because its
 // slot differs between phones and desktop.
 export default function AppointmentsRangeNav({
@@ -26,7 +25,7 @@ export default function AppointmentsRangeNav({
 }: AppointmentsRangeNavProps): React.ReactNode {
   return (
     <div className="flex items-center gap-2">
-      <Button type="button" variant="outline" className={BUTTON_CLASS} onClick={onPrev}>
+      <Button type="button" variant="outline" className={PRESS_CLASS_NAME} onClick={onPrev}>
         <ChevronLeft aria-hidden="true" />
         Prev
       </Button>
@@ -35,7 +34,7 @@ export default function AppointmentsRangeNav({
           {heading}
         </h2>
       </div>
-      <Button type="button" variant="outline" className={BUTTON_CLASS} onClick={onNext}>
+      <Button type="button" variant="outline" className={PRESS_CLASS_NAME} onClick={onNext}>
         Next
         <ChevronRight aria-hidden="true" />
       </Button>
