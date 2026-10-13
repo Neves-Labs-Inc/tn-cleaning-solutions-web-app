@@ -24,6 +24,8 @@ export type ClientJobPricingListProps = {
   clientId: string
   rows: ClientJobPricingRow[]
   today: string
+  // An archived client's rates: no edit or archive controls.
+  isReadOnly?: boolean
 }
 
 type RuleStatus = 'Current' | 'Scheduled' | 'Superseded' | 'Archived'
@@ -48,7 +50,7 @@ const statusClassNames: Record<RuleStatus, string> = {
   Archived: 'border-neutral-200 bg-neutral-100 text-neutral-500',
 }
 
-export function ClientJobPricingList({ clientId, rows, today }: ClientJobPricingListProps) {
+export function ClientJobPricingList({ clientId, rows, today, isReadOnly = false }: ClientJobPricingListProps) {
   const groups = groupByJob(rows, today)
   const archivedEntries = groups.flatMap((group) => group.entries.filter((entry) => entry.row.is_archived))
   const activeGroups = groups
@@ -64,7 +66,7 @@ export function ClientJobPricingList({ clientId, rows, today }: ClientJobPricing
               <h2 className="text-base font-semibold text-neutral-950">{group.jobName}</h2>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {group.entries.map((entry) => (
-                  <RuleCard key={entry.row.id} entry={entry} clientId={clientId} />
+                  <RuleCard key={entry.row.id} entry={entry} clientId={clientId} isReadOnly={isReadOnly} />
                 ))}
               </div>
             </section>
@@ -89,7 +91,7 @@ export function ClientJobPricingList({ clientId, rows, today }: ClientJobPricing
             </summary>
             <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {archivedEntries.map((entry) => (
-                <RuleCard key={entry.row.id} entry={entry} clientId={clientId} />
+                <RuleCard key={entry.row.id} entry={entry} clientId={clientId} isReadOnly={isReadOnly} />
               ))}
             </div>
           </details>
@@ -99,7 +101,7 @@ export function ClientJobPricingList({ clientId, rows, today }: ClientJobPricing
   )
 }
 
-function RuleCard({ entry, clientId }: { entry: RuleEntry; clientId: string }) {
+function RuleCard({ entry, clientId, isReadOnly }: { entry: RuleEntry; clientId: string; isReadOnly: boolean }) {
   const { row, status } = entry
 
   const appointmentsCache = useAppointmentsCache()
@@ -160,37 +162,39 @@ function RuleCard({ entry, clientId }: { entry: RuleEntry; clientId: string }) {
         ) : null}
       </CardContent>
 
-      <CardFooter className="justify-between border-t border-neutral-100 px-5 py-3">
-        <Link
-          href={`/solutions/clients/${clientId}/pricing/${row.id}/edit`}
-          className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-emerald-500"
-        >
-          <Pencil className="size-3.5" aria-hidden="true" />
-          Edit
-        </Link>
-
-        <form action={formAction}>
-          <input type="hidden" name="pricingId" value={row.id} />
-          <Button
-            type="submit"
-            variant="outline"
-            className={`h-8 cursor-pointer rounded-full px-3 text-xs font-medium ${
-              row.is_archived
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                : 'border-neutral-200 bg-white text-neutral-700 hover:bg-red-500/80'
-            }`}
+      {isReadOnly ? null : (
+        <CardFooter className="justify-between border-t border-neutral-100 px-5 py-3">
+          <Link
+            href={`/solutions/clients/${clientId}/pricing/${row.id}/edit`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-emerald-500"
           >
-            {row.is_archived ? (
-              <>
-                <RotateCcw className="size-3.5" aria-hidden="true" />
-                Restore
-              </>
-            ) : (
-              'Archive'
-            )}
-          </Button>
-        </form>
-      </CardFooter>
+            <Pencil className="size-3.5" aria-hidden="true" />
+            Edit
+          </Link>
+
+          <form action={formAction}>
+            <input type="hidden" name="pricingId" value={row.id} />
+            <Button
+              type="submit"
+              variant="outline"
+              className={`h-8 cursor-pointer rounded-full px-3 text-xs font-medium ${
+                row.is_archived
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  : 'border-neutral-200 bg-white text-neutral-700 hover:bg-red-500/80'
+              }`}
+            >
+              {row.is_archived ? (
+                <>
+                  <RotateCcw className="size-3.5" aria-hidden="true" />
+                  Restore
+                </>
+              ) : (
+                'Archive'
+              )}
+            </Button>
+          </form>
+        </CardFooter>
+      )}
     </Card>
   )
 }

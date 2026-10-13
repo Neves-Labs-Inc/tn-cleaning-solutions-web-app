@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Eye, Pencil, RotateCcw, Search, Users } from 'lucide-react'
+import { Eye, RotateCcw, Search, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -63,13 +63,6 @@ function ClientCard({ client, archived }: { client: ClientWithLocationCount; arc
 						>
 							<Eye className="size-3.5" aria-hidden="true" />
 							View
-						</Link>
-						<Link
-							href={`/solutions/clients/${client.id}/edit`}
-							className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-neutral-50"
-						>
-							<Pencil className="size-3.5" aria-hidden="true" />
-							Edit
 						</Link>
 					</div>
 				) : (

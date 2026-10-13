@@ -234,13 +234,14 @@ export async function updateClient(
     if (!data) {
       return { success: false, error: 'Client not found.' }
     }
-  } catch {
-    return { success: false, error: 'Failed to update client.' }
+  } catch (error) {
+    console.error('Client update failed', id, error)
+    return { success: false, error: "Couldn't save the client. Try again." }
   }
 
+  // The edit dialog stays on the client page, so it gets a result back instead of a redirect.
   revalidatePath('/solutions/clients')
-  redirect('/solutions/clients')
-
+  revalidatePath(`/solutions/clients/${id}`)
   return { success: true, data: { id } }
 }
 
