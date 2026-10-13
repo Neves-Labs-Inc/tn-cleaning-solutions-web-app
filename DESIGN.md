@@ -376,13 +376,13 @@ Rules: one axis per chart; single-series charts use `--chart-1` with no legend; 
 | `--ease-out-quart` | `cubic-bezier(0.25, 1, 0.5, 1)` | every enter |
 | `--ease-in-quart` | `cubic-bezier(0.5, 0, 0.75, 0)` | every exit |
 
-Exits are **faster than enters**: exit = enter × 0.7 (sheet in 200ms, out 140ms; dialog in 200ms, out 140ms; toast in 200ms, out 150ms). Animate only `transform` and `opacity` (plus `background-color`/`color`/`border-color` for state changes). Never animate `width`/`height`; collapse with `grid-template-rows: 0fr → 1fr` (Tailwind `grid-rows-[0fr]`/`grid-rows-[1fr]`) if needed.
+Exits are **faster than enters**: exit = enter × 0.7 (sheet in 200ms, out 140ms; dialog in 200ms, out 140ms; toast in 200ms, out 150ms). Animate only `transform` and `opacity` (plus the individual `scale`/`translate`/`rotate` properties: Tailwind v4 `scale-*`/`translate-*` set those, not `transform`, so a transition list must name them; `background-color`/`color`/`border-color` for state changes). Never animate `width`/`height`; collapse with `grid-template-rows: 0fr → 1fr` (Tailwind `grid-rows-[0fr]`/`grid-rows-[1fr]`) if needed.
 
 **Per interaction**:
 
 | Element | Hover (`md:` only, `hover:`) | Press (`active:`) | Focus-visible | Transition |
 |---|---|---|---|---|
-| Primary button | `hover:bg-primary/90` | `active:scale-[0.98]` (transform, 120ms) | `ring-2 ring-ring/50 ring-offset-2 ring-offset-background` | `transition-[background-color,transform,box-shadow] duration-fast` |
+| Primary button | `hover:bg-primary/90` | `active:scale-[0.98]` (scale, 120ms) | `ring-2 ring-ring/50 ring-offset-2 ring-offset-background` | `transition-[background-color,scale,translate,box-shadow] duration-fast` (use `PRESS_CLASS_NAME` from `components/admin/detail-page/press.ts`) |
 | Outline/ghost button | `hover:bg-muted` | `active:bg-muted active:scale-[0.98]` | same ring | same |
 | Card link / list row | `md:hover:ring-foreground/20` | `active:bg-muted` (no translate on phones) | ring inside (`focus-visible:ring-2 ring-inset`) | `transition-[background-color,box-shadow] duration-fast` |
 | Tab bar item | — | `active:bg-muted` | ring inset | icon `transition-colors duration-fast`; active indicator (2px top bar) `transition-transform duration-base ease-out-quart` sliding between tabs |
@@ -418,6 +418,7 @@ What the current UI does that this system forbids. Design briefs for the overhau
 12. **Back button** does `router.back()` with pill styling. → explicit `href` ghost button (§7.1).
 13. **Bare `<input>`** in `work-sessions-list.tsx` search; `focus:` instead of `focus-visible:`. → `InputGroup`.
 14. **Chart tokens** `--chart-1..5` are five rose steps. → §12 palette.
+15. **Press transitions that animate nothing**: ~29 files still use `transition-[background-color,transform,box-shadow]`, so `active:scale-*` snaps instead of easing under Tailwind v4. → `PRESS_CLASS_NAME` (§13) as each file is touched.
 15. **Fonts**: Geist Sans loaded and unused; `--font-heading` = `--font-sans` (fine, keep one family). → drop Geist Sans.
 16. **Admin `StatCard`** builds class names by string interpolation (`hover:border-${…}`), which Tailwind cannot see. → `stat-tile.tsx` with fixed classes.
 17. **Viewport**: no `viewport` export, no `viewportFit: 'cover'`, no safe-area padding anywhere. → §6.
