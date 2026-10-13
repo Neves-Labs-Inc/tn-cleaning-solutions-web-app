@@ -69,17 +69,14 @@ export default async function ClientDetailPage({ params, searchParams }: ClientD
 				backLabel="Clients"
 				title={client.name}
 				badges={
-					<>
+					// Archived wins over Active/Inactive, as in the clients list.
+					client.is_archived ? (
+						<StatusBadge tone={ARCHIVED_BADGE.tone} className="animate-in fade-in-0 zoom-in-95 duration-base">
+							{ARCHIVED_BADGE.label}
+						</StatusBadge>
+					) : (
 						<StatusBadge tone={activeBadge.tone}>{activeBadge.label}</StatusBadge>
-						{client.is_archived ? (
-							<StatusBadge
-								tone={ARCHIVED_BADGE.tone}
-								className="animate-in fade-in-0 zoom-in-95 duration-base"
-							>
-								{ARCHIVED_BADGE.label}
-							</StatusBadge>
-						) : null}
-					</>
+					)
 				}
 				actions={
 					<>

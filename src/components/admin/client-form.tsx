@@ -6,6 +6,7 @@ import { startTransition, useActionState, useEffect, useRef, useState } from 're
 import { AlertCircle } from 'lucide-react'
 
 import { SheetButtons, SHEET_BUTTON_CLASS } from '@/components/invoices/sheet-buttons'
+import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -198,7 +199,7 @@ export function ClientForm({ client, dialog }: ClientFormProps) {
         <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end">
           <Button
             variant="outline"
-            className={SHEET_BUTTON_CLASS}
+            className={cn(SHEET_BUTTON_CLASS, 'active:bg-muted')}
             render={<Link href="/solutions/clients" />}
             nativeButton={false}
           >
