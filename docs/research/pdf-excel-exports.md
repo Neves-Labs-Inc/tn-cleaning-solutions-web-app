@@ -95,7 +95,7 @@ Sizes come from `npm i` into empty directories on 2026-10-13 (`du -sh node_modul
 
 - **The hosting decision is still open** (#136), but its constraints (VPC with no NAT, under $15/mo) push towards a small EC2 running `next start`.
 - **On EC2:** everything recommended runs in-process with no extra system packages. Memory cost is a single render at a time, well within 2 GB.
-- **On Lambda (OpenNext):** react-pdf and exceljs are pure JS, so there is no layer. The default 1,024 MB+ function memory is plenty. The cold-start cost of loading react-pdf (~100 ms) applies only on export routes, because it is externalised and required lazily.
+- **On Lambda (OpenNext):** react-pdf and exceljs are pure JS, so there is no layer. The smoke test peaked at ~170 MB RSS for the whole Node process, so a modest function memory setting should do. This was not measured on Lambda itself.
 - Chromium is the only option that differs by host, which is another reason to skip it.
 
 ## Open points for the spec
