@@ -1,12 +1,16 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 type ResponsiveListSkeletonProps = {
   cards?: number;
   rows?: number;
+  // A height class matching the caller's loaded card, e.g. "h-27".
+  cardHeightClassName?: string;
 };
 
 const DEFAULT_CARDS = 6;
 const DEFAULT_ROWS = 8;
+const DEFAULT_CARD_HEIGHT_CLASS_NAME = "h-24";
 
 function range(count: number): number[] {
   return Array.from({ length: count }, (_, index) => index);
@@ -16,6 +20,7 @@ function range(count: number): number[] {
 export default function ResponsiveListSkeleton({
   cards = DEFAULT_CARDS,
   rows = DEFAULT_ROWS,
+  cardHeightClassName = DEFAULT_CARD_HEIGHT_CLASS_NAME,
 }: ResponsiveListSkeletonProps): React.ReactNode {
   return (
     <div aria-busy="true">
@@ -25,7 +30,10 @@ export default function ResponsiveListSkeleton({
         </div>
         <div className="space-y-3">
           {range(cards).map((index) => (
-            <Skeleton key={index} className="h-24 rounded-lg" />
+            <Skeleton
+              key={index}
+              className={cn("rounded-lg", cardHeightClassName)}
+            />
           ))}
         </div>
       </div>
