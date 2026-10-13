@@ -7,6 +7,7 @@ import { AppointmentScheduleContext } from '@/components/admin/new-appointment-s
 import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/ui/page-header'
+import { isCalendarDate } from '@/lib/dates/calendar'
 import { fetchClientJobRules } from '@/lib/pricing/lookup'
 import { toBusinessWallClock } from '@/lib/schedule'
 import { createClient } from '@/lib/supabase/server'
@@ -21,7 +22,7 @@ function normalizeParam(value: string | string[] | undefined) {
 }
 
 function isDateValue(value: string | undefined): value is string {
-  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value))
+  return value !== undefined && isCalendarDate(value)
 }
 
 function parseMonth(value: string | undefined, fallback: number) {

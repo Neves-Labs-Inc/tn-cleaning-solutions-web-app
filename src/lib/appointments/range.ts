@@ -1,4 +1,6 @@
-import { addDays, addWeeks, endOfMonth, format, isValid, parse, startOfWeek } from 'date-fns'
+import { addDays, addWeeks, endOfMonth, format, parse, startOfWeek } from 'date-fns'
+
+import { isCalendarDate } from '../dates/calendar.ts'
 
 // The date range the appointments screen shows: a week start (Sunday) for the Week and List
 // layouts, a month for the Month layout. Dates are business dates (yyyy-MM-dd) handled as local
@@ -9,7 +11,6 @@ export const LAYOUTS = ['week', 'month', 'list'] as const
 export type Layout = (typeof LAYOUTS)[number]
 
 const DATE_FORMAT = 'yyyy-MM-dd'
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const DAYS_IN_WEEK = 7
 export const MIN_YEAR = 2000
 export const MAX_YEAR = 2100
@@ -40,11 +41,10 @@ export function getWeekStart(date: string): string {
 
 // A strict yyyy-MM-dd date, or null for anything else (including Feb 30).
 export function parseDate(value: string | undefined): string | null {
-  if (value === undefined || !DATE_PATTERN.test(value)) return null
+  if (value === undefined || !isCalendarDate(value)) return null
 
-  const day = toDay(value)
-  const isInRange = day.getFullYear() >= MIN_YEAR && day.getFullYear() <= MAX_YEAR
-  return isValid(day) && isInRange && toDate(day) === value ? value : null
+  const year = Number(value.slice(0, 4))
+  return year >= MIN_YEAR && year <= MAX_YEAR ? value : null
 }
 
 // null stands for the business week, so the URL leaves it out and a bookmark follows today.

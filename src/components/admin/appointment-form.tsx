@@ -89,6 +89,7 @@ const initialState: AppointmentActionResult = {
 }
 
 const SCHEDULED_DATE_ERROR_ID = 'scheduled_date-error'
+const RECURRENCE_END_DATE_ERROR_ID = 'recurrence_end_date-error'
 // An archived employee drops out of the employee list but can still hold clocked time here.
 const REMOVED_EMPLOYEE_NAME = 'A removed employee'
 const RECURRENCE_HEADING_ID = 'recurrence-settings-heading'
@@ -199,6 +200,7 @@ export function AppointmentForm({
   const scheduledDateRef = useRef<HTMLInputElement>(null)
   const fieldErrors = 'fieldErrors' in state ? state.fieldErrors : undefined
   const scheduledDateError = fieldErrors?.scheduled_date
+  const recurrenceEndDateError = fieldErrors?.recurrence_end_date
   const formError = 'error' in state ? state.error : ''
   const formErrorRef = useRef<HTMLDivElement>(null)
 
@@ -540,7 +542,14 @@ export function AppointmentForm({
                 <FieldLabel htmlFor="recurrence_end_date" className={LABEL_CLASSES}>
                   End date
                 </FieldLabel>
-                <Input id="recurrence_end_date" name="recurrence_end_date" type="date" />
+                <Input
+                  id="recurrence_end_date"
+                  name="recurrence_end_date"
+                  type="date"
+                  aria-invalid={recurrenceEndDateError ? true : undefined}
+                  aria-describedby={recurrenceEndDateError ? RECURRENCE_END_DATE_ERROR_ID : undefined}
+                />
+                <FieldError id={RECURRENCE_END_DATE_ERROR_ID} message={recurrenceEndDateError} />
               </Field>
 
               <Field className="min-w-0">
@@ -623,8 +632,15 @@ export function AppointmentForm({
                 <FieldLabel htmlFor="recurrence_end_date" className={LABEL_CLASSES}>
                   End date
                 </FieldLabel>
-                <Input id="recurrence_end_date" name="recurrence_end_date" type="date"
-                  defaultValue={recurrenceSeries.end_date ?? ''} />
+                <Input
+                  id="recurrence_end_date"
+                  name="recurrence_end_date"
+                  type="date"
+                  defaultValue={recurrenceSeries.end_date ?? ''}
+                  aria-invalid={recurrenceEndDateError ? true : undefined}
+                  aria-describedby={recurrenceEndDateError ? RECURRENCE_END_DATE_ERROR_ID : undefined}
+                />
+                <FieldError id={RECURRENCE_END_DATE_ERROR_ID} message={recurrenceEndDateError} />
               </Field>
 
               <Field className="min-w-0">
