@@ -1,6 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 
 import AppointmentsLoadError from "@/components/admin/appointments-load-error";
 import AppointmentsScreenSkeleton from "@/components/admin/appointments-screen-skeleton";
@@ -9,6 +10,7 @@ import { useAppointmentsScreen } from "@/hooks/use-appointments-screen";
 import { useBusinessDate } from "@/hooks/use-business-date";
 import { useNeighbourPrefetch } from "@/hooks/use-neighbour-prefetch";
 import { resolveFilterOptions } from "@/lib/appointments/filters";
+import { browserListStorage, rememberListHref } from "@/lib/appointments/list-return";
 import {
   appointmentsHref,
   parseAppointmentsSearch,
@@ -27,6 +29,11 @@ export default function AppointmentsScreen({
   const businessDate = useBusinessDate(serverBusinessDate);
   const query = parseAppointmentsSearch(useSearchParams(), businessDate);
   const screen = useAppointmentsScreen(query, businessDate);
+  const currentHref = appointmentsHref(query);
+  // Remembered per tab so the ways back to the list (detail, New, save, sidebar) restore this state.
+  useEffect(() => {
+    rememberListHref(browserListStorage(), currentHref);
+  }, [currentHref]);
   useNeighbourPrefetch(
     query,
     businessDate,

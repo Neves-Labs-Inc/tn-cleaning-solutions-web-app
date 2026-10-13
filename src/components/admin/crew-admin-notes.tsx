@@ -13,14 +13,16 @@ import { cn } from "@/lib/utils";
 
 type CrewAdminNotesProps = {
   assignmentId: string;
+  appointmentId: string;
   initialNotes: string;
 };
 
 export default function CrewAdminNotes({
   assignmentId,
+  appointmentId,
   initialNotes,
 }: CrewAdminNotesProps): React.ReactNode {
-  const notes = useAdminNotes(assignmentId, initialNotes);
+  const notes = useAdminNotes(assignmentId, appointmentId, initialNotes);
   const textareaId = `admin-notes-${assignmentId}`;
   const descriptionId = `${textareaId}-description`;
 

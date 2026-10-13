@@ -640,6 +640,8 @@ export async function updateAppointment(
   }
 
   let claimingInvoiceId: string | null = null
+  // Every appointment the edit touched, so the client can patch its cached rows.
+  const changedIds = [id]
 
   try {
     const adminClient = createAdminClient()
@@ -976,6 +978,7 @@ export async function updateAppointment(
             return { success: false, error: toAppointmentErrorMessage(deleteLaterError, 'updateAppointment') }
           }
           deletedIds = new Set(deletedRows ?? [])
+          changedIds.push(...deletedIds)
         }
 
         const preservedDates = preservedSeriesDates(cleanupPlan, laterAppointments ?? [], deletedIds)
@@ -1014,6 +1017,7 @@ export async function updateAppointment(
           }
 
           const regeneratedAppointmentIds = (regeneratedAppointments ?? []).map((row) => row.id)
+          changedIds.push(...regeneratedAppointmentIds)
 
           if (parsed.data.employee_ids.length > 0 && regeneratedAppointmentIds.length > 0) {
             const regeneratedAssignmentInserts: TablesInsert<'appointment_employees'>[] = []
@@ -1049,7 +1053,7 @@ export async function updateAppointment(
   if (claimingInvoiceId) {
     revalidatePath(`/solutions/invoices/${claimingInvoiceId}`)
   }
-  return { success: true, data: { id } }
+  return { success: true, data: { id, ids: changedIds } }
 }
 
 type LifecycleLoadResult =

@@ -22,12 +22,13 @@ import {
   type AppointmentActionResult,
   updateAppointment,
 } from '@/lib/actions/appointments'
-import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
+import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { formatMinutes } from '@/components/admin/time-sheets/format-minutes'
 import CalculatedTotal from '@/components/admin/calculated-total'
 import { estimateAppointmentTotal } from '@/lib/pricing/estimate'
 import { parseDollarsToCents } from '@/lib/pricing/money'
 import type { ClientJobRule } from '@/lib/pricing/resolve'
+import { browserListStorage, listReturnHref } from '@/lib/appointments/list-return'
 import { planCrewChange } from '@/lib/appointments/crew'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 
@@ -168,7 +169,7 @@ export function AppointmentForm({
 }: AppointmentFormProps) {
   const serverAction = appointment ? updateAppointment.bind(null, appointment.id) : createAppointment
   const router = useRouter()
-  const invalidateAppointments = useInvalidateAppointments()
+  const appointmentsCache = useAppointmentsCache()
   const [hasSaved, setHasSaved] = useState(false)
   const [state, formAction, isPending] = useActionState(
     async (previous: AppointmentActionResult, formData: FormData): Promise<AppointmentActionResult> => {
@@ -177,11 +178,10 @@ export function AppointmentForm({
         if (result.success) {
           // Stays locked until the route unmounts, so a second tap can't create a duplicate.
           setHasSaved(true)
-          // Discard before pushing so the destination never renders cached rows.
-          void invalidateAppointments()
-          const destination = appointment
-            ? `/solutions/appointments/${appointment.id}`
-            : '/solutions/appointments'
+          // Patched before pushing so the list shows the change at once; the form stays locked meanwhile.
+          await appointmentsCache.applyChanges(result.data?.ids ?? [])
+          // Create and edit both return to the list's remembered state.
+          const destination = listReturnHref(browserListStorage())
           toast.success(appointment ? 'Appointment saved' : 'Appointment created')
           router.push(destination)
         }

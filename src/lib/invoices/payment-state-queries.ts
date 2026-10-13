@@ -5,7 +5,7 @@ import {
   APPOINTMENT_PRICE_COLUMNS,
   type PriceableAppointment,
 } from "../pricing/index.ts";
-import { inBatches, priceAppointmentsInBatches, readAllPages } from "./batch.ts";
+import { inBatches, priceAppointmentsInBatches, readAllPagesByIds } from "./batch.ts";
 import type { PaymentClaim } from "./payment-state.ts";
 import { unbilledQuery } from "./unbilled-query.ts";
 
@@ -96,18 +96,22 @@ type NeedsBillingRow = PriceableAppointment & {
 // pricing_job is the price module's own Job embed, so `jobs` stays free for the name.
 const NEEDS_BILLING_COLUMNS = `${APPOINTMENT_PRICE_COLUMNS}, jobs ( name ), clients ( name )`;
 
-// Every Unbilled appointment in every month, oldest first. Paged past PostgREST's row cap, in an
-// order with a unique last key so no row shifts between pages.
+// Every Unbilled appointment in every month, oldest first; with ids, only those of them that are
+// Unbilled. Paged past PostgREST's row cap, in an order with a unique last key so no row shifts
+// between pages.
 export async function listNeedsBilling(
   db: Db,
+  ids: string[] | null = null,
 ): Promise<NeedsBillingAppointment[]> {
-  const rows = (await readAllPages((from, to) =>
-    unbilledQuery(db, NEEDS_BILLING_COLUMNS, { clientId: null, isCount: false })
+  const rows = (await readAllPagesByIds(ids, (idBatch, from, to) => {
+    const unbilled = unbilledQuery(db, NEEDS_BILLING_COLUMNS, { clientId: null, isCount: false });
+    const scoped = idBatch === null ? unbilled : unbilled.in("id", idBatch);
+    return scoped
       .order("scheduled_date", { ascending: true })
       .order("scheduled_start_time", { ascending: true })
       .order("id", { ascending: true })
-      .range(from, to),
-  )) as unknown as NeedsBillingRow[];
+      .range(from, to);
+  })) as unknown as NeedsBillingRow[];
   const prices = await priceAppointmentsInBatches(db, rows);
 
   return rows.map((row) => {

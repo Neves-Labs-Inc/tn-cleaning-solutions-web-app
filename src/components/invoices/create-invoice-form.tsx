@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import SubmitButton from '@/components/ui/submit-button'
 import { Textarea } from '@/components/ui/textarea'
-import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
+import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { createInvoice } from '@/lib/actions/invoices'
 import { claimableStates, defaultSelectedIds, draftTotalCents } from '@/lib/invoices/lines'
 import type { BillableClient, ClaimableVisit } from '@/lib/invoices/queries'
@@ -84,7 +84,7 @@ export function CreateInvoiceForm({
   handedOffIds,
 }: CreateInvoiceFormProps) {
   const router = useRouter()
-  const invalidateAppointments = useInvalidateAppointments()
+  const { applyChanges } = useAppointmentsCache()
   const [isSwitching, startSwitch] = useTransition()
 
   // What the picker shows right away; the URL catches up when the transition lands.
@@ -124,7 +124,7 @@ export function CreateInvoiceForm({
       const result = await createInvoice(null, formData)
       if (result.success) {
         setHasCreated(true)
-        void invalidateAppointments()
+        void applyChanges(result.appointmentIds)
         toast.success('Draft created')
         router.push(`${INVOICES_PATH}/${result.data.id}`)
         return

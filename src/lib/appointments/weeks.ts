@@ -96,11 +96,11 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : 1;
 }
 
-// The order listRangeAppointments returns: date, start time, then id.
-function compareAppointments(
-  left: ScheduleAppointment,
-  right: ScheduleAppointment,
-): number {
+// A row in any of the screen's appointment lists.
+type DatedRow = Pick<ScheduleAppointment, "id" | "scheduledDate" | "startTime">;
+
+// The order listRangeAppointments (and the Needs lists) return: date, start time, then id.
+export function compareAppointments(left: DatedRow, right: DatedRow): number {
   return (
     compareText(left.scheduledDate, right.scheduledDate) ||
     compareText(left.startTime, right.startTime) ||

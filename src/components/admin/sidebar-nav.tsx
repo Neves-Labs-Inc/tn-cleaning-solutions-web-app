@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+import { AppointmentsReturnLink } from '@/components/admin/appointments-return-link'
 import { clearBrowserQueryCache } from '@/components/admin/admin-query-provider'
 import {
   BriefcaseBusiness,
@@ -17,12 +18,13 @@ import {
   Users,
 } from 'lucide-react'
 
+import { APPOINTMENTS_PATH } from '@/lib/appointments/overview'
 import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 
 const navItems = [
   { label: 'Dashboard', href: '/solutions/dashboard', icon: LayoutDashboard },
-  { label: 'Appointments', href: '/solutions/appointments', icon: CalendarDays },
+  { label: 'Appointments', href: APPOINTMENTS_PATH, icon: CalendarDays },
   { label: 'Clients', href: '/solutions/clients', icon: Users },
   { label: 'Jobs', href: '/solutions/jobs', icon: BriefcaseBusiness },
   { label: 'Employees', href: '/solutions/employees', icon: UserRound },
@@ -49,27 +51,38 @@ function NavList({
         const isActive =
           pathname === item.href || pathname.startsWith(`${item.href}/`)
 
+        const linkProps = {
+          'aria-current': isActive ? ('page' as const) : undefined,
+          onClick: onNavigate,
+          className: cn(
+            'group flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-sm font-medium text-neutral-600 transition-[color,background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-neutral-200 hover:bg-white hover:text-neutral-950',
+            isActive &&
+              'border-emerald-600/20 bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+          ),
+        }
+        const content = (
+          <>
+            <Icon
+              className={cn(
+                'size-4 shrink-0 text-neutral-400 transition-colors group-hover:text-neutral-600',
+                isActive && 'text-white'
+              )}
+              aria-hidden="true"
+            />
+            <span>{item.label}</span>
+          </>
+        )
+
+        // Appointments returns to the list's last state; the highlight still keys off item.href.
         return (
           <li key={item.href}>
-            <Link
-              href={item.href}
-              aria-current={isActive ? 'page' : undefined}
-              onClick={onNavigate}
-              className={cn(
-                'group flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-sm font-medium text-neutral-600 transition-[color,background-color,border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-neutral-200 hover:bg-white hover:text-neutral-950',
-                isActive &&
-                  'border-emerald-600/20 bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
-              )}
-            >
-              <Icon
-                className={cn(
-                  'size-4 shrink-0 text-neutral-400 transition-colors group-hover:text-neutral-600',
-                  isActive && 'text-white'
-                )}
-                aria-hidden="true"
-              />
-              <span>{item.label}</span>
-            </Link>
+            {item.href === APPOINTMENTS_PATH ? (
+              <AppointmentsReturnLink {...linkProps}>{content}</AppointmentsReturnLink>
+            ) : (
+              <Link href={item.href} {...linkProps}>
+                {content}
+              </Link>
+            )}
           </li>
         )
       })}

@@ -35,6 +35,7 @@ export type HistoryAcknowledgement = {
 
 export type SessionRowView = {
   id: string;
+  appointmentId: string;
   clientName: string;
   jobName: string;
   scheduledWindow: string;
@@ -69,6 +70,7 @@ export type DrilldownDay = {
 export function toSessionRowView(view: SessionView): SessionRowView {
   return {
     id: view.assignmentId,
+    appointmentId: view.appointmentId,
     clientName: view.clientName,
     jobName: view.jobName,
     scheduledWindow: `${formatBusinessTime(new Date(view.scheduledStart))}–${formatBusinessTime(new Date(view.scheduledEnd))}`,

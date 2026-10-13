@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
+import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import {
   type ClientJobPricingActionResult,
   createClientJobPricing,
@@ -46,12 +46,13 @@ export function ClientJobPricingForm({ clientId, jobs, pricing }: ClientJobPrici
     ? updateClientJobPricing.bind(null, pricing.id)
     : createClientJobPricing.bind(null, clientId)
   const [state, formAction] = useActionState(serverAction, initialState)
-  const invalidateAppointments = useInvalidateAppointments()
+  const appointmentsCache = useAppointmentsCache()
 
-  // A saved form never gets a result back: the action redirects. So discard at submit, before the
-  // action runs; a refused save costs one skeleton. Not prevented, so the action still dispatches.
+  // A saved form never gets a result back: the action redirects. So refresh at submit, before the
+  // action runs; cached rows stay and update in the background. Not prevented, so the action still
+  // dispatches.
   function handleSubmit() {
-    void invalidateAppointments()
+    void appointmentsCache.refresh()
   }
   const fieldErrors = 'fieldErrors' in state ? state.fieldErrors : undefined
 

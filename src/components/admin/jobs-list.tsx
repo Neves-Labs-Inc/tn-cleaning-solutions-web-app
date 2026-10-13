@@ -18,8 +18,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import { useInvalidateAppointments } from '@/hooks/use-invalidate-appointments'
+import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { archiveJobs, restoreJobs } from '@/lib/actions/jobs'
+import { appointmentsKeys } from '@/lib/appointments/appointments-keys'
 import { formatRate } from '@/lib/pricing/money'
 import { cn } from '@/lib/utils'
 
@@ -129,7 +130,7 @@ function JobsSection({ jobs, archived, searchSlot, selectionResetKey = '' }: Job
 	const [confirmOpen, setConfirmOpen] = useState(false)
 	const [appliedResetKey, setAppliedResetKey] = useState(selectionResetKey)
 	const [isPending, startTransition] = useTransition()
-	const invalidateAppointments = useInvalidateAppointments()
+	const appointmentsCache = useAppointmentsCache()
 
 	if (appliedResetKey !== selectionResetKey) {
 		setAppliedResetKey(selectionResetKey)
@@ -169,8 +170,8 @@ function JobsSection({ jobs, archived, searchSlot, selectionResetKey = '' }: Job
 			const result = archived ? await restoreJobs(selectedIds) : await archiveJobs(selectedIds)
 
 			if (result.success) {
-				// The Job filter lists only active jobs, so a change shows on the next view.
-				void invalidateAppointments()
+				// The Job filter lists only active jobs, so it needs the new set.
+				void appointmentsCache.refresh([appointmentsKeys.filterOptions])
 				setSelectMode(false)
 				setSelectedIds([])
 				setErrorMessage('')
