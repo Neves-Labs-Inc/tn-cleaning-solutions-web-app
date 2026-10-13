@@ -1,13 +1,26 @@
-import Link from 'next/link'
-import { AlertCircle, MapPin, Pencil, Plus, RotateCcw } from 'lucide-react'
+'use client'
 
+import { useRouter } from 'next/navigation'
+import { useEffect, useRef, useState, useTransition } from 'react'
+import { Archive, MapPin, Pencil, Plus, RotateCcw } from 'lucide-react'
+import { toast } from 'sonner'
+
+import { LocationForm } from '@/components/admin/location-form'
+import {
+	ITEM_META_CLASS_NAME,
+	ITEM_PRIMARY_CLASS_NAME,
+	ITEM_SECONDARY_CLASS_NAME,
+	ItemListCard,
+	ItemListEmpty,
+	ItemRow,
+	RowActions,
+	TabLoadError,
+} from '@/components/admin/detail-page/item-list'
 import { OUTLINE_PRESS_CLASS_NAME, PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import TabToolbar from '@/components/admin/detail-page/tab-toolbar'
-import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
-import StatusBadge, { activeStateBadge } from '@/components/ui/status-badge'
+import ResponsiveDialog from '@/components/ui/responsive-dialog'
+import StatusBadge, { activeStateBadge, ARCHIVED_BADGE } from '@/components/ui/status-badge'
 import SubmitButton from '@/components/ui/submit-button'
 import { archiveLocation, restoreLocation } from '@/lib/actions/clients'
 
@@ -20,139 +33,100 @@ export type LocationRow = {
 	is_archived: boolean
 }
 
-// Interim body until ticket 05 replaces it: the old location cards, moved under the tab.
+type DialogTarget = { mode: 'add' } | { mode: 'edit'; location: LocationRow }
 
-function LocationCard({
-	location,
-	clientId,
-	isReadOnly,
-}: {
+type LocationItemProps = {
 	location: LocationRow
-	clientId: string
 	isReadOnly: boolean
-}) {
-	async function handleLocationStateChange(formData: FormData) {
-		'use server'
+	onEdit: (location: LocationRow) => void
+}
 
-		const locationId = String(formData.get('locationId') ?? '')
-		const isArchived = String(formData.get('isArchived') ?? '') === 'true'
+function LocationItem({ location, isReadOnly, onEdit }: LocationItemProps): React.ReactNode {
+	const router = useRouter()
+	// Covers the change and the refresh after it, so the row can't run a change twice while it still
+	// shows the old state.
+	const [isPending, startPending] = useTransition()
+	const badge = location.is_archived ? ARCHIVED_BADGE : activeStateBadge(location.is_active)
+	const verb = location.is_archived ? 'restore' : 'archive'
 
-		if (!locationId) {
-			return
-		}
+	function handleStateChange(): void {
+		if (isPending) return
 
-		if (isArchived) {
-			await restoreLocation(locationId)
-			return
-		}
+		startPending(async () => {
+			let isSaved = false
+			try {
+				const result = location.is_archived
+					? await restoreLocation(location.id)
+					: await archiveLocation(location.id)
+				isSaved = result.success
+			} catch (error) {
+				console.error('Location state change failed', location.id, error)
+			}
 
-		await archiveLocation(locationId)
+			if (!isSaved) {
+				toast.error(`Couldn't ${verb} ${location.label}. Try again.`)
+				return
+			}
+			toast.success(`${location.label} ${location.is_archived ? 'restored' : 'archived'}`)
+			// A transition again after the await, so isPending holds until the refreshed list lands.
+			startPending(() => router.refresh())
+		})
 	}
 
-	const activeBadge = activeStateBadge(location.is_active)
+	// An archived location can't be edited (updateLocation refuses it), so it offers Restore only.
+	const actions = isReadOnly ? undefined : (
+		<RowActions>
+			{location.is_archived ? null : (
+				<Button
+					variant="outline"
+					className={OUTLINE_PRESS_CLASS_NAME}
+					aria-label={`Edit ${location.label}`}
+					disabled={isPending}
+					onClick={() => onEdit(location)}
+				>
+					<Pencil aria-hidden="true" data-icon="inline-start" />
+					Edit
+				</Button>
+			)}
+			{/* Not inside a form, so its submit type does nothing; one element in both states keeps focus
+			    on it when the row flips between Archive and Restore. */}
+			<SubmitButton
+				variant="outline"
+				className={OUTLINE_PRESS_CLASS_NAME}
+				aria-label={`${location.is_archived ? 'Restore' : 'Archive'} ${location.label}`}
+				label={location.is_archived ? 'Restore' : 'Archive'}
+				pendingLabel={location.is_archived ? 'Restoring…' : 'Archiving…'}
+				icon={location.is_archived ? <RotateCcw aria-hidden="true" /> : <Archive aria-hidden="true" />}
+				isPending={isPending}
+				// aria-disabled instead of native disabled while pending: a disabled button drops focus to <body>.
+				focusableWhenDisabled
+				onClick={handleStateChange}
+			/>
+		</RowActions>
+	)
 
 	return (
-		<Card>
-			<CardHeader className="gap-2">
-				<div className="flex items-start justify-between gap-3">
-					<CardTitle className="min-w-0 text-base font-semibold break-words">{location.label}</CardTitle>
-					<StatusBadge tone={activeBadge.tone}>{activeBadge.label}</StatusBadge>
-				</div>
-				<p className="text-sm text-muted-foreground break-words">{location.address}</p>
-			</CardHeader>
-
-			<CardContent>
-				<p className="text-sm leading-6 text-muted-foreground break-words">{location.notes || 'No notes added.'}</p>
-			</CardContent>
-
-			{isReadOnly ? null : (
-				<CardFooter className="justify-between gap-2 border-t border-border">
-					<Button
-						variant="outline"
-						className={OUTLINE_PRESS_CLASS_NAME}
-						render={<Link href={`/solutions/clients/${clientId}/locations/${location.id}/edit`} />}
-						nativeButton={false}
-					>
-						<Pencil aria-hidden="true" data-icon="inline-start" />
-						Edit
-					</Button>
-
-					<form action={handleLocationStateChange}>
-						<input type="hidden" name="locationId" value={location.id} />
-						<input type="hidden" name="isArchived" value={location.is_archived ? 'true' : 'false'} />
-						{location.is_archived ? (
-							<SubmitButton
-								variant="outline"
-								className={OUTLINE_PRESS_CLASS_NAME}
-								label="Restore"
-								pendingLabel="Restoring…"
-								icon={<RotateCcw aria-hidden="true" />}
-							/>
-						) : (
-							<SubmitButton
-								variant="outline"
-								className={OUTLINE_PRESS_CLASS_NAME}
-								label="Archive"
-								pendingLabel="Archiving…"
-							/>
-						)}
-					</form>
-				</CardFooter>
-			)}
-		</Card>
+		<ItemRow actions={actions}>
+			<div className="flex items-start justify-between gap-3 sm:justify-start">
+				<p className={`${ITEM_PRIMARY_CLASS_NAME} min-w-0`}>{location.label}</p>
+				<StatusBadge tone={badge.tone} className="shrink-0">
+					{badge.label}
+				</StatusBadge>
+			</div>
+			<p className={ITEM_SECONDARY_CLASS_NAME}>{location.address}</p>
+			<p className={`${ITEM_META_CLASS_NAME} whitespace-pre-line`}>{location.notes || 'No notes added.'}</p>
+		</ItemRow>
 	)
 }
 
 // Locations is the default tab, so the bare client URL retries it.
-function LocationsError({ clientId }: { clientId: string }) {
+function LocationsError({ clientId }: { clientId: string }): React.ReactNode {
 	return (
-		<Alert variant="destructive" className="has-data-[slot=alert-action]:pr-28">
-			<AlertCircle aria-hidden="true" />
-			<AlertTitle>Couldn&apos;t load locations</AlertTitle>
-			<AlertDescription>Client info is fine; this client&apos;s addresses didn&apos;t load.</AlertDescription>
-			<AlertAction>
-				<Button
-					variant="outline"
-					className="text-foreground"
-					render={<Link href={`/solutions/clients/${clientId}`} />}
-					nativeButton={false}
-				>
-					Try again
-				</Button>
-			</AlertAction>
-		</Alert>
-	)
-}
-
-function LocationsList({
-	locations,
-	clientId,
-	isReadOnly,
-}: {
-	locations: LocationRow[]
-	clientId: string
-	isReadOnly: boolean
-}) {
-	if (locations.length === 0) {
-		return (
-			<Empty className="rounded-lg bg-card ring-1 ring-foreground/10">
-				<EmptyHeader>
-					<EmptyMedia variant="icon">
-						<MapPin aria-hidden="true" />
-					</EmptyMedia>
-					<EmptyTitle>No locations yet</EmptyTitle>
-					<EmptyDescription>Add a location to assign appointments to a specific service address.</EmptyDescription>
-				</EmptyHeader>
-			</Empty>
-		)
-	}
-
-	return (
-		<div className="grid gap-3 md:grid-cols-2">
-			{locations.map((location) => (
-				<LocationCard key={location.id} location={location} clientId={clientId} isReadOnly={isReadOnly} />
-			))}
-		</div>
+		<TabLoadError
+			title="Couldn't load locations"
+			description="Client info is fine; this client's addresses didn't load."
+			retryHref={`/solutions/clients/${clientId}`}
+		/>
 	)
 }
 
@@ -164,28 +138,97 @@ type LocationsTabProps = {
 }
 
 export function LocationsTab({ clientId, locations, isReadOnly }: LocationsTabProps): React.ReactNode {
+	const router = useRouter()
+	// Open and content are separate so the last form stays mounted, title and all, through the close animation.
+	const [isDialogOpen, setIsDialogOpen] = useState(false)
+	const [dialogTarget, setDialogTarget] = useState<DialogTarget>({ mode: 'add' })
+	const [isDialogPending, setIsDialogPending] = useState(false)
+	const addButtonRef = useRef<HTMLButtonElement>(null)
+
+	const isEmpty = locations !== null && locations.length === 0
+	const canAdd = !isReadOnly && locations !== null && !isEmpty
+	const isEditing = dialogTarget.mode === 'edit'
+
+	// The first add is opened from the Empty, which the refreshed list replaces; focus would fall to
+	// <body>, so it moves to the toolbar's Add instead.
+	const wasEmptyRef = useRef(isEmpty)
+	useEffect(() => {
+		if (wasEmptyRef.current && !isEmpty && document.activeElement === document.body) {
+			addButtonRef.current?.focus()
+		}
+		wasEmptyRef.current = isEmpty
+	}, [isEmpty])
+
+	function openDialog(target: DialogTarget): void {
+		setDialogTarget(target)
+		setIsDialogOpen(true)
+	}
+
+	function handleSuccess(): void {
+		setIsDialogOpen(false)
+		toast.success(isEditing ? 'Location saved' : 'Location added')
+		router.refresh()
+	}
+
+	// One element for the Empty's Add and the toolbar's: only one shows at a time, so the ref follows it.
+	const addButton = (
+		<Button ref={addButtonRef} className={PRESS_CLASS_NAME} onClick={() => openDialog({ mode: 'add' })}>
+			<Plus aria-hidden="true" data-icon="inline-start" />
+			Add location
+		</Button>
+	)
+
+	function renderBody(): React.ReactNode {
+		if (locations === null) return <LocationsError clientId={clientId} />
+		if (isEmpty) {
+			return (
+				<ItemListEmpty
+					icon={MapPin}
+					title="No locations yet"
+					description={
+						isReadOnly
+							? 'This client is archived.'
+							: 'Add a location to assign appointments to a specific service address.'
+					}
+					action={isReadOnly ? undefined : addButton}
+				/>
+			)
+		}
+		return (
+			<ItemListCard ariaLabel="Locations">
+				{locations.map((location) => (
+					<LocationItem
+						key={location.id}
+						location={location}
+						isReadOnly={isReadOnly}
+						onEdit={(target) => openDialog({ mode: 'edit', location: target })}
+					/>
+				))}
+			</ItemListCard>
+		)
+	}
+
 	return (
 		<>
-			<TabToolbar
-				description="Service addresses for this client."
-				action={
-					isReadOnly ? undefined : (
-						<Button
-							className={PRESS_CLASS_NAME}
-							render={<Link href={`/solutions/clients/${clientId}/locations/new`} />}
-							nativeButton={false}
-						>
-							<Plus aria-hidden="true" data-icon="inline-start" />
-							Add location
-						</Button>
-					)
-				}
-			/>
-			{locations === null ? (
-				<LocationsError clientId={clientId} />
-			) : (
-				<LocationsList locations={locations} clientId={clientId} isReadOnly={isReadOnly} />
-			)}
+			<TabToolbar description="Service addresses for this client." action={canAdd ? addButton : undefined} />
+			{renderBody()}
+			<ResponsiveDialog
+				open={isDialogOpen}
+				onOpenChange={setIsDialogOpen}
+				title={isEditing ? 'Edit location' : 'Add location'}
+				isPending={isDialogPending}
+				// After an add the opener may be the Empty's Add, gone once the list lands.
+				returnFocusRef={isEditing ? undefined : addButtonRef}
+			>
+				<LocationForm
+					key={dialogTarget.mode === 'edit' ? dialogTarget.location.id : 'new'}
+					clientId={clientId}
+					location={dialogTarget.mode === 'edit' ? dialogTarget.location : undefined}
+					onSuccess={handleSuccess}
+					onCancel={() => setIsDialogOpen(false)}
+					onPendingChange={setIsDialogPending}
+				/>
+			</ResponsiveDialog>
 		</>
 	)
 }

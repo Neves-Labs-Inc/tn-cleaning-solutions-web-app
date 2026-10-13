@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+import { ClientLocations, type LocationRef, type Result } from '@/lib/clients/client-locations'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createSupabaseClient } from '@/lib/supabase/server'
 
@@ -407,96 +408,19 @@ export async function updateLocation(
     return parsed
   }
 
-  const supabase = await createSupabaseClient()
-  const { data: existingLocation, error: existingLocationError } = await supabase
-    .from('client_locations')
-    .select('id, client_id, is_archived')
-    .eq('id', locationId)
-    .maybeSingle()
-
-  if (existingLocationError) {
-    return { success: false, error: existingLocationError.message }
-  }
-
-  if (!existingLocation || existingLocation.is_archived) {
-    return { success: false, error: 'Location not found.' }
-  }
-
-  try {
-    const adminClient = createAdminClient()
-    const { data, error } = await adminClient
-      .from('client_locations')
-      .update({
-        label: parsed.data.label,
-        address: parsed.data.address,
-        notes: parsed.data.notes,
-      })
-      .eq('id', locationId)
-      .eq('is_archived', false)
-      .select('id')
-      .maybeSingle()
-
-    if (error) {
-      return { success: false, error: error.message }
-    }
-
-    if (!data) {
-      return { success: false, error: 'Location not found.' }
-    }
-  } catch {
-    return { success: false, error: 'Failed to update location.' }
-  }
-
-  revalidatePath('/solutions/clients')
-  return {
-    success: true,
-    data: { id: locationId, clientId: existingLocation.client_id },
-  }
+  const locations = await createClientLocations()
+  return settleLocationChange(await locations.update(locationId, parsed.data))
 }
 
 export async function archiveLocation(locationId: string): Promise<LocationActionResult> {
-  if (!locationId) {
-    return { success: false, error: 'Location id is required.' }
-  }
-
-  const authResult = await requireAdminRole()
-  if (!authResult.success) {
-    return { success: false, error: authResult.error }
-  }
-
-  const supabase = await createSupabaseClient()
-  const { data: existingLocation, error: existingLocationError } = await supabase
-    .from('client_locations')
-    .select('id, client_id')
-    .eq('id', locationId)
-    .maybeSingle()
-
-  if (existingLocationError) {
-    return { success: false, error: existingLocationError.message }
-  }
-
-  if (!existingLocation) {
-    return { success: false, error: 'Location not found.' }
-  }
-
-  const adminClient = createAdminClient()
-  const { error } = await adminClient
-    .from('client_locations')
-    .update({ is_archived: true })
-    .eq('id', locationId)
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  revalidatePath('/solutions/clients')
-  return {
-    success: true,
-    data: { id: locationId, clientId: existingLocation.client_id },
-  }
+  return setLocationArchived(locationId, true)
 }
 
 export async function restoreLocation(locationId: string): Promise<LocationActionResult> {
+  return setLocationArchived(locationId, false)
+}
+
+async function setLocationArchived(locationId: string, isArchived: boolean): Promise<LocationActionResult> {
   if (!locationId) {
     return { success: false, error: 'Location id is required.' }
   }
@@ -506,34 +430,19 @@ export async function restoreLocation(locationId: string): Promise<LocationActio
     return { success: false, error: authResult.error }
   }
 
-  const supabase = await createSupabaseClient()
-  const { data: existingLocation, error: existingLocationError } = await supabase
-    .from('client_locations')
-    .select('id, client_id')
-    .eq('id', locationId)
-    .maybeSingle()
+  const locations = await createClientLocations()
+  return settleLocationChange(await locations.setArchived(locationId, isArchived))
+}
 
-  if (existingLocationError) {
-    return { success: false, error: existingLocationError.message }
-  }
+async function createClientLocations(): Promise<ClientLocations> {
+  return new ClientLocations(await createSupabaseClient(), createAdminClient())
+}
 
-  if (!existingLocation) {
-    return { success: false, error: 'Location not found.' }
-  }
-
-  const adminClient = createAdminClient()
-  const { error } = await adminClient
-    .from('client_locations')
-    .update({ is_archived: false })
-    .eq('id', locationId)
-
-  if (error) {
-    return { success: false, error: error.message }
+function settleLocationChange(result: Result<LocationRef>): LocationActionResult {
+  if (!result.value) {
+    return { success: false, error: result.error ?? 'Failed to change location.' }
   }
 
   revalidatePath('/solutions/clients')
-  return {
-    success: true,
-    data: { id: locationId, clientId: existingLocation.client_id },
-  }
+  return { success: true, data: result.value }
 }

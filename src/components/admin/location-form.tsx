@@ -1,13 +1,14 @@
 'use client'
 
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useActionState, useEffect } from 'react'
-import { useFormStatus } from 'react-dom'
+import { unstable_rethrow } from 'next/navigation'
+import { startTransition, useActionState, useEffect, useRef } from 'react'
+import { AlertCircle } from 'lucide-react'
 
-import { Button } from '@/components/ui/button'
+import { SheetButtons, SHEET_BUTTON_CLASS } from '@/components/invoices/sheet-buttons'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import SubmitButton from '@/components/ui/submit-button'
 import { Textarea } from '@/components/ui/textarea'
 import { addLocation, type LocationActionResult, updateLocation } from '@/lib/actions/clients'
 
@@ -19,7 +20,10 @@ type LocationFormProps = {
     address: string
     notes: string | null
   }
-  onSuccess?: () => void
+  // The form sits in a ResponsiveDialog, which owns closing, the toast and the refresh.
+  onSuccess: () => void
+  onCancel: () => void
+  onPendingChange: (isPending: boolean) => void
 }
 
 const initialState: LocationActionResult = {
@@ -27,115 +31,118 @@ const initialState: LocationActionResult = {
   error: '',
 }
 
-function SubmitButton({ isEditMode }: { isEditMode: boolean }) {
-  const { pending } = useFormStatus()
+const SAVE_FAILED_MESSAGE = "Couldn't save the location. Try again."
+const LABEL_ERROR_ID = 'location-label-error'
+const ADDRESS_ERROR_ID = 'location-address-error'
 
-  return (
-    <Button
-      type="submit"
-      disabled={pending}
-      className="h-10 rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white hover:bg-emerald-700"
-    >
-      {pending ? 'Saving...' : isEditMode ? 'Save changes' : 'Add location'}
-    </Button>
-  )
-}
-
-export function LocationForm({ clientId, location, onSuccess }: LocationFormProps) {
-  const router = useRouter()
+export function LocationForm({ clientId, location, onSuccess, onCancel, onPendingChange }: LocationFormProps) {
   const serverAction = location ? updateLocation.bind(null, location.id) : addLocation.bind(null, clientId)
-  const [state, formAction, _isPending] = useActionState(serverAction, initialState)
+  const labelRef = useRef<HTMLInputElement>(null)
+  const addressRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    if (state.success) {
-      if (onSuccess) {
-        onSuccess()
-      } else {
-        router.push(`/solutions/clients/${clientId}`)
-      }
+  async function handleSave(previous: LocationActionResult, formData: FormData): Promise<LocationActionResult> {
+    let result: LocationActionResult
+    try {
+      result = await serverAction(previous, formData)
+    } catch (error) {
+      unstable_rethrow(error)
+      console.error('Location save failed', location?.id ?? clientId, error)
+      result = { success: false, error: SAVE_FAILED_MESSAGE }
     }
-  }, [state.success, onSuccess, router, clientId])
+
+    if (result.success) {
+      onSuccess()
+    }
+    return result
+  }
+
+  const [state, formAction, isPending] = useActionState(handleSave, initialState)
+  // Errors hide while a retry is in flight: the state still holds the last refusal until the new answer lands.
+  const isRefusedOnFields = 'fieldErrors' in state && Boolean(state.fieldErrors)
+  const fieldErrors = !isPending && 'fieldErrors' in state ? state.fieldErrors : undefined
+  const formError = !isPending && !state.success && !isRefusedOnFields ? state.error : ''
+
+  // A refused save puts focus on the first field to fix.
+  useEffect(() => {
+    if (fieldErrors?.label) {
+      labelRef.current?.focus()
+    } else if (fieldErrors?.address) {
+      addressRef.current?.focus()
+    }
+  }, [fieldErrors])
+
+  // Dispatched by hand rather than through <form action>: React resets an action form's fields after
+  // every submit, and a refused save must keep what the admin typed.
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (isPending) return
+    const formData = new FormData(event.currentTarget)
+    startTransition(() => formAction(formData))
+  }
 
   return (
-    <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-      <form action={formAction} className="space-y-5">
-        {'error' in state && state.error ? (
-          <div
-            className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
-            role="alert"
-            aria-live="polite"
-          >
-            {state.error}
-          </div>
-        ) : null}
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+      <Field data-invalid={Boolean(fieldErrors?.label)}>
+        <FieldLabel htmlFor="location-label">Label</FieldLabel>
+        <Input
+          ref={labelRef}
+          id="location-label"
+          name="label"
+          type="text"
+          autoComplete="off"
+          enterKeyHint="next"
+          defaultValue={location?.label ?? 'Location'}
+          aria-invalid={Boolean(fieldErrors?.label)}
+          aria-describedby={fieldErrors?.label ? LABEL_ERROR_ID : undefined}
+          placeholder="e.g. Main Home, Lake House"
+        />
+        {fieldErrors?.label ? <FieldError id={LABEL_ERROR_ID}>{fieldErrors.label}</FieldError> : null}
+      </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="label" className="text-sm font-medium text-neutral-700">
-            Label
-          </Label>
-          <Input
-            id="label"
-            name="label"
-            type="text"
-            required
-            defaultValue={location?.label ?? 'Location'}
-            aria-invalid={'fieldErrors' in state && Boolean(state.fieldErrors?.label)}
-            aria-describedby={'fieldErrors' in state && state.fieldErrors?.label ? 'label-error' : undefined}
-            className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-            placeholder="e.g. Main Home, Lake House"
-          />
-          {'fieldErrors' in state && state.fieldErrors?.label ? (
-            <p id="label-error" className="text-xs text-red-600">
-              {state.fieldErrors.label}
-            </p>
-          ) : null}
-        </div>
+      <Field data-invalid={Boolean(fieldErrors?.address)}>
+        <FieldLabel htmlFor="location-address">Address</FieldLabel>
+        <Input
+          ref={addressRef}
+          id="location-address"
+          name="address"
+          type="text"
+          required
+          autoComplete="street-address"
+          enterKeyHint="next"
+          defaultValue={location?.address ?? ''}
+          aria-invalid={Boolean(fieldErrors?.address)}
+          aria-describedby={fieldErrors?.address ? ADDRESS_ERROR_ID : undefined}
+          placeholder="123 Queen St W, Toronto, ON"
+        />
+        {fieldErrors?.address ? <FieldError id={ADDRESS_ERROR_ID}>{fieldErrors.address}</FieldError> : null}
+      </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="address" className="text-sm font-medium text-neutral-700">
-            Address
-          </Label>
-          <Input
-            id="address"
-            name="address"
-            type="text"
-            required
-            defaultValue={location?.address ?? ''}
-            aria-invalid={'fieldErrors' in state && Boolean(state.fieldErrors?.address)}
-            aria-describedby={'fieldErrors' in state && state.fieldErrors?.address ? 'address-error' : undefined}
-            className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-            placeholder="123 Main Street, Nashville, TN"
-          />
-          {'fieldErrors' in state && state.fieldErrors?.address ? (
-            <p id="address-error" className="text-xs text-red-600">
-              {state.fieldErrors.address}
-            </p>
-          ) : null}
-        </div>
+      <Field>
+        <FieldLabel htmlFor="location-notes">Notes</FieldLabel>
+        <Textarea
+          id="location-notes"
+          name="notes"
+          defaultValue={location?.notes ?? ''}
+          className="min-h-28"
+          placeholder="Parking details, gate code, alarm instructions, etc."
+        />
+      </Field>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="notes" className="text-sm font-medium text-neutral-700">
-            Notes
-          </Label>
-          <Textarea
-            id="notes"
-            name="notes"
-            defaultValue={location?.notes ?? ''}
-            className="min-h-28 rounded-xl border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
-            placeholder="Parking details, gate code, alarm instructions, etc."
-          />
-        </div>
+      {formError ? (
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription>{formError}</AlertDescription>
+        </Alert>
+      ) : null}
 
-        <div className="flex items-center justify-end gap-3 border-t border-neutral-100 pt-4">
-          <Link
-            href={`/solutions/clients/${clientId}`}
-            className="inline-flex h-10 items-center rounded-full border border-neutral-200 bg-white px-4 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-50"
-          >
-            Cancel
-          </Link>
-          <SubmitButton isEditMode={Boolean(location)} />
-        </div>
-      </form>
-    </section>
+      <SheetButtons onCancel={onCancel} onPendingChange={onPendingChange} isPending={isPending}>
+        <SubmitButton
+          className={SHEET_BUTTON_CLASS}
+          label={location ? 'Save changes' : 'Add location'}
+          pendingLabel={location ? 'Saving…' : 'Adding…'}
+          isPending={isPending}
+        />
+      </SheetButtons>
+    </form>
   )
 }
