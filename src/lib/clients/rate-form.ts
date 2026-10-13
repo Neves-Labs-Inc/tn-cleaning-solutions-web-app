@@ -1,3 +1,4 @@
+import { isCalendarDate } from "../dates/calendar.ts";
 import {
   AMOUNT_TOO_LARGE_MESSAGE,
   parseDollarsToCents,
@@ -27,19 +28,6 @@ export type RateFormResult<T> =
     };
 
 const FIX_FIELDS_MESSAGE = "Please correct the highlighted fields.";
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-// The pattern only checks the shape; the round-trip rejects 2026-02-31, which Date would roll over.
-function isCalendarDate(value: string): boolean {
-  let isValid = false;
-  if (DATE_PATTERN.test(value)) {
-    const parsed = new Date(`${value}T00:00:00Z`);
-    isValid =
-      !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value);
-  }
-  return isValid;
-}
-
 function readField(formData: FormData, name: string): string {
   return String(formData.get(name) ?? "").trim();
 }
