@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation'
 
-import type { ClientJobPricingRow } from '@/components/admin/client-job-pricing-list'
 import DetailHeader from '@/components/admin/detail-page/detail-header'
 import UrlTabs from '@/components/admin/detail-page/url-tabs'
 import StatusBadge, { activeStateBadge, ARCHIVED_BADGE } from '@/components/ui/status-badge'
@@ -13,36 +12,13 @@ import { BillingSection } from './billing-section'
 import { ClientArchiveButton } from './client-archive-button'
 import { ClientEditDialog } from './client-edit-dialog'
 import { ClientInfoCard } from './client-info-card'
+import { loadPricingTab } from './load-pricing-tab'
 import { LocationsTab, type LocationRow } from './locations-tab'
 import { PricingTab } from './pricing-tab'
 
 type ClientDetailPageProps = {
 	params: Promise<{ id: string }>
 	searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}
-
-type PricingQueryRow = {
-	id: string
-	job_id: string
-	hourly_rate_cents: number
-	effective_from: string
-	notes: string | null
-	is_archived: boolean
-	jobs: { name: string } | { name: string }[]
-}
-
-function toPricingRow(row: PricingQueryRow): ClientJobPricingRow {
-	const job = Array.isArray(row.jobs) ? row.jobs[0] : row.jobs
-
-	return {
-		id: row.id,
-		job_id: row.job_id,
-		job_name: job?.name ?? '',
-		hourly_rate_cents: row.hourly_rate_cents,
-		effective_from: row.effective_from,
-		notes: row.notes,
-		is_archived: row.is_archived,
-	}
 }
 
 export default async function ClientDetailPage({ params, searchParams }: ClientDetailPageProps) {
@@ -54,7 +30,7 @@ export default async function ClientDetailPage({ params, searchParams }: ClientD
 	const [
 		{ data: client, error: clientError },
 		{ data: locations, error: locationsError },
-		{ data: pricing, error: pricingError },
+		pricing,
 		receivables,
 	] = await Promise.all([
 		supabase
@@ -68,11 +44,7 @@ export default async function ClientDetailPage({ params, searchParams }: ClientD
 			.eq('client_id', id)
 			.order('is_archived', { ascending: true })
 			.order('label', { ascending: true }),
-		supabase
-			.from('client_job_pricing')
-			.select('id, job_id, hourly_rate_cents, effective_from, notes, is_archived, jobs!inner(name)')
-			.eq('client_id', id)
-			.order('effective_from', { ascending: false }),
+		loadPricingTab(supabase, id),
 		getReceivables(supabase, id).catch((error: unknown) => {
 			console.error('Failed to load billing for client', id, error)
 			return null
@@ -84,7 +56,6 @@ export default async function ClientDetailPage({ params, searchParams }: ClientD
 	}
 
 	if (locationsError) console.error('Failed to load locations for client', id, locationsError)
-	if (pricingError) console.error('Failed to load pricing for client', id, pricingError)
 
 	const businessDate = getBusinessDate(new Date())
 	// An archived client is read-only: only Restore remains, and Locations and Pricing lose their controls.
@@ -142,7 +113,7 @@ export default async function ClientDetailPage({ params, searchParams }: ClientD
 						content: (
 							<PricingTab
 								clientId={client.id}
-								rows={pricingError ? null : ((pricing ?? []) as PricingQueryRow[]).map(toPricingRow)}
+								data={pricing}
 								today={businessDate}
 								isReadOnly={isReadOnly}
 							/>

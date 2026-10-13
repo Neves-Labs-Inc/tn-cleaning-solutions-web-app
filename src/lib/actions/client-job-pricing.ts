@@ -1,28 +1,15 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 
-import { AMOUNT_TOO_LARGE_MESSAGE, parseDollarsToCents } from '@/lib/pricing/money'
+import { getRateEditRefusal, type RateTarget } from '@/lib/clients/rate-client-guard'
+import { type ClientJobPricingFieldErrors, parseNewRateForm, parseRateChangeForm } from '@/lib/clients/rate-form'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient as createSupabaseClient } from '@/lib/supabase/server'
 
-export type ClientJobPricingFieldErrors = {
-  job_id?: string
-  hourly_rate_cents?: string
-  effective_from?: string
-}
-
 export type ClientJobPricingActionResult =
-  | { success: true; data?: { id: string } }
+  | { success: true; data: { id: string } }
   | { success: false; error: string; fieldErrors?: ClientJobPricingFieldErrors }
-
-type ParsedClientJobPricingInput = {
-  job_id: string
-  hourly_rate_cents: number
-  effective_from: string
-  notes: string | null
-}
 
 export async function createClientJobPricing(
   clientId: string,
@@ -53,9 +40,14 @@ export async function createClientJobPricing(
     return { success: false, error: authResult.error }
   }
 
-  const parsed = parseClientJobPricingFormData(formData)
+  const parsed = parseNewRateForm(formData)
   if (!parsed.success) {
     return parsed
+  }
+
+  const clientCheck = await checkRateClient({ clientId })
+  if (clientCheck.error !== null) {
+    return { success: false, error: clientCheck.error }
   }
 
   let pricingId = ''
@@ -84,8 +76,6 @@ export async function createClientJobPricing(
   }
 
   revalidateClientJobPricingPaths(clientId)
-  redirect(`/solutions/clients/${clientId}/pricing`)
-
   return { success: true, data: { id: pricingId } }
 }
 
@@ -118,9 +108,14 @@ export async function updateClientJobPricing(
     return { success: false, error: authResult.error }
   }
 
-  const parsed = parseClientJobPricingFormData(formData)
+  const parsed = parseRateChangeForm(formData)
   if (!parsed.success) {
     return parsed
+  }
+
+  const clientCheck = await checkRateClient({ pricingId })
+  if (clientCheck.error !== null) {
+    return { success: false, error: clientCheck.error }
   }
 
   let clientId = ''
@@ -129,12 +124,8 @@ export async function updateClientJobPricing(
     const adminClient = createAdminClient()
     const { data, error } = await adminClient
       .from('client_job_pricing')
-      .update({
-        job_id: parsed.data.job_id,
-        hourly_rate_cents: parsed.data.hourly_rate_cents,
-        effective_from: parsed.data.effective_from,
-        notes: parsed.data.notes,
-      })
+      // No job_id: an edit never moves a rate to another job.
+      .update(parsed.data)
       .eq('id', pricingId)
       .eq('is_archived', false)
       .select('id, client_id')
@@ -154,8 +145,6 @@ export async function updateClientJobPricing(
   }
 
   revalidateClientJobPricingPaths(clientId)
-  redirect(`/solutions/clients/${clientId}/pricing`)
-
   return { success: true, data: { id: pricingId } }
 }
 
@@ -169,6 +158,15 @@ export async function restoreClientJobPricing(
   pricingId: string
 ): Promise<ClientJobPricingActionResult> {
   return setClientJobPricingArchived(pricingId, false)
+}
+
+// Refuses writes to an archived client's rates; the UI hides the controls, this backs it up.
+async function checkRateClient(target: RateTarget): Promise<{ error: string | null }> {
+  const error = await getRateEditRefusal(createAdminClient(), target)
+  if (error !== null) {
+    console.warn('client-job-pricing: write refused', target, error)
+  }
+  return { error }
 }
 
 async function requireAdminRole(): Promise<{ success: true } | { success: false; error: string }> {
@@ -191,58 +189,6 @@ async function requireAdminRole(): Promise<{ success: true } | { success: false;
   }
 
   return { success: true }
-}
-
-function parseClientJobPricingFormData(formData: FormData):
-  | { success: true; data: ParsedClientJobPricingInput }
-  | { success: false; error: string; fieldErrors: ClientJobPricingFieldErrors } {
-  const jobId = String(formData.get('job_id') ?? '').trim()
-  const rate = parseDollarsToCents(String(formData.get('hourly_rate_cents') ?? ''))
-  const effectiveFrom = String(formData.get('effective_from') ?? '').trim()
-  const notesRaw = String(formData.get('notes') ?? '').trim()
-
-  const fieldErrors: ClientJobPricingFieldErrors = {}
-
-  if (!jobId) {
-    fieldErrors.job_id = 'Job is required.'
-  }
-
-  if ('error' in rate) {
-    fieldErrors.hourly_rate_cents =
-      rate.error === 'too_large' ? AMOUNT_TOO_LARGE_MESSAGE : 'Enter a valid hourly rate in dollars.'
-  }
-
-  if (!isValidDate(effectiveFrom)) {
-    fieldErrors.effective_from = 'Enter a valid date.'
-  }
-
-  let result:
-    | { success: true; data: ParsedClientJobPricingInput }
-    | { success: false; error: string; fieldErrors: ClientJobPricingFieldErrors }
-
-  if ('error' in rate || Object.keys(fieldErrors).length > 0) {
-    result = {
-      success: false,
-      error: 'Please correct the highlighted fields.',
-      fieldErrors,
-    }
-  } else {
-    result = {
-      success: true,
-      data: {
-        job_id: jobId,
-        hourly_rate_cents: rate.cents,
-        effective_from: effectiveFrom,
-        notes: notesRaw || null,
-      },
-    }
-  }
-
-  return result
-}
-
-function isValidDate(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
 function toWriteFailure(message: string): ClientJobPricingActionResult {
@@ -277,7 +223,6 @@ function isUniqueConstraintError(error: string) {
 function revalidateClientJobPricingPaths(clientId: string) {
   revalidatePath('/solutions/clients')
   revalidatePath(`/solutions/clients/${clientId}`)
-  revalidatePath(`/solutions/clients/${clientId}/pricing`)
   revalidatePath('/solutions/appointments')
 }
 
@@ -292,6 +237,11 @@ async function setClientJobPricingArchived(
   const authResult = await requireAdminRole()
   if (!authResult.success) {
     return { success: false, error: authResult.error }
+  }
+
+  const clientCheck = await checkRateClient({ pricingId })
+  if (clientCheck.error !== null) {
+    return { success: false, error: clientCheck.error }
   }
 
   const adminClient = createAdminClient()
