@@ -5,7 +5,10 @@ import { notFound } from 'next/navigation'
 
 import AppointmentCrewClocks from '@/components/admin/appointment-crew-clocks'
 import BillingCard from '@/components/admin/billing-card'
-import AppointmentLifecycleActions, { CompletedByAdminHint } from '@/components/admin/appointment-lifecycle-actions'
+import AppointmentLifecycleActions, {
+  CompletedByAdminHint,
+  CompletedByClocksHint,
+} from '@/components/admin/appointment-lifecycle-actions'
 import { BillingMismatchNote } from '@/components/invoices/visit-line-summary'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -144,6 +147,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
           <StatusBadge tone={statusBadge.tone} icon={statusBadge.icon}>{statusBadge.label}</StatusBadge>
 
           <CompletedByAdminHint status={appointment.status} manuallyCompleted={appointment.manually_completed} />
+          <CompletedByClocksHint status={appointment.status} manuallyCompleted={appointment.manually_completed} />
         </div>
 
         <AppointmentLifecycleActions
