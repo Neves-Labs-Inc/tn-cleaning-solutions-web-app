@@ -111,57 +111,57 @@ set local request.jwt.claims = '{"sub": "a5000000-0000-4000-8000-000000000002", 
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_create_draft('c5000000-0000-4000-8000-000000000001',
-		array['d5000000-0000-4000-8000-000000000001']::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000001']::uuid[], null, null, null)
 $$), 'not_admin', 'an employee can''t create a draft');
 
 set local request.jwt.claims = '{"sub": "a5000000-0000-4000-8000-000000000001", "role": "authenticated", "app_metadata": {"role": "admin"}}';
 
 select is(public.pgtap_drafts_code($$
-	select public.invoice_create_draft('c5000000-0000-4000-8000-000000000001', array[]::uuid[], null, null)
+	select public.invoice_create_draft('c5000000-0000-4000-8000-000000000001', array[]::uuid[], null, null, null)
 $$), 'empty_lines', 'a draft with no visits is refused');
 
 select is(public.pgtap_drafts_code($$
-	select public.invoice_create_draft('c5000000-0000-4000-8000-000000000001', null, null, null)
+	select public.invoice_create_draft('c5000000-0000-4000-8000-000000000001', null, null, null, null)
 $$), 'empty_lines', 'a draft with a null visit list is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_create_draft('c5000000-0000-4000-8000-000000000001',
-		array['d5000000-0000-4000-8000-000000000001', 'd5000000-0000-4000-8000-000000000007']::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000001', 'd5000000-0000-4000-8000-000000000007']::uuid[], null, null, null)
 $$), 'visit_other_client', 'a visit of another client is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_create_draft('c5000000-0000-4000-8000-000000000001',
-		array['d5000000-0000-4000-8000-000000000006']::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000006']::uuid[], null, null, null)
 $$), 'visit_other_client', 'an archived visit is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_create_draft('c5000000-0000-4000-8000-000000000001',
-		array['d5000000-0000-4000-8000-0000000000ff']::uuid[], null, null)
+		array['d5000000-0000-4000-8000-0000000000ff']::uuid[], null, null, null)
 $$), 'visit_other_client', 'an unknown visit is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_create_draft('c5000000-0000-4000-8000-0000000000ff',
-		array['d5000000-0000-4000-8000-000000000001']::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000001']::uuid[], null, null, null)
 $$), 'visit_other_client', 'a draft for an unknown client is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_create_draft('c5000000-0000-4000-8000-000000000001',
-		array['d5000000-0000-4000-8000-000000000005']::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000005']::uuid[], null, null, null)
 $$), 'visit_cancelled', 'a cancelled visit is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_create_draft('c5000000-0000-4000-8000-000000000001',
-		array['d5000000-0000-4000-8000-000000000008']::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000008']::uuid[], null, null, null)
 $$), 'visit_claimed', 'a visit on a manual draft is refused');
 
 select is(public.pgtap_drafts_code($$
 	select public.invoice_create_draft('c5000000-0000-4000-8000-000000000001',
-		array['d5000000-0000-4000-8000-000000000009']::uuid[], null, null)
+		array['d5000000-0000-4000-8000-000000000009']::uuid[], null, null, null)
 $$), 'visit_claimed', 'a visit on the Automatic draft is refused');
 
 select ok(public.invoice_create_draft('c5000000-0000-4000-8000-000000000001',
 		array['d5000000-0000-4000-8000-000000000001', 'd5000000-0000-4000-8000-000000000004',
-			'd5000000-0000-4000-8000-000000000004']::uuid[], '2026-11-01', 'Thanks!') is not null,
+			'd5000000-0000-4000-8000-000000000004']::uuid[], '2026-11-01', 'Thanks!', null) is not null,
 	'an admin creates a draft from an Upcoming and a completed visit');
 
 reset role;

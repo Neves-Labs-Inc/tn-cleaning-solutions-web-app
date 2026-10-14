@@ -21,6 +21,7 @@ import { fetchClientJobRules } from '@/lib/pricing/lookup'
 import { formatCents, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
 import { canEdit, type AppointmentStatus } from '@/lib/appointments/lifecycle'
+import type { IntervalUnit } from '@/lib/appointments/recurrence'
 import { getClockedMinutes } from '@/lib/time-sheets/session-view'
 import { cn } from '@/lib/utils'
 
@@ -30,7 +31,8 @@ type EditAppointmentPageProps = {
 
 type RecurrenceSeriesRow = {
   id: string
-  frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly'
+  interval_unit: IntervalUnit
+  interval_count: number
   start_date: string
   end_date: string | null
   max_occurrences: number | null
@@ -118,7 +120,7 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
   if (typedAppointment.recurrence_series_id) {
     const { data, error } = await supabase
       .from('recurrence_series')
-      .select('id, frequency, start_date, end_date, max_occurrences')
+      .select('id, interval_unit, interval_count, start_date, end_date, max_occurrences')
       .eq('id', typedAppointment.recurrence_series_id)
       .neq('is_archived', true)
       .maybeSingle()

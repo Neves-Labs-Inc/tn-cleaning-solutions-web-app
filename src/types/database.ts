@@ -255,7 +255,8 @@ export type Database = {
       recurrence_series: {
         Row: {
           id: string
-          frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly'
+          interval_unit: 'day' | 'week' | 'month'
+          interval_count: number
           start_date: string
           end_date: string | null
           max_occurrences: number | null
@@ -269,7 +270,8 @@ export type Database = {
         }
         Insert: {
           id?: string
-          frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly'
+          interval_unit: 'day' | 'week' | 'month'
+          interval_count?: number
           start_date: string
           end_date?: string | null
           max_occurrences?: number | null
@@ -283,7 +285,8 @@ export type Database = {
         }
         Update: {
           id?: string
-          frequency?: 'daily' | 'weekly' | 'biweekly' | 'monthly'
+          interval_unit?: 'day' | 'week' | 'month'
+          interval_count?: number
           start_date?: string
           end_date?: string | null
           max_occurrences?: number | null
@@ -475,6 +478,7 @@ export type Database = {
           paid_date: string | null
           payment_method: string | null
           payment_reference: string | null
+          internal_note: string | null
         }
         Insert: {
           id?: string
@@ -491,6 +495,7 @@ export type Database = {
           paid_date?: string | null
           payment_method?: string | null
           payment_reference?: string | null
+          internal_note?: string | null
         }
         Update: {
           id?: string
@@ -507,6 +512,7 @@ export type Database = {
           paid_date?: string | null
           payment_method?: string | null
           payment_reference?: string | null
+          internal_note?: string | null
         }
         Relationships: [
           {
@@ -799,6 +805,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      cancel_appointments: {
+        Args: { p_appointment_ids: string[] }
+        Returns: Json
+      }
       correct_session_clocks: {
         Args: {
           assignment_id: string
@@ -807,6 +817,15 @@ export type Database = {
           reason: string | null
         }
         Returns: undefined
+      }
+      delete_appointments: {
+        Args: {
+          p_appointment_ids: string[]
+          p_series_id: string | null
+          p_series_change: string
+          p_end_before: string | null
+        }
+        Returns: Json
       }
       delete_unprotected_series_appointments: {
         Args: { appointment_ids: string[] }
@@ -821,6 +840,7 @@ export type Database = {
           p_client_id: string
           p_appointment_ids: string[]
           p_due_date: string | null
+          p_internal_note: string | null
           p_notes: string | null
         }
         Returns: string
@@ -846,11 +866,16 @@ export type Database = {
           p_paid_date: string | null
           p_method: string
           p_reference: string | null
+          p_internal_note: string | null
         }
         Returns: Json
       }
       invoice_record_payment: {
         Args: { p_invoice_id: string; p_paid_date: string | null; p_method: string; p_reference: string | null }
+        Returns: undefined
+      }
+      invoice_set_internal_note: {
+        Args: { p_invoice_id: string; p_internal_note: string | null }
         Returns: undefined
       }
       invoice_unarchive: {

@@ -160,13 +160,14 @@ export async function createInvoice(_previous: unknown, formData: FormData): Pro
   const appointmentIds = ids(formData, 'appointment_ids')
   const dueDate = readOptionalDate(formData, 'due_date')
   const notes = optionalText(formData, 'notes', MAX_NOTES_LENGTH)
-  if (!clientId || !appointmentIds || notes === undefined) return refuse('invalid_input')
+  const internalNote = optionalText(formData, 'internal_note', MAX_NOTES_LENGTH)
+  if (!clientId || !appointmentIds || notes === undefined || internalNote === undefined) return refuse('invalid_input')
   if (dueDate === undefined) return refuse('invalid_due_date')
 
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
 
-  const result = await admin.ledger.createDraft({ clientId, appointmentIds, dueDate, notes })
+  const result = await admin.ledger.createDraft({ clientId, appointmentIds, dueDate, notes, internalNote })
   if (!result.ok) return toActionResult(result)
 
   revalidateInvoicing()
@@ -307,7 +308,8 @@ export async function markAppointmentsPaid(
   const clientId = id(formData, 'client_id')
   const appointmentIds = ids(formData, 'appointment_ids')
   const parsedPayment = payment(formData)
-  if (!clientId || !appointmentIds) return refuse('invalid_input')
+  const internalNote = optionalText(formData, 'internal_note', MAX_NOTES_LENGTH)
+  if (!clientId || !appointmentIds || internalNote === undefined) return refuse('invalid_input')
   if ('refusal' in parsedPayment) return parsedPayment.refusal
   const { input } = parsedPayment
   if (appointmentIds.length === 0) return refuse('empty_lines')
@@ -319,7 +321,7 @@ export async function markAppointmentsPaid(
   const lines = markPaidLines(formData, appointmentIds)
   if (!lines) return refuse('unpriced_line')
 
-  const result = await admin.ledger.markPaid({ clientId, lines, ...input })
+  const result = await admin.ledger.markPaid({ clientId, lines, internalNote, ...input })
   if (!result.ok) return toActionResult(result)
 
   // The ids passed the UUID parser, so the detail paths are never free text.
@@ -392,6 +394,20 @@ export async function unarchiveInvoice(_previous: unknown, formData: FormData): 
   const result = await admin.ledger.unarchive(invoiceId)
   revalidateInvoicing(invoiceId)
   return toActionResult(result, touched.appointmentIds)
+}
+
+// Posts invoice_id and internal_note. Allowed at any status and while archived; blank clears it.
+export async function setInternalNote(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
+  const invoiceId = id(formData, 'invoice_id')
+  const internalNote = optionalText(formData, 'internal_note', MAX_NOTES_LENGTH)
+  if (!invoiceId || internalNote === undefined) return refuse('invalid_input')
+
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
+
+  const result = await admin.ledger.setInternalNote(invoiceId, internalNote)
+  if (result.ok) revalidateInvoicing(invoiceId)
+  return toActionResult(result)
 }
 
 export async function setClientAutomaticInvoicing(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {

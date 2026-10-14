@@ -9,7 +9,12 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/components/ui/alert";
-import { Field, FieldError } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field";
 import {
   InputGroup,
   InputGroupAddon,
@@ -17,6 +22,7 @@ import {
   InputGroupText,
 } from "@/components/ui/input-group";
 import SubmitButton from "@/components/ui/submit-button";
+import { Textarea } from "@/components/ui/textarea";
 import usePaymentSheetSubmit, {
   type SheetFieldErrors,
 } from "@/hooks/use-payment-sheet-submit";
@@ -51,6 +57,8 @@ type MarkPaidFormProps = {
 
 const AMOUNT_MESSAGE = "Type an amount of $0 or more.";
 const METHOD_MESSAGE = "Choose a payment method.";
+// The action refuses a longer note; maxLength stops typing past it first.
+const MAX_INTERNAL_NOTE_LENGTH = 2000;
 
 function amountKey(appointmentId: string): string {
   return `amount:${appointmentId}`;
@@ -68,8 +76,12 @@ export default function MarkPaidForm({
   onPendingChange,
 }: MarkPaidFormProps): React.ReactNode {
   const amountIdPrefix = useId();
+  const internalNoteId = useId();
+  const internalNoteCaptionId = useId();
   const paidDateRef = useRef<HTMLInputElement>(null);
   const methodRef = useRef<PaymentMethodFieldHandle>(null);
+  // Controlled, so a refused submit doesn't reset what the admin typed.
+  const [internalNote, setInternalNote] = useState("");
   const [amounts, setAmounts] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       appointments.map((appointment) => [
@@ -211,6 +223,28 @@ export default function MarkPaidForm({
         paidDateRef={paidDateRef}
         methodRef={methodRef}
       />
+
+      {/* Not in PaymentFields: Record payment shares it and must not get this field. */}
+      <Field>
+        <FieldLabel htmlFor={internalNoteId}>
+          Internal note{" "}
+          <span className="font-normal text-muted-foreground">(optional)</span>
+        </FieldLabel>
+        <Textarea
+          id={internalNoteId}
+          name="internal_note"
+          rows={3}
+          maxLength={MAX_INTERNAL_NOTE_LENGTH}
+          enterKeyHint="done"
+          aria-describedby={internalNoteCaptionId}
+          value={internalNote}
+          onChange={(event) => setInternalNote(event.target.value)}
+          className="transition-[border-color,box-shadow] duration-fast md:hover:border-foreground/30"
+        />
+        <FieldDescription id={internalNoteCaptionId}>
+          Admin only, never shown to the client
+        </FieldDescription>
+      </Field>
 
       {formError ? (
         <Alert
