@@ -160,13 +160,14 @@ export async function createInvoice(_previous: unknown, formData: FormData): Pro
   const appointmentIds = ids(formData, 'appointment_ids')
   const dueDate = readOptionalDate(formData, 'due_date')
   const notes = optionalText(formData, 'notes', MAX_NOTES_LENGTH)
-  if (!clientId || !appointmentIds || notes === undefined) return refuse('invalid_input')
+  const internalNote = optionalText(formData, 'internal_note', MAX_NOTES_LENGTH)
+  if (!clientId || !appointmentIds || notes === undefined || internalNote === undefined) return refuse('invalid_input')
   if (dueDate === undefined) return refuse('invalid_due_date')
 
   const admin = await requireAdmin()
   if ('refusal' in admin) return admin.refusal
 
-  const result = await admin.ledger.createDraft({ clientId, appointmentIds, dueDate, notes })
+  const result = await admin.ledger.createDraft({ clientId, appointmentIds, dueDate, notes, internalNote })
   if (!result.ok) return toActionResult(result)
 
   revalidateInvoicing()

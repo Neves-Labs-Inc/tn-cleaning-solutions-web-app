@@ -13,7 +13,7 @@ import { normalizePaymentMethodName } from './view.ts'
 export type LedgerResult<T> = { ok: true; data: T } | ({ ok: false } & LedgerError)
 
 export type DraftInput = { dueDate: string | null; notes: string | null }
-export type CreateDraftInput = DraftInput & { clientId: string; appointmentIds: string[] }
+export type CreateDraftInput = DraftInput & { clientId: string; appointmentIds: string[]; internalNote: string | null }
 // The difference the admin made against what the page loaded, so a visit that joined an Automatic
 // draft meanwhile isn't dropped.
 // details null leaves the stored due date and notes alone; only the details form's Save sends them.
@@ -81,6 +81,7 @@ export class InvoiceLedger {
       p_appointment_ids: input.appointmentIds,
       p_due_date: input.dueDate,
       p_notes: input.notes,
+      p_internal_note: input.internalNote,
     })
     return this.settle('createDraft', { clientId: input.clientId }, error, { id: data ?? '' })
   }

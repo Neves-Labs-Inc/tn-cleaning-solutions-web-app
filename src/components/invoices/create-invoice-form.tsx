@@ -30,6 +30,8 @@ const UNKNOWN_MESSAGE = 'Something went wrong. Try again.'
 const STALE_VISIT_CODES = ['visit_claimed', 'visit_cancelled']
 const CLIENT_FIELD_ID = 'invoice-client'
 const CLIENT_ERROR_ID = 'invoice-client-error'
+// Matches the action's cap (MAX_NOTES_LENGTH in src/lib/actions/invoices.ts).
+const MAX_INTERNAL_NOTE_LENGTH = 2000
 
 type CreateInvoiceFormProps = {
   clients: BillableClient[]
@@ -95,6 +97,7 @@ export function CreateInvoiceForm({
   )
   const [dueDate, setDueDate] = useState('')
   const [notes, setNotes] = useState('')
+  const [internalNote, setInternalNote] = useState('')
   const [clientError, setClientError] = useState(false)
   const [refusal, setRefusal] = useState<string | null>(null)
   // Stays true after success so the form remains locked until the detail page takes over.
@@ -275,6 +278,24 @@ export function CreateInvoiceForm({
                 onChange={(event) => setNotes(event.target.value)}
                 className="scroll-mb-32"
               />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="internal_note">
+                Internal note <span className="font-normal text-muted-foreground">(optional)</span>
+              </FieldLabel>
+              <Textarea
+                id="internal_note"
+                name="internal_note"
+                rows={3}
+                maxLength={MAX_INTERNAL_NOTE_LENGTH}
+                enterKeyHint="done"
+                placeholder="e.g. Client asked for a separate October invoice"
+                value={internalNote}
+                onChange={(event) => setInternalNote(event.target.value)}
+                className="scroll-mb-32"
+                aria-describedby="internal_note-description"
+              />
+              <FieldDescription id="internal_note-description">Admin only, never shown to the client</FieldDescription>
             </Field>
           </Card>
 

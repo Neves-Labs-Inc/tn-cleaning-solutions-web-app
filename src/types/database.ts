@@ -840,6 +840,7 @@ export type Database = {
           p_client_id: string
           p_appointment_ids: string[]
           p_due_date: string | null
+          p_internal_note: string | null
           p_notes: string | null
         }
         Returns: string
