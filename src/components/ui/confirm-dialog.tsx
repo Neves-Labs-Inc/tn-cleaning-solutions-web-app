@@ -72,7 +72,8 @@ function KeepButton({ label, isMobile, keepRef }: KeepButtonProps): React.ReactN
   );
 }
 
-// Base UI radios are buttons, so a disabled fieldset disables them natively while the confirm runs.
+// Disables native controls in the body while the confirm runs. Base UI radios are spans, so a radio
+// group reads useFormStatus itself.
 function PendingFieldset({ children }: { children: React.ReactNode }): React.ReactNode {
   const { pending } = useFormStatus();
 

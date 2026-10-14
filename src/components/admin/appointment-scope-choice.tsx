@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
+import { useFormStatus } from 'react-dom'
 import { format, parseISO } from 'date-fns'
 import { AlertCircle, RotateCcw } from 'lucide-react'
 
@@ -42,6 +43,8 @@ type AppointmentScopeChoiceProps = {
 
 export function AppointmentScopeChoice({ value, onValueChange, chosenDate }: AppointmentScopeChoiceProps) {
   const headingId = useId()
+  // Base UI radios are spans, so the dialog's disabled fieldset only dims them; this stops the picks.
+  const { pending } = useFormStatus()
   // parseISO keeps a yyyy-MM-dd date on its own day; new Date() would read it as UTC midnight.
   const date = parseISO(chosenDate)
 
@@ -54,6 +57,7 @@ export function AppointmentScopeChoice({ value, onValueChange, chosenDate }: App
         aria-labelledby={headingId}
         value={value}
         onValueChange={(scope) => onValueChange(scope as AppointmentScope)}
+        disabled={pending}
         className="gap-0"
       >
         {SCOPE_ROWS.map((row) => (
@@ -76,12 +80,19 @@ export type ScopePreview = {
   error: string | null
   // Changes with every settled request, so the slot can replay its fade-in per answer.
   dataKey: string | null
+  // The scope the current data was fetched for; differs from the picked one while refreshing.
+  dataScope: AppointmentScope | null
   retry: () => void
 }
 
-type PreviewState = { key: string | null; data: ScopePreviewData | null; error: string | null }
+type PreviewState = {
+  key: string | null
+  data: ScopePreviewData | null
+  dataScope: AppointmentScope | null
+  error: string | null
+}
 
-const INITIAL_STATE: PreviewState = { key: null, data: null, error: null }
+const INITIAL_STATE: PreviewState = { key: null, data: null, dataScope: null, error: null }
 
 type UseScopePreviewOptions = {
   appointmentId: string
@@ -114,14 +125,14 @@ export function useScopePreview({ appointmentId, scope, action, enabled }: UseSc
         if (requestId !== latestRequestRef.current) return
         setState((previous) =>
           result.success
-            ? { key: requestKey, data: result.data, error: null }
-            : { key: requestKey, data: previous.data, error: result.error }
+            ? { key: requestKey, data: result.data, dataScope: scope, error: null }
+            : { ...previous, key: requestKey, error: result.error }
         )
       })
       .catch((thrown: unknown) => {
         if (requestId !== latestRequestRef.current) return
         console.error('Scope preview failed:', thrown)
-        setState((previous) => ({ key: requestKey, data: previous.data, error: PREVIEW_ERROR }))
+        setState((previous) => ({ ...previous, key: requestKey, error: PREVIEW_ERROR }))
       })
 
     // A close (or a newer request) orphans this one, so a reopen never settles on its stale answer.
@@ -145,6 +156,7 @@ export function useScopePreview({ appointmentId, scope, action, enabled }: UseSc
     data: enabled ? state.data : null,
     error: isSettled ? state.error : null,
     dataKey: enabled ? state.key : null,
+    dataScope: enabled ? state.dataScope : null,
     retry: () => setAttempt((count) => count + 1),
   }
 }
@@ -152,9 +164,11 @@ export function useScopePreview({ appointmentId, scope, action, enabled }: UseSc
 type ScopePreviewSlotProps = {
   preview: ScopePreview
   children: (data: ScopePreviewData) => React.ReactNode
+  // Reserves the height the copy lands at, so the dialog doesn't jump. Delete's copy is taller.
+  minHeightClassName?: string
 }
 
-export function ScopePreviewSlot({ preview, children }: ScopePreviewSlotProps) {
+export function ScopePreviewSlot({ preview, children, minHeightClassName = 'min-h-[4.5rem]' }: ScopePreviewSlotProps) {
   // Persists across every state, so focus has somewhere to land when Try again unmounts.
   const slotRef = useRef<HTMLDivElement>(null)
   // The first sentence after the skeleton fades in slower than the later scope changes.
@@ -189,7 +203,7 @@ export function ScopePreviewSlot({ preview, children }: ScopePreviewSlotProps) {
     )
   } else if (preview.data === null) {
     content = (
-      <div className="min-h-[4.5rem] rounded-lg bg-muted/50 p-3">
+      <div className={`${minHeightClassName} rounded-lg bg-muted/50 p-3`}>
         <div className="mt-1 space-y-2">
           <Skeleton className="h-4 w-4/5" />
           <Skeleton className="h-4 w-1/2" />
@@ -200,11 +214,11 @@ export function ScopePreviewSlot({ preview, children }: ScopePreviewSlotProps) {
     content = (
       // Dimming and the fade-in sit on separate elements: both set a duration.
       <div
-        className={`min-h-[4.5rem] rounded-lg bg-muted/50 p-3 transition-opacity duration-fast ${preview.status === 'refreshing' ? 'opacity-50' : ''}`}
+        className={`${minHeightClassName} rounded-lg bg-muted/50 p-3 transition-opacity duration-fast ${preview.status === 'refreshing' ? 'opacity-50' : ''}`}
       >
-        <p key={preview.dataKey} className={`animate-in fade-in-0 ${fadeClasses}`}>
+        <div key={preview.dataKey} className={`animate-in fade-in-0 ${fadeClasses}`}>
           {children(preview.data)}
-        </p>
+        </div>
       </div>
     )
   }
@@ -216,7 +230,7 @@ export function ScopePreviewSlot({ preview, children }: ScopePreviewSlotProps) {
       role="status"
       aria-live="polite"
       aria-busy={isBusy}
-      className="min-h-[4.5rem] text-sm leading-6 text-foreground outline-none"
+      className={`${minHeightClassName} text-sm leading-6 text-foreground outline-none`}
     >
       {content}
     </div>
