@@ -1,7 +1,6 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 
 import {
   parseEmployeeUpdateFormData,
@@ -210,8 +209,7 @@ export async function updateEmployee(
 
   revalidatePath('/solutions/employees')
   revalidatePath(`/solutions/employees/${id}`)
-  redirect('/solutions/employees')
-
+  // The form navigates back to the employee page itself, so it can toast on the way.
   return { success: true, data: { id } }
 }
 

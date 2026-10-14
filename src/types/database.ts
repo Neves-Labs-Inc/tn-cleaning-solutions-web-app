@@ -51,7 +51,7 @@ export type Database = {
           phone: string
           started_at: string | null
           address: string | null
-          e_transfer_email: string | null
+          e_transfer_contact: string | null
           default_payout_method: string | null
           is_active: boolean
           created_at: string
@@ -65,7 +65,7 @@ export type Database = {
           phone: string
           started_at?: string | null
           address?: string | null
-          e_transfer_email?: string | null
+          e_transfer_contact?: string | null
           default_payout_method?: string | null
           is_active: boolean
           created_at?: string
@@ -79,7 +79,7 @@ export type Database = {
           phone?: string
           started_at?: string | null
           address?: string | null
-          e_transfer_email?: string | null
+          e_transfer_contact?: string | null
           default_payout_method?: string | null
           is_active?: boolean
           created_at?: string

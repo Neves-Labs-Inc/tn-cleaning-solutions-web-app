@@ -18,7 +18,7 @@ insert into auth.users (id, email) values
 	('a2000000-0000-4000-8000-000000000001', 'pgtap.lifecycle.a@example.test'),
 	('a2000000-0000-4000-8000-000000000002', 'pgtap.lifecycle.b@example.test');
 
-insert into public.employees (id, user_id, full_name, is_active, is_archived, address, e_transfer_email) values
+insert into public.employees (id, user_id, full_name, is_active, is_archived, address, e_transfer_contact) values
 	('e2000000-0000-4000-8000-00000000000a', 'a2000000-0000-4000-8000-000000000001', 'Lifecycle A', true, false, '1 A St', 'a@pay.test'),
 	('e2000000-0000-4000-8000-00000000000b', 'a2000000-0000-4000-8000-000000000002', 'Lifecycle B', true, false, '2 B St', 'b@pay.test');
 

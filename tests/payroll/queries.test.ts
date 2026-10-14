@@ -68,7 +68,7 @@ function employeeRow(id: string, overrides: Record<string, unknown> = {}) {
     is_active: true,
     is_archived: false,
     default_payout_method: null,
-    e_transfer_email: null,
+    e_transfer_contact: null,
     ...overrides,
   };
 }
@@ -101,7 +101,7 @@ function tables() {
       employeeRow("ana", {
         full_name: "Ana Costa",
         default_payout_method: "e-Transfer",
-        e_transfer_email: "ana@example.com",
+        e_transfer_contact: "ana@example.com",
       }),
       employeeRow("bea", { full_name: "Beatriz Lima", is_active: false }),
       employeeRow("carla", { full_name: "Carla Mendes", is_archived: true }),

@@ -1,10 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState } from 'react'
-import { useFormStatus } from 'react-dom'
+import { useRouter } from 'next/navigation'
+import { startTransition, useActionState, useEffect, useRef } from 'react'
+import { toast } from 'sonner'
 
+import { PayoutMethodInput } from '@/components/admin/payroll/payout-method-input'
 import { Button } from '@/components/ui/button'
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { updateEmployee, type EmployeeActionResult } from '@/lib/actions/employees'
@@ -16,7 +19,8 @@ type EmployeeEditFormProps = {
     phone: string | null
     started_at: string | null
     address: string | null
-    e_transfer_email: string | null
+    default_payout_method: string | null
+    e_transfer_contact: string | null
     is_active: boolean
   }
 }
@@ -26,12 +30,21 @@ const initialState: EmployeeActionResult = {
   error: '',
 }
 
+const PAYOUT_METHOD_HELP_ID = 'default-payout-method-help'
+const PAYOUT_METHOD_ERROR_ID = 'default-payout-method-error'
+const CONTACT_HELP_ID = 'e-transfer-contact-help'
+const CONTACT_ERROR_ID = 'e-transfer-contact-error'
+
+function joinIds(...ids: Array<string | false | undefined>): string | undefined {
+  const present = ids.filter((id): id is string => Boolean(id))
+  return present.length > 0 ? present.join(' ') : undefined
+}
+
 const inputClassName =
   'h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20'
 
-function SubmitButton() {
-  const { pending } = useFormStatus()
-
+// Pending comes from the form: a hand-dispatched submit is invisible to useFormStatus.
+function SubmitButton({ pending }: { pending: boolean }) {
   return (
     <Button
       type="submit"
@@ -44,11 +57,52 @@ function SubmitButton() {
 }
 
 export function EmployeeEditForm({ employee }: EmployeeEditFormProps) {
-  const [state, formAction] = useActionState(updateEmployee.bind(null, employee.id), initialState)
+  const router = useRouter()
+
+  async function handleSave(
+    previous: EmployeeActionResult,
+    formData: FormData
+  ): Promise<EmployeeActionResult> {
+    const result = await updateEmployee(employee.id, previous, formData)
+    if (result.success) {
+      toast.success('Employee saved')
+      router.push(`/solutions/employees/${employee.id}`)
+    }
+    return result
+  }
+
+  const fullNameRef = useRef<HTMLInputElement>(null)
+  const startedAtRef = useRef<HTMLInputElement>(null)
+  const payoutMethodRef = useRef<HTMLInputElement>(null)
+  const contactRef = useRef<HTMLInputElement>(null)
+  const [state, formAction, isPending] = useActionState(handleSave, initialState)
+  const fieldErrors = 'fieldErrors' in state ? state.fieldErrors : undefined
+
+  // A refused save puts focus on the first field to fix, in form order.
+  useEffect(() => {
+    if (fieldErrors?.full_name) {
+      fullNameRef.current?.focus()
+    } else if (fieldErrors?.started_at) {
+      startedAtRef.current?.focus()
+    } else if (fieldErrors?.default_payout_method) {
+      payoutMethodRef.current?.focus()
+    } else if (fieldErrors?.e_transfer_contact) {
+      contactRef.current?.focus()
+    }
+  }, [fieldErrors])
+
+  // Dispatched by hand rather than through <form action>: React resets an action form's fields
+  // after every submit, and a refused save must keep what the admin typed.
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>): void {
+    event.preventDefault()
+    if (isPending) return
+    const formData = new FormData(event.currentTarget)
+    startTransition(() => formAction(formData))
+  }
 
   return (
     <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-      <form action={formAction} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         {'error' in state && state.error ? (
           <div
             className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700"
@@ -64,6 +118,7 @@ export function EmployeeEditForm({ employee }: EmployeeEditFormProps) {
             Full Name
           </Label>
           <Input
+            ref={fullNameRef}
             id="full_name"
             name="full_name"
             type="text"
@@ -102,6 +157,7 @@ export function EmployeeEditForm({ employee }: EmployeeEditFormProps) {
             Started At
           </Label>
           <Input
+            ref={startedAtRef}
             id="started_at"
             name="started_at"
             type="date"
@@ -133,30 +189,57 @@ export function EmployeeEditForm({ employee }: EmployeeEditFormProps) {
           />
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="e_transfer_email" className="text-sm font-medium text-neutral-700">
-            E-transfer Email
-          </Label>
-          <Input
-            id="e_transfer_email"
-            name="e_transfer_email"
-            type="email"
-            defaultValue={employee.e_transfer_email ?? ''}
-            aria-invalid={'fieldErrors' in state && Boolean(state.fieldErrors?.e_transfer_email)}
-            aria-describedby={
-              'fieldErrors' in state && state.fieldErrors?.e_transfer_email
-                ? 'e-transfer-email-error'
-                : undefined
-            }
-            className={inputClassName}
-            placeholder="alex@example.com"
-          />
-          {'fieldErrors' in state && state.fieldErrors?.e_transfer_email ? (
-            <p id="e-transfer-email-error" className="text-xs text-red-600">
-              {state.fieldErrors.e_transfer_email}
-            </p>
-          ) : null}
-        </div>
+        <fieldset id="payout" className="scroll-mt-20 space-y-5">
+          <legend className="mb-4 text-lg font-semibold tracking-tight">Payout</legend>
+
+          <Field data-invalid={Boolean(fieldErrors?.default_payout_method)}>
+            <FieldLabel htmlFor="default_payout_method">Default Payout method</FieldLabel>
+            <PayoutMethodInput
+              ref={payoutMethodRef}
+              id="default_payout_method"
+              name="default_payout_method"
+              defaultValue={employee.default_payout_method ?? ''}
+              error={fieldErrors?.default_payout_method}
+              describedBy={joinIds(
+                PAYOUT_METHOD_HELP_ID,
+                Boolean(fieldErrors?.default_payout_method) && PAYOUT_METHOD_ERROR_ID
+              )}
+            />
+            <FieldDescription id={PAYOUT_METHOD_HELP_ID}>
+              Pick a suggestion or type your own. Leave blank if it varies.
+            </FieldDescription>
+            {fieldErrors?.default_payout_method ? (
+              <FieldError id={PAYOUT_METHOD_ERROR_ID}>{fieldErrors.default_payout_method}</FieldError>
+            ) : null}
+          </Field>
+
+          <Field data-invalid={Boolean(fieldErrors?.e_transfer_contact)}>
+            <FieldLabel htmlFor="e_transfer_contact">e-Transfer contact</FieldLabel>
+            {/* Not type="email": that would refuse a phone number. */}
+            <Input
+              ref={contactRef}
+              id="e_transfer_contact"
+              name="e_transfer_contact"
+              type="text"
+              inputMode="email"
+              autoComplete="off"
+              enterKeyHint="next"
+              defaultValue={employee.e_transfer_contact ?? ''}
+              placeholder="ana@example.com or 647-555-0142"
+              aria-invalid={Boolean(fieldErrors?.e_transfer_contact)}
+              aria-describedby={joinIds(
+                CONTACT_HELP_ID,
+                Boolean(fieldErrors?.e_transfer_contact) && CONTACT_ERROR_ID
+              )}
+            />
+            <FieldDescription id={CONTACT_HELP_ID}>
+              Email or phone number she receives e-Transfers at.
+            </FieldDescription>
+            {fieldErrors?.e_transfer_contact ? (
+              <FieldError id={CONTACT_ERROR_ID}>{fieldErrors.e_transfer_contact}</FieldError>
+            ) : null}
+          </Field>
+        </fieldset>
 
         <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3.5 py-3">
           <input
@@ -175,7 +258,7 @@ export function EmployeeEditForm({ employee }: EmployeeEditFormProps) {
           >
             Cancel
           </Link>
-          <SubmitButton />
+          <SubmitButton pending={isPending} />
         </div>
       </form>
     </section>

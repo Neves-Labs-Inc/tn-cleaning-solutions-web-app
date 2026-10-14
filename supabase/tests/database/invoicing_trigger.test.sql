@@ -19,7 +19,7 @@ insert into auth.users (id, email) values
 	('a6000000-0000-4000-8000-000000000001', 'pgtap.trigger.admin@example.test'),
 	('a6000000-0000-4000-8000-000000000002', 'pgtap.trigger.cleaner@example.test');
 
-insert into public.employees (id, user_id, full_name, is_active, is_archived, address, e_transfer_email) values
+insert into public.employees (id, user_id, full_name, is_active, is_archived, address, e_transfer_contact) values
 	('e6000000-0000-4000-8000-00000000000a', 'a6000000-0000-4000-8000-000000000002', 'Trigger Cleaner', true, false, '1 A St', 'a@pay.test');
 
 -- c1: Automatic invoicing on. c2: off. c3: the target of a client move. c4, c5, c6: on, each

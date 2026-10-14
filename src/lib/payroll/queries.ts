@@ -50,9 +50,8 @@ const ADJUSTMENT_COLUMNS = `
   id, pay_run_id, amount_cents, reason, appointment_employee_id, created_at,
   pay_run:pay_runs!inner ( period_start )
 `;
-// Ticket 04 renames e_transfer_email to e_transfer_contact; this module already calls it that.
 const EMPLOYEE_COLUMNS =
-  "id, full_name, is_active, is_archived, default_payout_method, e_transfer_email";
+  "id, full_name, is_active, is_archived, default_payout_method, e_transfer_contact";
 
 type RunLineRead = PayRunLineRow & { id: string };
 type AdjustmentRead = PayAdjustmentRow;
@@ -62,7 +61,7 @@ type EmployeeRead = {
   is_active: boolean;
   is_archived: boolean;
   default_payout_method: string | null;
-  e_transfer_email: string | null;
+  e_transfer_contact: string | null;
 };
 
 // Each page must be ordered by a unique key, or rows can repeat or vanish between pages.
@@ -166,7 +165,7 @@ async function fetchCleaners(db: Db): Promise<PayCleaner[]> {
     fullName: row.full_name,
     isActive: row.is_active && !row.is_archived,
     defaultPayoutMethod: row.default_payout_method,
-    eTransferContact: row.e_transfer_email,
+    eTransferContact: row.e_transfer_contact,
   }));
 }
 

@@ -46,7 +46,7 @@ insert into auth.users (id, email) values
 	('a7000000-0000-4000-8000-000000000001', 'pgtap.wholecrew.a@example.test'),
 	('a7000000-0000-4000-8000-000000000002', 'pgtap.wholecrew.b@example.test');
 
-insert into public.employees (id, user_id, full_name, is_active, is_archived, address, e_transfer_email) values
+insert into public.employees (id, user_id, full_name, is_active, is_archived, address, e_transfer_contact) values
 	('e7000000-0000-4000-8000-00000000000a', 'a7000000-0000-4000-8000-000000000001', 'Whole Crew A', true, false, '1 A St', 'a@pay.test'),
 	('e7000000-0000-4000-8000-00000000000b', 'a7000000-0000-4000-8000-000000000002', 'Whole Crew B', true, false, '2 B St', 'b@pay.test');
 
