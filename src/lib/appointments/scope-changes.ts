@@ -181,3 +181,114 @@ export async function previewScope(
     error: null,
   };
 }
+
+// Scoped delete -----------------------------------------------------------------------------------
+
+type SeriesChange = "none" | "end_before" | "delete";
+
+export type DeleteInScopeRequest = {
+  appointmentId: string;
+  scope: AppointmentScope;
+};
+
+export type DeletedInScope = {
+  deletedIds: string[];
+  skipped: SkippedVisit[];
+  invoiceIds: string[];
+  chosenDeleted: boolean;
+};
+
+// What delete_appointments returns.
+type DeleteAppointmentsResult = {
+  deleted: string[];
+  skipped: SkippedVisit[];
+  invoice_ids: string[];
+};
+
+const SERIES_CHANGE_FOR_SCOPE: Record<AppointmentScope, SeriesChange> = {
+  occurrence: "none",
+  future: "end_before",
+  series: "delete",
+};
+
+export const PAID_VISIT_NOT_DELETED_ERROR =
+  "This appointment is on a paid invoice. Void the invoice first to delete it.";
+export const PAID_SCOPE_NOT_DELETED_ERROR =
+  "Every appointment in this scope is on a paid invoice. Void the invoice first to delete them.";
+
+const NO_DELETE_RESULT: DeleteAppointmentsResult = {
+  deleted: [],
+  skipped: [],
+  invoice_ids: [],
+};
+
+async function callDeleteAppointments(
+  db: Db,
+  scope: AppointmentScope,
+  actIds: string[],
+  chosen: ChosenVisit,
+): Promise<DeleteAppointmentsResult> {
+  // The read already skipped every visit in scope: nothing to send.
+  if (actIds.length === 0) return NO_DELETE_RESULT;
+
+  const seriesChange = SERIES_CHANGE_FOR_SCOPE[scope];
+  const { data, error } = await db.rpc("delete_appointments", {
+    p_appointment_ids: actIds,
+    p_series_id: seriesChange === "none" ? null : chosen.recurrence_series_id,
+    p_series_change: seriesChange,
+    p_end_before: seriesChange === "end_before" ? chosen.scheduled_date : null,
+  });
+  if (error) throw error;
+  // The function builds exactly this jsonb shape.
+  return data as unknown as DeleteAppointmentsResult;
+}
+
+// The read can miss a claim made since; the function re-checks under lock, so a visit can be
+// skipped by both or by the function alone.
+function mergeSkipped(
+  planned: SkippedVisit[],
+  locked: SkippedVisit[],
+): SkippedVisit[] {
+  const plannedIds = new Set(planned.map((visit) => visit.id));
+  return [...planned, ...locked.filter((visit) => !plannedIds.has(visit.id))];
+}
+
+// Permanently deletes the visits in scope, with their clocks, Clock corrections, acknowledgements
+// and invoice lines, and changes the Series as the scope says. Deleting nothing is an error.
+export async function deleteInScope(
+  db: Db,
+  request: DeleteInScopeRequest,
+): Promise<ScopeOutcome<DeletedInScope>> {
+  const loaded = await loadScopePlan(db, { ...request, action: "delete" });
+  if (loaded.error !== null) return loaded;
+
+  const { plan, chosen } = loaded.value;
+  const result = await callDeleteAppointments(
+    db,
+    request.scope,
+    plan.actIds,
+    chosen,
+  );
+  const skipped = mergeSkipped(plan.skipped, result.skipped);
+
+  if (result.deleted.length === 0) {
+    let error = APPOINTMENT_NOT_FOUND_ERROR;
+    if (skipped.length > 0) {
+      error =
+        request.scope === "occurrence"
+          ? PAID_VISIT_NOT_DELETED_ERROR
+          : PAID_SCOPE_NOT_DELETED_ERROR;
+    }
+    return { value: null, error };
+  }
+
+  return {
+    value: {
+      deletedIds: result.deleted,
+      skipped,
+      invoiceIds: result.invoice_ids,
+      chosenDeleted: result.deleted.includes(request.appointmentId),
+    },
+    error: null,
+  };
+}

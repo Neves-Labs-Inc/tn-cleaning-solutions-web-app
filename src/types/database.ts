@@ -811,6 +811,15 @@ export type Database = {
         }
         Returns: undefined
       }
+      delete_appointments: {
+        Args: {
+          p_appointment_ids: string[]
+          p_series_id: string | null
+          p_series_change: string
+          p_end_before: string | null
+        }
+        Returns: Json
+      }
       delete_unprotected_series_appointments: {
         Args: { appointment_ids: string[] }
         Returns: string[]
