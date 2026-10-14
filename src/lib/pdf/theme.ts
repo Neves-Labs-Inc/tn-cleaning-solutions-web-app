@@ -41,6 +41,7 @@ const FONT_SIZE = {
   meta: 9,
   table: 9,
   footer: 8,
+  subLine: 8,
 } as const;
 
 export const PDF_STYLES = StyleSheet.create({
@@ -93,6 +94,15 @@ export const PDF_STYLES = StyleSheet.create({
   },
   cell: {
     paddingHorizontal: PDF_SPACING.cellX,
+  },
+  // A cell's second line (e.g. the shift an Adjustment points at).
+  subLine: {
+    fontSize: FONT_SIZE.subLine,
+    color: PDF_COLORS.muted,
+    marginTop: 1,
+  },
+  mutedCell: {
+    color: PDF_COLORS.muted,
   },
   footer: {
     position: "absolute",

@@ -19,10 +19,13 @@ type PdfPageProps = { children: ReactNode };
 
 type PdfHeaderProps = { title: string; metaLine: string };
 
+// Plain text, or text with a muted second line and/or a muted whole cell.
+export type PdfCell = string | { text: string; sub?: string; muted?: boolean };
+
 type PdfTableProps = {
   columns: PdfColumn[];
-  rows: string[][];
-  totalRow?: string[];
+  rows: PdfCell[][];
+  totalRow?: PdfCell[];
 };
 
 type PageNumbers = { pageNumber: number; totalPages: number };
@@ -51,19 +54,24 @@ export function PdfHeader({ title, metaLine }: PdfHeaderProps): ReactElement {
   );
 }
 
-function renderCells(columns: PdfColumn[], cells: string[]): ReactElement[] {
-  return columns.map((column, index) =>
-    h(
+function renderCells(columns: PdfColumn[], cells: PdfCell[]): ReactElement[] {
+  return columns.map((column, index) => {
+    const cell = cells[index] ?? "";
+    const { text, sub, muted } =
+      typeof cell === "string" ? { text: cell, sub: undefined, muted: false } : cell;
+    return h(
       Text,
       {
         style: [
           PDF_STYLES.cell,
           { width: `${column.widthPct}%`, textAlign: column.align },
+          muted ? PDF_STYLES.mutedCell : {},
         ],
       },
-      cells[index] ?? "",
-    ),
-  );
+      text,
+      sub === undefined ? null : h(Text, { style: PDF_STYLES.subLine }, `\n${sub}`),
+    );
+  });
 }
 
 // The header row repeats on every page and no row splits across pages. The last body row and the
@@ -73,7 +81,7 @@ export function PdfTable({
   rows,
   totalRow,
 }: PdfTableProps): ReactElement {
-  const labels = columns.map((column) => column.label);
+  const labels: PdfCell[] = columns.map((column) => column.label);
   const bodyRows = rows.map((cells) =>
     h(
       View,

@@ -1,6 +1,8 @@
 import { formatCents, formatRate } from '@/lib/pricing/money'
 import type { MyPaidRun } from '@/lib/payroll/my-pay'
 
+import { StatementDownloadButton } from './statement-download-button'
+
 const EYEBROW_CLASSES = 'text-xs font-semibold uppercase tracking-wider text-muted-foreground'
 const ROW_CLASSES = 'grid grid-cols-[1fr_auto] gap-x-3 py-2'
 
@@ -58,8 +60,9 @@ export function PaidRunLines({ run }: PaidRunLinesProps): React.ReactNode {
         <p className="text-base font-semibold text-foreground tabular-nums">{formatCents(run.totalCents)}</p>
       </div>
 
-      {/* Ticket 14 puts the Download statement button here. */}
-      <div data-slot="statement" />
+      <div className="mt-3 flex justify-end border-t border-border pt-3">
+        <StatementDownloadButton href={`/solutions/my-pay/${run.id}/statement.pdf`} />
+      </div>
     </div>
   )
 }
