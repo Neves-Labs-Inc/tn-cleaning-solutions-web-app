@@ -18,7 +18,9 @@
 // `jobs_employee_view`). Functions lists the invoice write functions (20261009140000 onward), the
 // RPCs the invoice ledger calls through the typed session client; `p_lines` is the Billed amounts
 // TypeScript priced. It also lists the two Clock correction functions (20261010120000), which refuse
-// through `clock_error` the same way, with the overlap's clashing assignment id in `hint`. The
+// through `clock_error` the same way, with the overlap's clashing assignment id in `hint`, and the
+// Payroll write functions (20261014130000), which refuse through `payroll_error`; `finalize_pay_runs`
+// instead returns one row per target with `code` 'ok' or the refusal code. The
 // other SQL functions are called through untyped clients and stay out until a
 // typed caller needs them. Every invoice function refuses through `invoice_error`: the PostgREST
 // error's `details` is the code.
@@ -1115,6 +1117,47 @@ export type Database = {
       payroll_settings: {
         Args: Record<PropertyKey, never>
         Returns: { pay_period_anchor: string; payroll_start: string }
+      }
+      finalize_pay_runs: {
+        Args: { p_targets: Json }
+        Returns: {
+          employee_id: string
+          period_start: string
+          code: string
+          message: string | null
+          detail: Json | null
+          pay_run_id: string | null
+        }[]
+      }
+      undo_finalize_pay_run: {
+        Args: { p_run_id: string }
+        Returns: undefined
+      }
+      add_pay_adjustment: {
+        Args: {
+          p_employee_id: string
+          p_period_start: string
+          p_amount_cents: number
+          p_reason: string
+          p_appointment_employee_id: string | null
+        }
+        Returns: string
+      }
+      delete_pay_adjustment: {
+        Args: { p_adjustment_id: string }
+        Returns: undefined
+      }
+      add_cleaner_to_pay_period: {
+        Args: { p_employee_id: string; p_period_start: string }
+        Returns: string
+      }
+      remove_cleaner_from_pay_period: {
+        Args: { p_employee_id: string; p_period_start: string }
+        Returns: undefined
+      }
+      start_off_cycle_run: {
+        Args: { p_employee_id: string; p_period_start: string }
+        Returns: string
       }
     }
   }
