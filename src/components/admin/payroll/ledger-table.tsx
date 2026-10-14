@@ -27,6 +27,8 @@ type LedgerTableProps = {
   cleanerName: string;
   cleanerId: string;
   isPaid: boolean;
+  // Unpaid in an ended period: each Adjustment line gets its Delete button.
+  canDeleteAdjustments: boolean;
 };
 
 const HEAD_CLASS_NAME =
@@ -40,6 +42,7 @@ export default function LedgerTable({
   cleanerName,
   cleanerId,
   isPaid,
+  canDeleteAdjustments,
 }: LedgerTableProps): React.ReactNode {
   return (
     <div className="overflow-hidden rounded-lg bg-card ring-1 ring-foreground/10">
@@ -119,7 +122,11 @@ export default function LedgerTable({
                     className="px-3 pb-2 whitespace-normal"
                   >
                     {entry.adjustments.map((item) => (
-                      <AdjustmentRow key={item.id} adjustment={item} />
+                      <AdjustmentRow
+                        key={item.id}
+                        adjustment={item}
+                        isDeletable={canDeleteAdjustments}
+                      />
                     ))}
                   </TableCell>
                 </TableRow>

@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   describeFinalizeResult,
   describeMarkPaidResult,
+  toBulkOutcome,
 } from "../../src/lib/payroll/bulk-result.ts";
 
 const NO_BLOCKERS = { openShifts: 0, missingClocks: 0, noRateLines: 0 };
@@ -85,5 +86,72 @@ describe("describeMarkPaidResult", () => {
       ]),
       "Marked 3 paid",
     );
+  });
+});
+
+describe("toBulkOutcome", () => {
+  it("reads a finalized row as done", () => {
+    assert.deepEqual(
+      toBulkOutcome({ code: "ok", message: null, detail: null }, "Ana"),
+      { cleanerName: "Ana", refusal: null },
+    );
+  });
+
+  it("reads a blocked row's counts per kind", () => {
+    const outcome = toBulkOutcome(
+      {
+        code: "blocked",
+        message: "raised text",
+        detail: { open_shift: 1, missing_clock: 0, no_rate: 2 },
+      },
+      "Carla",
+    );
+
+    assert.deepEqual(outcome, {
+      cleanerName: "Carla",
+      refusal: {
+        blockers: { openShifts: 1, missingClocks: 0, noRateLines: 2 },
+      },
+    });
+  });
+
+  it("describes a blocked row with its reasons in the result line", () => {
+    const outcome = toBulkOutcome(
+      {
+        code: "blocked",
+        message: null,
+        detail: { open_shift: 0, missing_clock: 1, no_rate: 0 },
+      },
+      "Carla",
+    );
+
+    assert.equal(
+      describeFinalizeResult([outcome]),
+      "Finalized 0 · 1 blocked: Carla: 1 Missing clock",
+    );
+  });
+
+  it("gives any other refusal its readable message", () => {
+    const outcome = toBulkOutcome(
+      { code: "nothing_to_finalize", message: "raised text", detail: null },
+      "Maria",
+    );
+
+    assert.deepEqual(outcome, {
+      cleanerName: "Maria",
+      refusal: { message: "There's no draft Pay run to finalize." },
+    });
+  });
+
+  it("gives an unknown code a generic message", () => {
+    const outcome = toBulkOutcome(
+      { code: "something_new", message: "raised text", detail: null },
+      "Maria",
+    );
+
+    assert.deepEqual(outcome, {
+      cleanerName: "Maria",
+      refusal: { message: "Couldn't save. Try again." },
+    });
   });
 });

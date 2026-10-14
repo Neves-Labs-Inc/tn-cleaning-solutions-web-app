@@ -5,6 +5,7 @@ import PayRunLedger from "@/components/admin/payroll/pay-run-ledger";
 import { FlagCountBadge } from "@/components/admin/payroll/payroll-badges";
 import RunCleanerName from "@/components/admin/payroll/run-cleaner-name";
 import RunStatusBadges from "@/components/admin/payroll/run-status-badges";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -14,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { PeriodSelection } from "@/hooks/use-period-selection";
 import { formatSignedCents } from "@/lib/payroll/format";
 import { formatHoursMinutes } from "@/lib/payroll/period";
 import type {
@@ -30,10 +32,13 @@ type PayRunTableProps = {
   totals: PeriodView["totals"];
   expandedKeys: ReadonlySet<string>;
   onToggle: (key: string) => void;
+  // null on a running period: nothing is selectable.
+  selection: PeriodSelection | null;
+  isSelectionDisabled: boolean;
 };
 
-// Cleaner | Hours | Shift pay | Adjustments | Total | Flags | Status | expander. The one place
-// the column count lives, so ticket 08 can add its checkbox column here.
+// Cleaner | Hours | Shift pay | Adjustments | Total | Flags | Status | expander, plus the checkbox
+// column on an ended period.
 const RUN_TABLE_COLUMN_COUNT = 8;
 // Period total, hours, shift pay, Adjustments and total; the footer leaves the rest empty.
 const FOOTER_FILLED_CELLS = 5;
@@ -56,13 +61,34 @@ export default function PayRunTable({
   totals,
   expandedKeys,
   onToggle,
+  selection,
+  isSelectionDisabled,
 }: PayRunTableProps): React.ReactNode {
+  const hasSelection = selection !== null;
+  const columnCount = RUN_TABLE_COLUMN_COUNT + (hasSelection ? 1 : 0);
+  const hasSelectable = runs.some((run) => run.status !== "paid");
+
   return (
     <div className="hidden overflow-hidden rounded-lg bg-card ring-1 ring-foreground/10 xl:block">
       <Table className="text-sm">
         <caption className="sr-only">Pay runs in this period</caption>
         <TableHeader className="bg-muted/60">
           <TableRow className="hover:bg-transparent">
+            {selection === null ? null : (
+              <TableHead className="w-12 pl-4">
+                <Checkbox
+                  aria-label="Select all unpaid"
+                  checked={selection.isAllSelected}
+                  indeterminate={
+                    selection.isSomeSelected && !selection.isAllSelected
+                  }
+                  disabled={!hasSelectable || isSelectionDisabled}
+                  onCheckedChange={(checked) =>
+                    checked ? selection.selectAll() : selection.clear()
+                  }
+                />
+              </TableHead>
+            )}
             <TableHead className={HEAD_CLASS_NAME}>Cleaner</TableHead>
             <TableHead className={cn(HEAD_CLASS_NAME, "text-right")}>
               Hours
@@ -90,8 +116,12 @@ export default function PayRunTable({
             return (
               <Fragment key={run.key}>
                 <TableRow
+                  data-run-key={run.key}
+                  data-state={
+                    selection?.isSelected(run.key) ? "selected" : undefined
+                  }
                   className={cn(
-                    "cursor-pointer duration-fast active:bg-muted",
+                    "scroll-mt-24 cursor-pointer duration-fast active:bg-muted",
                     // The primitive tints a row holding an open expander; keep it at /40.
                     isOpen && "bg-muted/40 has-aria-expanded:bg-muted/40",
                   )}
@@ -99,6 +129,22 @@ export default function PayRunTable({
                     if (!isFromControl(event.target)) onToggle(run.key);
                   }}
                 >
+                  {selection === null ? null : (
+                    // Ticking the box doesn't toggle the row's ledger.
+                    <TableCell
+                      className="w-12 pl-4"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {run.status === "paid" ? null : (
+                        <Checkbox
+                          checked={selection.isSelected(run.key)}
+                          disabled={isSelectionDisabled}
+                          aria-label={`Select ${run.cleaner.name}'s run`}
+                          onCheckedChange={() => selection.toggle(run.key)}
+                        />
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="px-3 py-3 whitespace-normal">
                     <button
                       type="button"
@@ -141,7 +187,7 @@ export default function PayRunTable({
                   <TableRow className="hover:bg-transparent">
                     <TableCell
                       id={panelId}
-                      colSpan={RUN_TABLE_COLUMN_COUNT}
+                      colSpan={columnCount}
                       className="bg-muted/30 px-4 py-4 whitespace-normal"
                     >
                       <div className="animate-in duration-base ease-out-quart fade-in-0 slide-in-from-top-1">
@@ -156,6 +202,7 @@ export default function PayRunTable({
         </TableBody>
         <TableFooter className="border-t-2 bg-muted/60 font-medium">
           <TableRow className="hover:bg-transparent">
+            {hasSelection ? <TableCell /> : null}
             <TableCell className="px-3 py-2">Period total</TableCell>
             <TableCell className="px-3 py-2 text-right font-mono tabular-nums">
               {formatHoursMinutes(totals.minutes)}

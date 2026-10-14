@@ -39,7 +39,23 @@ export type PostgrestLikeError = {
   code?: string;
 };
 
-const UNKNOWN_PAYROLL_MESSAGE = "Couldn't save. Try again.";
+export const UNKNOWN_PAYROLL_MESSAGE = "Couldn't save. Try again.";
+
+const STATUS_FORBIDDEN = 403;
+const STATUS_NOT_FOUND = 404;
+const STATUS_CONFLICT = 409;
+const STATUS_UNPROCESSABLE = 422;
+
+// Every other code refuses the write in the run's or period's current state: 409.
+const PAYROLL_ERROR_STATUSES: Partial<Record<PayrollErrorCode, number>> = {
+  not_admin: STATUS_FORBIDDEN,
+  run_not_found: STATUS_NOT_FOUND,
+  adjustment_not_found: STATUS_NOT_FOUND,
+  amount_required: STATUS_UNPROCESSABLE,
+  reason_required: STATUS_UNPROCESSABLE,
+  method_required: STATUS_UNPROCESSABLE,
+  paid_on_required: STATUS_UNPROCESSABLE,
+};
 
 const PAYROLL_ERROR_MESSAGES: Record<PayrollErrorCode, string> = {
   not_admin: "Only an admin can change payroll.",
@@ -49,8 +65,7 @@ const PAYROLL_ERROR_MESSAGES: Record<PayrollErrorCode, string> = {
   blocked: "Fix this Cleaner's problem sessions and Pay rate to finalize.",
   run_not_found: "This Pay run no longer exists. Reload and try again.",
   not_finalized: "This Pay run isn't finalized, or it's already paid.",
-  has_later_run:
-    "This Cleaner has an off-cycle run in this period, so this run can't go back to draft.",
+  has_later_run: "Undo her off-cycle run first.",
   run_paid: "This Pay run is paid and can't change.",
   amount_required: "Enter an amount other than $0",
   reason_required: "Add a reason",
@@ -75,6 +90,11 @@ export function isPayrollErrorCode(value: unknown): value is PayrollErrorCode {
 // For the per-target codes in a bulk result row (finalize_pay_runs), which aren't raised.
 export function getPayrollErrorMessage(code: PayrollErrorCode): string {
   return PAYROLL_ERROR_MESSAGES[code];
+}
+
+// The HTTP status a refusal maps to in a service Result.
+export function getPayrollErrorStatus(code: PayrollErrorCode): number {
+  return PAYROLL_ERROR_STATUSES[code] ?? STATUS_CONFLICT;
 }
 
 export function toPayrollError(error: PostgrestLikeError): PayrollError {

@@ -1,10 +1,14 @@
-import AdjustmentRow from "@/components/admin/payroll/adjustment-row";
+"use client";
+
+import AdjustmentSection from "@/components/admin/payroll/adjustment-section";
 import LedgerEntryCard from "@/components/admin/payroll/ledger-entry-card";
 import LedgerTable from "@/components/admin/payroll/ledger-table";
+import { usePeriodActions } from "@/components/admin/payroll/period-actions-context";
 import ProblemSessionBlock from "@/components/admin/payroll/problem-session-block";
-import RunStateLine from "@/components/admin/payroll/run-state-line";
-import { formatSignedCents, getRunStateLine } from "@/lib/payroll/format";
+import RunActions from "@/components/admin/payroll/run-actions";
+import { formatSignedCents } from "@/lib/payroll/format";
 import { buildLedger } from "@/lib/payroll/ledger";
+import { getAdjustmentAccess } from "@/lib/payroll/period-actions";
 import { formatHoursMinutes } from "@/lib/payroll/period";
 import type { PeriodRun, PeriodStatus } from "@/lib/payroll/period-view";
 import { formatCents } from "@/lib/pricing/money";
@@ -13,9 +17,6 @@ type PayRunLedgerProps = {
   run: PeriodRun;
   periodStatus: PeriodStatus;
 };
-
-const EYEBROW_CLASS_NAME =
-  "text-xs font-semibold tracking-wider text-muted-foreground uppercase";
 
 function RunTotals({ run }: { run: PeriodRun }): React.ReactNode {
   const totals = [
@@ -48,8 +49,17 @@ export default function PayRunLedger({
   run,
   periodStatus,
 }: PayRunLedgerProps): React.ReactNode {
+  const periodActions = usePeriodActions();
   const { entries, runAdjustments } = buildLedger(run);
   const isPaid = run.status === "paid";
+  const access =
+    periodActions === null
+      ? { canAdd: false, canDelete: false }
+      : getAdjustmentAccess(
+          run,
+          periodActions.isEnded,
+          periodActions.unpaidOffCycleCleanerIds.has(run.cleaner.id),
+        );
   const hasNoLines = entries.length === 0;
 
   return (
@@ -82,6 +92,7 @@ export default function PayRunLedger({
                 entry={entry}
                 cleanerId={run.cleaner.id}
                 isPaid={isPaid}
+                canDeleteAdjustments={access.canDelete}
               />
             ))}
           </div>
@@ -91,27 +102,27 @@ export default function PayRunLedger({
               cleanerName={run.cleaner.name}
               cleanerId={run.cleaner.id}
               isPaid={isPaid}
+              canDeleteAdjustments={access.canDelete}
             />
           </div>
         </>
       )}
 
-      {runAdjustments.length > 0 ? (
-        <section className="rounded-lg bg-card p-3 ring-1 ring-foreground/10">
-          <h3 className={EYEBROW_CLASS_NAME}>Adjustments for the run</h3>
-          <div className="divide-y">
-            {runAdjustments.map((item) => (
-              <AdjustmentRow key={item.id} adjustment={item} showsAppointment />
-            ))}
-          </div>
-        </section>
-      ) : null}
+      <AdjustmentSection
+        run={run}
+        adjustments={runAdjustments}
+        lines={entries}
+        periodStart={periodActions?.periodStart ?? ""}
+        canAdd={access.canAdd}
+        canDelete={access.canDelete}
+        isFormInitiallyOpen={
+          periodActions?.adjustmentFormKeys.has(run.key) ?? false
+        }
+      />
 
       <RunTotals run={run} />
 
-      <div className="flex flex-wrap items-center justify-end gap-2 rounded-lg bg-card p-3 ring-1 ring-foreground/10">
-        <RunStateLine line={getRunStateLine(run, periodStatus)} />
-      </div>
+      <RunActions run={run} periodStatus={periodStatus} />
     </div>
   );
 }

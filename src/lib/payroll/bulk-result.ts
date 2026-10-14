@@ -1,4 +1,9 @@
 // Relative import: node --test runs this file without the @/ alias.
+import {
+  getPayrollErrorMessage,
+  isPayrollErrorCode,
+  UNKNOWN_PAYROLL_MESSAGE,
+} from "./errors.ts";
 import { describeClockProblems, type BlockerCounts } from "./period-view.ts";
 
 // The one-line result of a bulk Finalize or Mark paid:
@@ -12,10 +17,53 @@ export type BulkOutcome = {
   refusal: BulkRefusal | null;
 };
 
+// One row of finalize_pay_runs or mark_pay_runs_paid: code 'ok', or a payroll_error code with
+// the blocked counts in detail.
+export type BulkResultRow = {
+  code: string;
+  message: string | null;
+  detail: unknown;
+};
+
+const OK_CODE = "ok";
 const NO_RATE_REASON = "no Pay rate";
 
+function readCount(detail: unknown, key: string): number {
+  const value =
+    typeof detail === "object" && detail !== null
+      ? (detail as Record<string, unknown>)[key]
+      : undefined;
+  return typeof value === "number" ? value : 0;
+}
+
+function toRefusal(row: BulkResultRow): BulkRefusal {
+  let refusal: BulkRefusal = { message: UNKNOWN_PAYROLL_MESSAGE };
+  if (row.code === "blocked") {
+    refusal = {
+      blockers: {
+        openShifts: readCount(row.detail, "open_shift"),
+        missingClocks: readCount(row.detail, "missing_clock"),
+        noRateLines: readCount(row.detail, "no_rate"),
+      },
+    };
+  } else if (isPayrollErrorCode(row.code)) {
+    refusal = { message: getPayrollErrorMessage(row.code) };
+  }
+  return refusal;
+}
+
+export function toBulkOutcome(
+  row: BulkResultRow,
+  cleanerName: string,
+): BulkOutcome {
+  return {
+    cleanerName,
+    refusal: row.code === OK_CODE ? null : toRefusal(row),
+  };
+}
+
 // "1 Open shift and 1 Missing clock", "no Pay rate", or both joined with "and".
-function describeRefusal(refusal: BulkRefusal): string {
+export function describeRefusal(refusal: BulkRefusal): string {
   if ("message" in refusal) return refusal.message;
 
   const clockProblems = describeClockProblems(refusal.blockers);

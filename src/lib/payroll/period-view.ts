@@ -389,6 +389,19 @@ function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
 }
 
+// A row's identity across refreshes, for selection and expanded state. A Cleaner has one regular
+// run per period, so its key holds from live draft to stored row to finalized. Off-cycle runs are
+// always stored (start_off_cycle_run), and a Cleaner can have several, so theirs carry the id.
+export function getRunKey(
+  employeeId: string,
+  kind: RunKind,
+  runId: string | null,
+): string {
+  return kind === "regular"
+    ? `${employeeId}:regular`
+    : `${employeeId}:off_cycle:${runId ?? "draft"}`;
+}
+
 type RunInput = {
   employeeId: string;
   cleaner: PayCleaner | undefined;
@@ -425,7 +438,7 @@ function buildRun(input: RunInput, context: PeriodContext): PeriodRun {
   }
 
   return {
-    key: `${input.employeeId}:${input.kind}:${runId ?? "draft"}`,
+    key: getRunKey(input.employeeId, input.kind, runId),
     runId,
     cleaner: toRunCleaner(input.employeeId, input.cleaner),
     kind: input.kind,

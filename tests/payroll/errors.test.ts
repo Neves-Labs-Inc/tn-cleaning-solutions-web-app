@@ -6,6 +6,7 @@ import { describe, it } from "node:test";
 import {
   PAYROLL_ERROR_CODES,
   getPayrollErrorMessage,
+  getPayrollErrorStatus,
   toPayrollError,
 } from "../../src/lib/payroll/errors.ts";
 
@@ -97,5 +98,31 @@ describe("payroll errors", () => {
       code: null,
       message: UNKNOWN_MESSAGE,
     });
+  });
+
+  it("tells the admin to undo the off-cycle run before the regular one", () => {
+    assert.deepEqual(toPayrollError(refusal("has_later_run")), {
+      code: "has_later_run",
+      message: "Undo her off-cycle run first.",
+    });
+  });
+
+  it("gives a refusal on a missing run a not-found status", () => {
+    assert.equal(getPayrollErrorStatus("run_not_found"), 404);
+    assert.equal(getPayrollErrorStatus("adjustment_not_found"), 404);
+  });
+
+  it("gives a non-admin caller a forbidden status", () => {
+    assert.equal(getPayrollErrorStatus("not_admin"), 403);
+  });
+
+  it("gives a bad Adjustment field an unprocessable status", () => {
+    assert.equal(getPayrollErrorStatus("amount_required"), 422);
+    assert.equal(getPayrollErrorStatus("reason_required"), 422);
+  });
+
+  it("gives a refusal of the run's current state a conflict status", () => {
+    assert.equal(getPayrollErrorStatus("draft_exists"), 409);
+    assert.equal(getPayrollErrorStatus("run_paid"), 409);
   });
 });

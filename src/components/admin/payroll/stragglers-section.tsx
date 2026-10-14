@@ -1,8 +1,8 @@
 import { AlertTriangle } from "lucide-react";
 
 import ArrowLinkButton from "@/components/admin/payroll/arrow-link-button";
+import OffCycleButton from "@/components/admin/payroll/off-cycle-button";
 import { SpecBadge } from "@/components/admin/payroll/payroll-badges";
-import { Button } from "@/components/ui/button";
 import { CARD_TINT_CLASSES } from "@/components/ui/status-badge";
 import {
   TIME_SHEET_FLAG_SPECS,
@@ -20,8 +20,8 @@ type StragglersSectionProps = {
   stragglers: Straggler[];
 };
 
-// A problem straggler is fixed on Time Sheets; a closed one goes on an off-cycle run (ticket 08
-// wires the button), unless an unpaid off-cycle run must be settled first (its note says so).
+// A problem straggler is fixed on Time Sheets; a closed one goes on an off-cycle run, unless an
+// unpaid off-cycle run must be settled first (its note says so).
 function StragglerAction({
   straggler,
 }: {
@@ -38,7 +38,7 @@ function StragglerAction({
     );
   }
 
-  return <Button disabled>{straggler.actionLabel}</Button>;
+  return <OffCycleButton cleaner={straggler.cleaner} />;
 }
 
 // Shifts left out of the period's finalized or paid runs.

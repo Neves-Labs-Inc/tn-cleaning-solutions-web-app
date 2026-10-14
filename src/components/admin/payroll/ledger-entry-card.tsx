@@ -15,6 +15,8 @@ type LedgerEntryCardProps = {
   entry: LedgerEntry;
   cleanerId: string;
   isPaid: boolean;
+  // Unpaid in an ended period: each Adjustment line gets its Delete button.
+  canDeleteAdjustments: boolean;
 };
 
 // One pay line, stacked, for a narrow ledger.
@@ -22,6 +24,7 @@ export default function LedgerEntryCard({
   entry,
   cleanerId,
   isPaid,
+  canDeleteAdjustments,
 }: LedgerEntryCardProps): React.ReactNode {
   return (
     <article className="rounded-lg bg-card p-4 ring-1 ring-foreground/10">
@@ -63,7 +66,11 @@ export default function LedgerEntryCard({
       {entry.adjustments.length > 0 ? (
         <div className="mt-2 divide-y border-t">
           {entry.adjustments.map((item) => (
-            <AdjustmentRow key={item.id} adjustment={item} />
+            <AdjustmentRow
+              key={item.id}
+              adjustment={item}
+              isDeletable={canDeleteAdjustments}
+            />
           ))}
         </div>
       ) : null}

@@ -1,27 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Info, Wallet } from "lucide-react";
+import { ArrowLeft, Info } from "lucide-react";
 
 import { OUTLINE_PRESS_CLASS_NAME } from "@/components/admin/detail-page/press";
 import DownloadExportMenu from "@/components/admin/payroll/download-export-menu";
-import PayRunList from "@/components/admin/payroll/pay-run-list";
 import { PeriodStatusBadge } from "@/components/admin/payroll/payroll-badges";
-import StragglersSection from "@/components/admin/payroll/stragglers-section";
+import PeriodWorkspace from "@/components/admin/payroll/period-workspace";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
 import PageHeader from "@/components/ui/page-header";
 import {
   describePeriodHeader,
   formatFinalizeOpens,
 } from "@/lib/payroll/format";
 import { parsePeriodParam } from "@/lib/payroll/period";
+import { getAddCleanerCandidates } from "@/lib/payroll/period-actions";
 import { buildPeriodView } from "@/lib/payroll/period-view";
 import { fetchPayPeriodData } from "@/lib/payroll/queries";
 import { formatCents } from "@/lib/pricing/money";
@@ -33,24 +26,6 @@ type PayPeriodPageProps = {
 };
 
 const PAY_PERIODS_PATH = "/solutions/payroll";
-
-function NoRuns({ isEnded }: { isEnded: boolean }): React.ReactNode {
-  return (
-    <Empty className="border">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <Wallet aria-hidden="true" />
-        </EmptyMedia>
-        <EmptyTitle>No pay this period</EmptyTitle>
-        <EmptyDescription>
-          {isEnded
-            ? "No Cleaner clocked a shift or had a clock problem in this period."
-            : "Drafts show up here as Cleaners clock shifts."}
-        </EmptyDescription>
-      </EmptyHeader>
-    </Empty>
-  );
-}
 
 export default async function PayPeriodPage({
   params,
@@ -111,19 +86,10 @@ export default async function PayPeriodPage({
           </Alert>
         )}
 
-        {view.isEnded && view.stragglers.length > 0 ? (
-          <StragglersSection stragglers={view.stragglers} />
-        ) : null}
-
-        {hasRuns ? (
-          <PayRunList
-            runs={view.runs}
-            periodStatus={view.status}
-            totals={view.totals}
-          />
-        ) : (
-          <NoRuns isEnded={view.isEnded} />
-        )}
+        <PeriodWorkspace
+          view={view}
+          candidates={getAddCleanerCandidates(data.cleaners, view.runs)}
+        />
       </div>
     </div>
   );

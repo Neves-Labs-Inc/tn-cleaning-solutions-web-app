@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { buildPeriodView } from "../../src/lib/payroll/period-view.ts";
+import {
+  buildPeriodView,
+  getRunKey,
+} from "../../src/lib/payroll/period-view.ts";
 import {
   adjustment,
   ANA,
@@ -625,5 +628,58 @@ describe("buildPeriodView: unknown Cleaner", () => {
       name: "Unknown Cleaner",
       isActive: false,
     });
+  });
+});
+
+describe("buildPeriodView: run keys", () => {
+  it("keeps a regular run's key from live draft to stored draft to finalized", () => {
+    const shift = session("s1", "ana");
+    const stored = run("r-ana", "ana");
+    const finalized = run("r-ana", "ana", { status: "finalized" });
+
+    const live = only(
+      buildPeriodView(payrollData({ sessions: [shift] }), OCT_5, NOW).runs,
+    );
+    const withRow = only(
+      buildPeriodView(
+        payrollData({ sessions: [shift], runs: [stored] }),
+        OCT_5,
+        NOW,
+      ).runs,
+    );
+    const afterFinalize = only(
+      buildPeriodView(
+        payrollData({
+          sessions: [claimed(shift, finalized)],
+          runs: [finalized],
+        }),
+        OCT_5,
+        NOW,
+      ).runs,
+    );
+
+    assert.equal(withRow.key, live.key);
+    assert.equal(afterFinalize.key, live.key);
+  });
+
+  it("gives each off-cycle run its own key, the one getRunKey builds", () => {
+    const regular = run("r-ana", "ana", { status: "paid" });
+    const paidOffCycle = run("r-off-1", "ana", {
+      kind: "off_cycle",
+      status: "paid",
+    });
+    const offCycleDraft = run("r-off-2", "ana", { kind: "off_cycle" });
+
+    const view = buildPeriodView(
+      payrollData({ runs: [regular, paidOffCycle, offCycleDraft] }),
+      OCT_5,
+      NOW,
+    );
+    const offCycleKeys = view.runs
+      .filter((item) => item.kind === "off_cycle")
+      .map((item) => item.key);
+
+    assert.equal(new Set(offCycleKeys).size, 2);
+    assert.ok(offCycleKeys.includes(getRunKey("ana", "off_cycle", "r-off-2")));
   });
 });
