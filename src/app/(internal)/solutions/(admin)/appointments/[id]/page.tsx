@@ -158,6 +158,8 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
           status={appointment.status}
           manuallyCompleted={appointment.manually_completed}
           editHref={`/solutions/appointments/${appointment.id}/edit`}
+          recurrenceSeriesId={appointment.recurrence_series?.id ?? null}
+          scheduledDate={appointment.scheduled_date}
         />
       </div>
 

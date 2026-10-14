@@ -16,7 +16,6 @@ import {
 } from '@/lib/appointments/crew'
 import { toAppointmentErrorMessage, type DatabaseLikeError } from '@/lib/appointments/errors'
 import {
-  canCancel,
   canEdit,
   canMarkComplete,
   canRestore,
@@ -711,40 +710,6 @@ async function loadAppointmentForLifecycle(id: string): Promise<LifecycleLoadRes
 function revalidateAppointment(id: string) {
   revalidatePath('/solutions/appointments')
   revalidatePath(`/solutions/appointments/${id}`)
-}
-
-export async function cancelAppointment(id: string): Promise<AppointmentActionResult> {
-  const loaded = await loadAppointmentForLifecycle(id)
-  if (!loaded.success) return loaded
-
-  if (!canCancel(loaded.appointment.status)) {
-    return { success: false, error: 'This appointment is already cancelled.' }
-  }
-
-  // A paid-invoice trigger refuses with P0001 and a message the admin must read; it passes through.
-  const { data, error } = await createAdminClient()
-    .from('appointments')
-    .update({ status: 'cancelled' })
-    .eq('id', id)
-    .eq('is_archived', false)
-    .eq('status', loaded.appointment.status)
-    .select('id')
-    .maybeSingle()
-
-  if (error) {
-    return { success: false, error: toAppointmentErrorMessage(error, 'cancelAppointment') }
-  }
-
-  if (!data) {
-    return {
-      success: false,
-      error: 'The appointment changed while you were cancelling it. Refresh and try again.',
-    }
-  }
-
-  revalidateAppointment(id)
-
-  return { success: true, data: { id } }
 }
 
 export async function restoreAppointment(id: string): Promise<AppointmentActionResult> {

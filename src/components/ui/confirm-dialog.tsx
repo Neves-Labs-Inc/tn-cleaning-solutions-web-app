@@ -39,6 +39,10 @@ type ConfirmDialogProps = {
   returnFocusRef?: React.RefObject<HTMLElement | null>;
   // Destructive unless the confirmed action isn't (a bulk Mark complete).
   confirmVariant?: "destructive" | "default";
+  // The body between the description and the footer (a scope choice, a preview). Disabled while
+  // the confirm runs.
+  children?: React.ReactNode;
+  confirmDisabled?: boolean;
 };
 
 type KeepButtonProps = {
@@ -68,6 +72,17 @@ function KeepButton({ label, isMobile, keepRef }: KeepButtonProps): React.ReactN
   );
 }
 
+// Base UI radios are buttons, so a disabled fieldset disables them natively while the confirm runs.
+function PendingFieldset({ children }: { children: React.ReactNode }): React.ReactNode {
+  const { pending } = useFormStatus();
+
+  return (
+    <fieldset disabled={pending} className="min-w-0 space-y-4">
+      {children}
+    </fieldset>
+  );
+}
+
 // DESIGN.md §9 / §10: a centered AlertDialog from md up, a bottom Drawer on phones.
 // Destructive by default; Keep takes initial focus so Enter never confirms by accident.
 export default function ConfirmDialog({
@@ -81,6 +96,8 @@ export default function ConfirmDialog({
   onConfirm,
   returnFocusRef,
   confirmVariant = "destructive",
+  children,
+  confirmDisabled = false,
 }: ConfirmDialogProps): React.ReactNode {
   const isMobile = useIsMobile();
   const keepRef = useRef<HTMLButtonElement>(null);
@@ -107,17 +124,27 @@ export default function ConfirmDialog({
       // vaul defaults autoFocus to false, which loses focus to <body> on close.
       <Drawer open={open} onOpenChange={onOpenChange} direction="bottom" autoFocus>
         <DrawerContent onCloseAutoFocus={handleCloseAutoFocus}>
-          <DrawerHeader className="group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
-            <DrawerTitle>{title}</DrawerTitle>
-            <DrawerDescription>{description}</DrawerDescription>
-          </DrawerHeader>
-          <form action={onConfirm}>
-            <DrawerFooter className="pb-[calc(1rem+var(--safe-bottom))]">
+          {/* The header scrolls away with a tall body; the footer stays pinned. */}
+          <form action={onConfirm} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <DrawerHeader className="group-data-[vaul-drawer-direction=bottom]/drawer-content:text-left">
+                <DrawerTitle>{title}</DrawerTitle>
+                <DrawerDescription>{description}</DrawerDescription>
+              </DrawerHeader>
+              {children ? (
+                <div className="px-4">
+                  <PendingFieldset>{children}</PendingFieldset>
+                </div>
+              ) : null}
+            </div>
+            {/* A body can scroll under the footer, so its top edge marks where the cut is. */}
+            <DrawerFooter className={`pb-[calc(1rem+var(--safe-bottom))] ${children ? "border-t" : ""}`}>
               <SubmitButton
                 variant={confirmVariant}
                 size="lg"
                 label={confirmLabel}
                 pendingLabel={pendingLabel}
+                disabled={confirmDisabled}
               />
               <KeepButton label={keepLabel} isMobile keepRef={keepRef} />
             </DrawerFooter>
@@ -132,16 +159,22 @@ export default function ConfirmDialog({
       <AlertDialogContent
         initialFocus={keepRef}
         finalFocus={returnFocusRef ?? true}
-        className="data-open:duration-base data-open:ease-out-quart data-closed:duration-[140ms] data-closed:ease-in-quart"
+        className={`data-open:duration-base data-open:ease-out-quart data-closed:duration-[140ms] data-closed:ease-in-quart ${children ? "data-[size=default]:sm:max-w-md" : ""}`}
       >
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
-        <form action={onConfirm}>
+        <form action={onConfirm} className="contents">
+          {children ? <PendingFieldset>{children}</PendingFieldset> : null}
           <AlertDialogFooter>
             <KeepButton label={keepLabel} isMobile={false} keepRef={keepRef} />
-            <SubmitButton variant={confirmVariant} label={confirmLabel} pendingLabel={pendingLabel} />
+            <SubmitButton
+              variant={confirmVariant}
+              label={confirmLabel}
+              pendingLabel={pendingLabel}
+              disabled={confirmDisabled}
+            />
           </AlertDialogFooter>
         </form>
       </AlertDialogContent>

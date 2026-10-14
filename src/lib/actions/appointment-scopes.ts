@@ -7,6 +7,7 @@ import {
   toAppointmentErrorMessage,
   type DatabaseLikeError,
 } from "@/lib/appointments/errors";
+import { cancelInScope } from "@/lib/appointments/scope-cancel";
 import { deleteInScope, previewScope } from "@/lib/appointments/scope-changes";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -33,6 +34,17 @@ export type DeleteAppointmentsData = {
 
 export type DeleteAppointmentsResult =
   | { success: true; data: DeleteAppointmentsData }
+  | { success: false; error: string };
+
+export type CancelAppointmentsData = {
+  id: string;
+  ids: string[];
+  cancelledCount: number;
+  skippedCount: number;
+};
+
+export type CancelAppointmentsResult =
+  | { success: true; data: CancelAppointmentsData }
   | { success: false; error: string };
 
 const APPOINTMENTS_PATH = "/solutions/appointments";
@@ -183,6 +195,74 @@ export async function deleteAppointments(
       error: toAppointmentErrorMessage(
         error as DatabaseLikeError,
         "deleteAppointments",
+      ),
+    };
+  }
+  return result;
+}
+
+// Ids come back from the database, never free text.
+function revalidateCancelled(cancelledIds: string[], invoiceIds: string[]): void {
+  revalidatePath(APPOINTMENTS_PATH);
+  for (const id of cancelledIds) {
+    revalidatePath(`${APPOINTMENTS_PATH}/${id}`);
+  }
+  for (const id of invoiceIds) {
+    revalidatePath(`${INVOICES_PATH}/${id}`);
+  }
+}
+
+// Cancels the chosen visit, the visits after it or its whole Series. Visits on a paid invoice are
+// skipped and counted, not refused.
+export async function cancelAppointments(
+  appointmentId: string,
+  scope: AppointmentScope,
+): Promise<CancelAppointmentsResult> {
+  const authResult = await requireAdminRole();
+  if (!authResult.success) return authResult;
+
+  if (!appointmentId) {
+    return { success: false, error: "Appointment id is required." };
+  }
+  // Server actions take whatever the client sends, so the union is checked at runtime.
+  if (!SCOPES.includes(scope)) {
+    return { success: false, error: "Invalid scope." };
+  }
+
+  let result: CancelAppointmentsResult;
+  try {
+    // The session client, not the admin one: cancel_appointments checks the caller is an admin.
+    const cancelled = await cancelInScope(await createClient(), {
+      appointmentId,
+      scope,
+    });
+    if (cancelled.error === null) {
+      const { cancelledIds, skipped, invoiceIds } = cancelled.value;
+      revalidateCancelled(cancelledIds, invoiceIds);
+      result = {
+        success: true,
+        data: {
+          id: appointmentId,
+          ids: cancelledIds,
+          cancelledCount: cancelledIds.length,
+          skippedCount: skipped.length,
+        },
+      };
+    } else {
+      console.warn("cancelAppointments: nothing cancelled", {
+        appointmentId,
+        scope,
+        error: cancelled.error,
+      });
+      result = { success: false, error: cancelled.error };
+    }
+  } catch (error) {
+    // A not_admin refusal arrives as P0001 and is translated; anything else is logged and replaced.
+    result = {
+      success: false,
+      error: toAppointmentErrorMessage(
+        error as DatabaseLikeError,
+        "cancelAppointments",
       ),
     };
   }

@@ -805,6 +805,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      cancel_appointments: {
+        Args: { p_appointment_ids: string[] }
+        Returns: Json
+      }
       correct_session_clocks: {
         Args: {
           assignment_id: string

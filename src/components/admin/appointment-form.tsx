@@ -99,6 +99,7 @@ const REMOVED_EMPLOYEE_NAME = 'A removed employee'
 const RECURRENCE_HEADING_ID = 'recurrence-settings-heading'
 
 // Visual 20px (DESIGN §8); the indicator dot is sized up to match.
+// RADIO_CLASSES and CHOICE_ROW_CLASSES are kept in sync with appointment-scope-choice.tsx's exports.
 const RADIO_CLASSES = 'mt-0.5 size-5 [&_[data-slot=radio-group-indicator]]:size-5'
 const LABEL_CLASSES = 'text-sm text-foreground'
 const ENTER_CLASSES = 'animate-in fade-in-0 slide-in-from-top-1 duration-base ease-out-quart'
