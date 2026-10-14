@@ -13,7 +13,7 @@ import { normalizePaymentMethodName } from './view.ts'
 export type LedgerResult<T> = { ok: true; data: T } | ({ ok: false } & LedgerError)
 
 export type DraftInput = { dueDate: string | null; notes: string | null }
-export type CreateDraftInput = DraftInput & { clientId: string; appointmentIds: string[] }
+export type CreateDraftInput = DraftInput & { clientId: string; appointmentIds: string[]; internalNote: string | null }
 // The difference the admin made against what the page loaded, so a visit that joined an Automatic
 // draft meanwhile isn't dropped.
 // details null leaves the stored due date and notes alone; only the details form's Save sends them.
@@ -22,6 +22,7 @@ export type PaymentInput = { paidDate: string | null; method: string; reference:
 export type MarkPaidInput = PaymentInput & {
   clientId: string
   lines: Array<{ appointmentId: string; amountCents: number }>
+  internalNote: string | null
 }
 export type PaymentMethod = { id: string; name: string; is_hidden: boolean; sort_order: number }
 export type BulkIssueOutcome = {
@@ -81,6 +82,7 @@ export class InvoiceLedger {
       p_appointment_ids: input.appointmentIds,
       p_due_date: input.dueDate,
       p_notes: input.notes,
+      p_internal_note: input.internalNote,
     })
     return this.settle('createDraft', { clientId: input.clientId }, error, { id: data ?? '' })
   }
@@ -218,6 +220,7 @@ export class InvoiceLedger {
       p_paid_date: input.paidDate,
       p_method: input.method,
       p_reference: input.reference,
+      p_internal_note: input.internalNote,
     })
     const created = data as MarkPaidResult | null
     return this.settle('markPaid', { clientId: input.clientId }, error, {
@@ -249,6 +252,15 @@ export class InvoiceLedger {
   async unarchive(invoiceId: string): Promise<LedgerResult<null>> {
     const { error } = await this.db.rpc('invoice_unarchive', { p_invoice_id: invoiceId })
     return this.settle('unarchive', { invoiceId }, error, null)
+  }
+
+  // Allowed at any status and while archived; null clears the note.
+  async setInternalNote(invoiceId: string, internalNote: string | null): Promise<LedgerResult<null>> {
+    const { error } = await this.db.rpc('invoice_set_internal_note', {
+      p_invoice_id: invoiceId,
+      p_internal_note: internalNote,
+    })
+    return this.settle('setInternalNote', { invoiceId }, error, null)
   }
 
   async setAutomaticInvoicing(clientId: string, isOn: boolean): Promise<LedgerResult<null>> {

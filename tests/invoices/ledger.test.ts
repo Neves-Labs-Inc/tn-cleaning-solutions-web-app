@@ -204,7 +204,7 @@ test('bulkIssue keeps going and reports each draft whose read failed', async () 
   })
 })
 
-test('markPaid sends the lines, paid date, method and reference to invoice_mark_paid and returns the new invoice', async () => {
+test('markPaid sends the lines, paid date, method, reference and internal note to invoice_mark_paid and returns the new invoice', async () => {
   const { ledger, rpcCalls } = setup({ appointments: [], invoice_appointments: [] }, () =>
     success({ invoice_id: 'inv-9', invoice_number: 'INV-007-SMI2026' })
   )
@@ -218,6 +218,7 @@ test('markPaid sends the lines, paid date, method and reference to invoice_mark_
     paidDate: '2026-10-10',
     method: 'Cash',
     reference: 'receipt 12',
+    internalNote: 'Gate code 4471',
   })
 
   assert.deepEqual(result, { ok: true, data: { invoiceId: 'inv-9', invoiceNumber: 'INV-007-SMI2026' } })
@@ -233,6 +234,7 @@ test('markPaid sends the lines, paid date, method and reference to invoice_mark_
         p_paid_date: '2026-10-10',
         p_method: 'Cash',
         p_reference: 'receipt 12',
+        p_internal_note: 'Gate code 4471',
       },
     },
   ])
@@ -247,6 +249,7 @@ test('markPaid returns a refusal by its code, in the appointment wording', async
     paidDate: null,
     method: 'Cash',
     reference: null,
+    internalNote: null,
   })
 
   assert.deepEqual(result, { ok: false, code: 'invoice_issued', message: messageFor('invoice_issued') })
@@ -265,6 +268,7 @@ test('markPaid keeps the raw message of an error that is not a refusal', async (
     paidDate: null,
     method: 'Cash',
     reference: null,
+    internalNote: null,
   })
 
   assert.deepEqual(result, { ok: false, code: 'unknown', message: 'connection reset' })
@@ -304,4 +308,52 @@ test('appointmentIdsOn returns a failed read as an unknown error instead of thro
   const result = await ledger.appointmentIdsOn(['inv-1'])
 
   assert.deepEqual(result, { ok: false, code: 'unknown', message: 'connection reset' })
+})
+
+test('setInternalNote sends the invoice id and note to invoice_set_internal_note', async () => {
+  const { ledger, rpcCalls } = setup({ appointments: [], invoice_appointments: [] }, () => success())
+
+  const result = await ledger.setInternalNote('inv-1', 'Paid by e-transfer on Oct 3')
+
+  assert.deepEqual(result, { ok: true, data: null })
+  assert.deepEqual(rpcCalls, [
+    {
+      name: 'invoice_set_internal_note',
+      args: { p_invoice_id: 'inv-1', p_internal_note: 'Paid by e-transfer on Oct 3' },
+    },
+  ])
+})
+
+test('setInternalNote returns a refusal by its code', async () => {
+  const { ledger } = setup({ appointments: [], invoice_appointments: [] }, () => refusal('invoice_not_found'))
+
+  const result = await ledger.setInternalNote('inv-1', null)
+
+  assert.deepEqual(result, { ok: false, code: 'invoice_not_found', message: messageFor('invoice_not_found') })
+})
+
+test('createDraft sends the Internal note with the draft to invoice_create_draft', async () => {
+  const { ledger, rpcCalls } = setup({ appointments: [], invoice_appointments: [] }, () => success('inv-9'))
+
+  const result = await ledger.createDraft({
+    clientId: CLIENT_ID,
+    appointmentIds: ['appt-1'],
+    dueDate: DUE_DATE,
+    notes: 'Thanks!',
+    internalNote: 'Client asked for a separate October invoice',
+  })
+
+  assert.deepEqual(result, { ok: true, data: { id: 'inv-9' } })
+  assert.deepEqual(rpcCalls, [
+    {
+      name: 'invoice_create_draft',
+      args: {
+        p_client_id: CLIENT_ID,
+        p_appointment_ids: ['appt-1'],
+        p_due_date: DUE_DATE,
+        p_notes: 'Thanks!',
+        p_internal_note: 'Client asked for a separate October invoice',
+      },
+    },
+  ])
 })

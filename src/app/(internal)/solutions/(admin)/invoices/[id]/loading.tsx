@@ -21,6 +21,7 @@ export default function InvoiceDetailLoading() {
           ))}
         </div>
         <Skeleton className="h-40 rounded-lg" />
+        <Skeleton className="h-44 rounded-lg lg:col-span-2" />
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-4 pt-3 pb-[calc(0.75rem+var(--safe-bottom))] shadow-lg backdrop-blur md:hidden">

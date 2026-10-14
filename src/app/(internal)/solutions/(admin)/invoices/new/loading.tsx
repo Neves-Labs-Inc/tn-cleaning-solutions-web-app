@@ -33,7 +33,7 @@ export default function NewInvoiceLoading() {
           </div>
           <Skeleton className="h-12 w-full lg:hidden" />
         </div>
-        <Skeleton className="hidden h-72 w-full lg:block" />
+        <Skeleton className="hidden h-162 w-full lg:block" />
       </div>
     </div>
   )

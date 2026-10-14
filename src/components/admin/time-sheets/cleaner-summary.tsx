@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { ChevronRight, UsersRound } from "lucide-react";
+import { ChevronRight, SearchX, UsersRound } from "lucide-react";
 
 import FlagCountBadges from "@/components/admin/time-sheets/flag-count-badges";
 import { formatMinutes } from "@/components/admin/time-sheets/format-minutes";
 import { buildTimeSheetsHref } from "@/components/admin/time-sheets/time-sheets-href";
+import { OUTLINE_PRESS_CLASS_NAME } from "@/components/admin/detail-page/press";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -25,22 +27,68 @@ import type { CleanerSummary } from "@/lib/time-sheets/summaries";
 import { cn } from "@/lib/utils";
 
 type CleanerSummaryListProps = {
+  // Already narrowed by the search; `totalCount` is every active Cleaner.
   summaries: CleanerSummary[];
+  totalCount: number;
+  range: WeekRange;
+  q?: string;
+};
+
+type NoMatchProps = {
+  q: string;
   range: WeekRange;
 };
 
 const FOCUS_RING = "outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+// Dims while a search is loading; the wrapper in TimeSheetsSearch sets data-pending.
+const PENDING_DIM_CLASS_NAME =
+  "transition-opacity duration-fast group-data-pending/search:opacity-60";
 const INVITE_PATH = "/solutions/employees/invite";
 
 function pluralize(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
+function NoMatch({ q, range }: NoMatchProps): React.ReactNode {
+  return (
+    <div className="rounded-lg bg-card ring-1 ring-foreground/10">
+      <Empty className="animate-in duration-base ease-out-quart fade-in-0">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <SearchX aria-hidden="true" />
+          </EmptyMedia>
+          <EmptyTitle className="[overflow-wrap:anywhere]">
+            No Cleaners match &quot;{q}&quot;
+          </EmptyTitle>
+          <EmptyDescription>
+            Check the spelling or try part of the name.
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Link
+            href={buildTimeSheetsHref({ from: range.from, to: range.to })}
+            className={cn(
+              buttonVariants({ variant: "outline" }),
+              OUTLINE_PRESS_CLASS_NAME,
+            )}
+          >
+            Clear search
+          </Link>
+        </EmptyContent>
+      </Empty>
+    </div>
+  );
+}
+
 export default function CleanerSummaryList({
   summaries,
+  totalCount,
   range,
+  q,
 }: CleanerSummaryListProps): React.ReactNode {
-  if (summaries.length === 0) {
+  const search = q?.trim() ?? "";
+
+  if (totalCount === 0) {
     return (
       <div className="rounded-lg bg-card ring-1 ring-foreground/10">
         <Empty>
@@ -64,16 +112,32 @@ export default function CleanerSummaryList({
     );
   }
 
+  if (summaries.length === 0) return <NoMatch q={search} range={range} />;
+
   const hrefFor = (summary: CleanerSummary) =>
     buildTimeSheetsHref({
       cleaner: summary.cleaner.id,
       from: range.from,
       to: range.to,
+      q: search,
     });
 
   return (
-    <>
-      <ul className="grid gap-3 md:hidden" aria-label="Cleaners">
+    <div className="space-y-3">
+      {search ? (
+        <p
+          aria-live="polite"
+          className={cn(
+            "text-sm text-muted-foreground tabular-nums",
+            PENDING_DIM_CLASS_NAME,
+          )}
+        >
+          {summaries.length} of {pluralize(totalCount, "Cleaner")}
+        </p>
+      ) : null}
+      <ul
+        className={cn("grid gap-3 md:hidden", PENDING_DIM_CLASS_NAME)} aria-label="Cleaners"
+      >
         {summaries.map((summary) => (
           <li key={summary.cleaner.id}>
             <Link
@@ -110,7 +174,12 @@ export default function CleanerSummaryList({
         ))}
       </ul>
 
-      <div className="hidden overflow-hidden rounded-lg bg-card ring-1 ring-foreground/10 md:block">
+      <div
+        className={cn(
+          "hidden overflow-hidden rounded-lg bg-card ring-1 ring-foreground/10 md:block",
+          PENDING_DIM_CLASS_NAME,
+        )}
+      >
         <Table className="text-sm">
           <caption className="sr-only">Hours per Cleaner, {range.label}</caption>
           <TableHeader>
@@ -166,6 +235,6 @@ export default function CleanerSummaryList({
           </TableBody>
         </Table>
       </div>
-    </>
+    </div>
   );
 }

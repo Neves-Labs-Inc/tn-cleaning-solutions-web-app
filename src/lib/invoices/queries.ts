@@ -58,7 +58,8 @@ export type InvoiceDetailLine = {
 }
 
 export type InvoiceDetail = {
-  invoice: Views<'invoices_with_status'> & { client: ClientContact | null }
+  // internal_note is read from invoices: invoices_with_status doesn't carry it, so no list shows it.
+  invoice: Views<'invoices_with_status'> & { client: ClientContact | null; internal_note: string | null }
   lines: InvoiceDetailLine[]
   // A draft's total is at the Live price; otherwise the view's total of Billed amounts.
   total_cents: number
@@ -217,16 +218,23 @@ export async function getInvoiceDetail(db: Db, invoiceId: string): Promise<Invoi
   if (error) throw error
   if (!data) return null
 
-  const invoice = data as unknown as InvoiceDetail['invoice']
-
   // The visits come embedded in the lines, so no id list travels in the URL.
-  const { data: lineData, error: linesError } = await db
-    .from('invoice_appointments')
-    .select(
-      `billed_amount_cents, billed_rate_cents, billed_minutes, cancelled_at, is_archived, appointment:appointments ( ${VISIT_COLUMNS} )`
-    )
-    .eq('invoice_id', invoiceId)
+  const [{ data: lineData, error: linesError }, { data: noteData, error: noteError }] = await Promise.all([
+    db
+      .from('invoice_appointments')
+      .select(
+        `billed_amount_cents, billed_rate_cents, billed_minutes, cancelled_at, is_archived, appointment:appointments ( ${VISIT_COLUMNS} )`
+      )
+      .eq('invoice_id', invoiceId),
+    db.from('invoices').select('internal_note').eq('id', invoiceId).maybeSingle(),
+  ])
   if (linesError) throw linesError
+  if (noteError) throw noteError
+
+  const invoice = {
+    ...(data as unknown as Omit<InvoiceDetail['invoice'], 'internal_note'>),
+    internal_note: noteData?.internal_note ?? null,
+  }
 
   const lineRows = (lineData as unknown as DetailLineRow[]).filter((line) => line.appointment !== null)
   const visits = await priceVisits(

@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import { buildSessionView } from "../../src/lib/time-sheets/session-view.ts";
 import {
+  filterSummariesByName,
   summarizeCleanerMonth,
   summarizeCleaners,
 } from "../../src/lib/time-sheets/summaries.ts";
@@ -181,5 +182,49 @@ describe("summarizeCleanerMonth", () => {
       totalMinutes: 0,
       averageMinutes: null,
     });
+  });
+});
+
+describe("filterSummariesByName", () => {
+  const BARBARA = { id: "barbara", full_name: "Bárbara Silva" };
+  const JULIANA = { id: "juliana", full_name: "Juliana Reis" };
+  const summaries = summarizeCleaners([], [JULIANA, BARBARA, ANA]);
+  const namesFor = (query: string) =>
+    filterSummariesByName(summaries, query).map((row) => row.cleaner.full_name);
+
+  it("matches case-insensitively", () => {
+    assert.deepEqual(namesFor("ANA"), ["Ana Souza", "Juliana Reis"]);
+  });
+
+  it("matches without regard to accents, in both directions", () => {
+    assert.deepEqual(namesFor("barbara"), ["Bárbara Silva"]);
+    const plain = summarizeCleaners([], [{ id: "b", full_name: "Barbara Lima" }]);
+    assert.equal(filterSummariesByName(plain, "bárbara").length, 1);
+  });
+
+  it("matches in the middle of a name", () => {
+    assert.deepEqual(namesFor("liana"), ["Juliana Reis"]);
+    assert.deepEqual(namesFor("a si"), ["Bárbara Silva"]);
+  });
+
+  it("ignores spaces around the query", () => {
+    assert.deepEqual(namesFor("  souza "), ["Ana Souza"]);
+  });
+
+  it("keeps everyone for a blank or whitespace query", () => {
+    assert.equal(filterSummariesByName(summaries, ""), summaries);
+    assert.equal(filterSummariesByName(summaries, "   "), summaries);
+  });
+
+  it("returns an empty list when nothing matches", () => {
+    assert.deepEqual(filterSummariesByName(summaries, "zzz"), []);
+  });
+
+  it("preserves input order", () => {
+    assert.deepEqual(namesFor("a"), [
+      "Ana Souza",
+      "Bárbara Silva",
+      "Juliana Reis",
+    ]);
   });
 });
