@@ -5,17 +5,16 @@
 ### Payroll
 
 **Cleaner**:
-A member of the cleaning staff who works appointments and is paid through payroll. Stored as an employee.
+A self-employed member of the cleaning staff who works appointments and is paid through payroll, with nothing withheld. Stored as an employee.
 _Avoid_: menina, girl, worker
 
 **Pay rate**:
-The hourly amount a Cleaner earns. Each Cleaner has a default Pay rate, which a Job pay override can replace for a specific Job.
+The hourly amount a Cleaner earns. Each Cleaner has her own Pay rate, which takes effect from a date. An appointment uses the rate in effect on its scheduled date, plus its Job's Job pay premium. A change never alters a shift already on a paid Pay run. A shift with no Pay rate in effect stops that Cleaner's Pay run from being finalized until an admin adds one.
 _Avoid_: wage, salary, hourly rate (ambiguous with a Job's client-facing rate)
 
-**Job pay override**:
-A Pay rate that applies to one Cleaner on one Job instead of her default Pay rate.
-
-Both kinds of Pay rate take effect from a date. An appointment uses the rate in effect on its scheduled date, an override winning over the default. A change never alters an appointment already on a finalized Pay run.
+**Job pay premium**:
+An hourly amount a Job adds to the Pay rate of every Cleaner who works it. It has only a current value: changing it affects every appointment not yet on a paid Pay run. Cleaners see it folded into their rate, not as a separate line.
+_Avoid_: job pay override (dropped: no per-Cleaner rate on a Job), bonus, job rate
 
 **Job rate**:
 The hourly amount a client is charged for a Job. Not related to what a Cleaner is paid.
@@ -35,36 +34,54 @@ The session of a Cleaner taken off an appointment's crew after she had clocks, a
 _Avoid_: deleted session, archived shift
 
 **Clock correction**:
-An admin changing a session's clocks after the fact: editing a time, closing an Open shift, entering the clocks for an assigned Cleaner who never clocked in, or clearing a session's clocks. Every one is kept for good with who, when, the old and new times, and an optional reason, and the session is marked edited. Entering clocks for a Cleaner who never clocked in needs a clock-out once the appointment is an hour past its scheduled end. It counts exactly like a clock the Cleaner made, so it can move Appointment status. It is refused on a cancelled appointment, on a Cleaner no longer on the crew, if it would overlap another of the Cleaner's sessions, or on an appointment in a paid Pay run, but allowed on a Manual completion.
-_Avoid_: correction (that is a Pay run fix), override, manual session
+An admin changing a session's clocks after the fact: editing a time, closing an Open shift, entering the clocks for an assigned Cleaner who never clocked in, or clearing a session's clocks. Every one is kept for good with who, when, the old and new times, and an optional reason, and the session is marked edited. Entering clocks for a Cleaner who never clocked in needs a clock-out once the appointment is an hour past its scheduled end. It counts exactly like a clock the Cleaner made, so it can move Appointment status. It is refused on a cancelled appointment, on a Cleaner no longer on the crew, if it would overlap another of the Cleaner's sessions, or on a session already on a paid Pay run (a crewmate's unpaid session on the same appointment stays editable), but allowed on a Manual completion.
+_Avoid_: correction on its own (ambiguous), override, manual session
 
 **Time sheet flag**:
-A warning an admin sees on a session that may need fixing before pay. The problem flags are an Open shift still open an hour after the appointment's scheduled end, a Missing clock, and an Odd duration that hasn't been acknowledged. A session with a Clock correction is marked edited, but that is not a problem. Flags never stop a Pay run. Cleaners don't see them.
+A warning an admin sees on a session that may need fixing before pay. The problem flags are an Open shift still open an hour after the appointment's scheduled end, a Missing clock, and an Odd duration that hasn't been acknowledged. A session with a Clock correction is marked edited, but that is not a problem. An Open shift or Missing clock stops that Cleaner's Pay run from being finalized until it is fixed; other Cleaners' runs are not held back. An Odd duration only warns. Cleaners don't see them.
 _Avoid_: alert, issue, error
 
 **Missing clock**:
-An assigned Cleaner who never clocked in on an appointment an hour past its scheduled end. A Manual completion does not clear it, because the appointment pays only what was clocked. Cancelled appointments never have one.
+An assigned Cleaner who never clocked in on an appointment an hour past its scheduled end. A Manual completion does not clear it, because the appointment pays only what was clocked. It clears when an admin enters her clocks or, if she didn't work, takes her off the crew. Cancelled appointments never have one.
 _Avoid_: no-show (it may be a forgotten clock-in)
 
 **Odd duration**:
 A closed session whose Clocked time is under half or over one and a half times the appointment's scheduled length. An admin can acknowledge it with a note; the acknowledgement lapses if the clock times change.
 
-**Appointment add-on**:
-An extra amount paid to one Cleaner for one appointment, of kind gasoline, extra, or tip. Gasoline and extra are business money; a tip is client money. None appear on an invoice. Each is paid once, by the first Pay run after it is entered.
-_Avoid_: bonus, adjustment, visit add-on
-
-**Direct tip**:
-A tip the client gave straight to the Cleaner. It is recorded but never paid through a Pay run.
-
 **Pay run**:
-What one Cleaner is owed for a date range: her closed shifts in that range plus her unpaid Appointment add-ons. It is a preview until finalized; finalizing claims its shifts and add-ons so no other Pay run includes them, but its amounts still follow the source data until it is marked paid. Once paid, its amounts are frozen and its appointments' clocks are locked.
-_Avoid_: payroll report, pay slip
+What one Cleaner is owed for a Pay period: her closed shifts in it not on another Pay run, and its Adjustments. It is a draft until finalized: computed live from the source data, never stored. Finalizing claims its shifts so no other Pay run includes them, but its amounts still follow the source data until it is marked paid. Once paid, its amounts are frozen and its sessions' clocks are locked.
+_Avoid_: payroll report, pay slip, preview
+
+**Pay period**:
+The business's regular two-week pay cycle, Monday to Sunday twice, anchored on Monday October 5, 2026. Its range is fixed. While it runs, each Cleaner's draft Pay run can be seen but not finalized; once it ends, every Cleaner with a closed shift or a problem Time sheet flag in it has a draft for an admin to review and finalize. Nobody is paid for a Pay period before it ends. Only Pay periods from the Payroll start on exist in Payroll.
+_Avoid_: pay cycle, payroll week
+
+**Payroll start**:
+The first Pay period paid through the app, fixed when Payroll launches. Earlier Pay periods were paid outside the app: their shifts are never payable, never shown as unpaid, and never flagged in Payroll, though Time Sheets still flag them as usual.
+_Avoid_: go-live date, cutover
+
+**Off-cycle run**:
+A Pay run an admin makes for a shift in an ended Pay period that became payable after that period's Pay run was finalized. The Pay period shows such a shift as unpaid until an off-cycle run pays it. A shift is still never paid twice.
+_Avoid_: bonus run, early payout
+
+**Payout method**:
+How an admin paid a Cleaner a Pay run, as free text: e-Transfer and Cash are suggested, but any method can be entered. Each Cleaner has a default, set only by an admin, with an optional e-Transfer contact. A Pay run is paid one way, never split, and the Payout method is recorded with the paid date when the run is marked paid. Both can be fixed afterwards, but a paid Pay run can't go back to unpaid. A $0 or negative Pay run is finalized and marked paid like any other.
+_Avoid_: payment method (that is how a client paid an invoice)
+
+**Pay statement**:
+The document a Cleaner downloads from My pay for one paid Pay run.
+_Avoid_: pay stub, pay slip
+
+**Payroll export**:
+The files an admin downloads for a Pay period, for whoever does the books: an .xlsx with a Summary tab (a total line per Cleaner and a grand total) and a tab per Cleaner listing each appointment and Adjustment with its rate, and a PDF summary.
+_Avoid_: accountant export (there is no set accountant)
 
 **My pay**:
-What a Cleaner sees of her own pay: her paid Pay runs, the rate each line used, and her own Appointment add-ons. Never other Cleaners' pay, her rate table, or unpaid runs.
+What a Cleaner sees of her own pay: her paid Pay runs with the paid date and Payout method, the rate each line used, and each Adjustment with its reason. Never other Cleaners' pay, her rate table, or unpaid runs.
 
-**Correction**:
-An extra on a Cleaner's next Pay run, positive or negative, that fixes a mistake on a paid one.
+**Adjustment**:
+A line an admin adds to one Pay run, positive or negative, with a free-text reason: a tip paid through the business, gas money, an expense, or a fix. It may point at one of the run's appointments. It shows as its own line, never as a column, and the Cleaner sees it with its reason. Deleting it removes it from the run. A mistake on a paid Pay run is fixed by an Adjustment on the Cleaner's next one. Tips a client hands a Cleaner directly are not recorded.
+_Avoid_: add-on, appointment add-on (merged into Adjustment), direct tip, correction (that is a Clock correction), bonus, deduction
 
 ### Appointments
 
@@ -171,8 +188,8 @@ _Avoid_: cash receipt, quick invoice
 
 ## Relationships
 
-- A **Cleaner** has one default **Pay rate** and zero or more **Job pay overrides**
-- A **Pay run** covers many appointments; each appointment's pay is **Clocked time** × the applicable **Pay rate**, plus its **Appointment add-ons**
+- A **Cleaner** has one **Pay rate** at a time; a **Job** may have a **Job pay premium**
+- A **Pay run** covers many appointments; each appointment's pay is **Clocked time** × the applicable **Pay rate** plus the Job's **Job pay premium**. The run's **Adjustments** are added on top
 - An appointment belongs to at most one **Pay run**
 - An appointment shows its **Billed amount** if it is on a live invoice, otherwise its **Live price**
 - A cancelled appointment never has a **Live claim**. Cancelling removes its line from a draft, turns it into a **Cancelled line** on an issued invoice, and is refused on a paid invoice until it is voided
