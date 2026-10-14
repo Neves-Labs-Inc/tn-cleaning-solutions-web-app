@@ -9,9 +9,13 @@ export default function PeriodPageSkeleton(): React.ReactNode {
     <div className="space-y-6 lg:space-y-8" aria-busy="true">
       <span className="sr-only">Loading pay period</span>
       <Skeleton className="h-11 w-36 md:h-9" />
-      <div className="space-y-2">
-        <Skeleton className="h-8 w-64 max-w-full sm:h-9" />
-        <Skeleton className="h-4 w-80 max-w-full" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-8 w-64 max-w-full sm:h-9" />
+          <Skeleton className="h-4 w-80 max-w-full" />
+        </div>
+        {/* The header action slot (Download export), so the header doesn't shift on load. */}
+        <Skeleton className="h-11 w-full shrink-0 sm:w-44 md:h-9" />
       </div>
       <Skeleton className="h-6 w-48" />
 

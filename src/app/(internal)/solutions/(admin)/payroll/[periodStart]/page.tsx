@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Info, Wallet } from "lucide-react";
 
 import { OUTLINE_PRESS_CLASS_NAME } from "@/components/admin/detail-page/press";
+import DownloadExportMenu from "@/components/admin/payroll/download-export-menu";
 import PayRunList from "@/components/admin/payroll/pay-run-list";
 import { PeriodStatusBadge } from "@/components/admin/payroll/payroll-badges";
 import StragglersSection from "@/components/admin/payroll/stragglers-section";
@@ -82,6 +83,12 @@ export default async function PayPeriodPage({
           <PageHeader
             title={`Pay period ${view.label}`}
             description={describePeriodHeader(view)}
+            action={
+              <DownloadExportMenu
+                periodStart={period.start}
+                canExport={view.counts.finalized + view.counts.paid > 0}
+              />
+            }
           />
           <div className="flex flex-wrap items-center gap-2">
             <PeriodStatusBadge kind={hasRuns ? view.status.kind : "no_pay"} />

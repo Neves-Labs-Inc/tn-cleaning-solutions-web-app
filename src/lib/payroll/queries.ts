@@ -14,6 +14,7 @@ import type {
   MyPayLineRow,
   MyPayRunRow,
 } from "./my-pay.ts";
+import type { PayRateRow } from "./export-model.ts";
 import { getPayPeriod, PAYROLL_START } from "./period.ts";
 import { getBusinessDate } from "../schedule/business-time.ts";
 
@@ -242,6 +243,23 @@ export function fetchPayPeriodsOverview(
 ): Promise<PayrollData> {
   const running = getPayPeriod(getBusinessDate(now));
   return fetchPayrollData(db, { from: PAYROLL_START, to: running.start });
+}
+
+const PAY_RATE_COLUMNS =
+  "id, employee_id, hourly_rate_cents, effective_from, is_archived";
+
+// Every live Pay rate in effect by `day`, for the Payroll export's current rates
+// (buildPayrollExportModel picks each Cleaner's latest).
+export function fetchPayRatesUpTo(db: Db, day: string): Promise<PayRateRow[]> {
+  return readAllPages<PayRateRow>((from, to) =>
+    db
+      .from("pay_rates")
+      .select(PAY_RATE_COLUMNS)
+      .eq("is_archived", false)
+      .lte("effective_from", day)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 }
 
 const MY_RUN_COLUMNS =
