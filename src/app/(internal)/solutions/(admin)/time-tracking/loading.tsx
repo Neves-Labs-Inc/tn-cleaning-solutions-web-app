@@ -25,6 +25,8 @@ export default function TimeSheetsLoading(): React.ReactNode {
         <Skeleton className="h-4 w-32" />
       </div>
 
+      <Skeleton className="h-11 w-full md:h-9 md:max-w-sm" />
+
       <TimeSheetsSummarySkeleton />
     </div>
   );
