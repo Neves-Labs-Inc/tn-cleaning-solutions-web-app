@@ -76,16 +76,20 @@ export function finalizeOpensOn(period: PayPeriod): string {
   return addDays(period.end, 1);
 }
 
-// The period a `[periodStart]` route param names: a real period start on or after the Payroll
-// start, else null.
+// The period a `[periodStart]` route param names: a real period start from the Payroll start
+// through the running period, else null. A period that hasn't begun has nothing to show.
 export function parsePeriodParam(
   value: string | string[] | undefined,
+  now: Date,
 ): PayPeriod | null {
   const day = Array.isArray(value) ? value[0] : value;
   if (day === undefined || !isCalendarDate(day)) return null;
 
   const period = getPayPeriod(day);
-  return period.start === day && day >= PAYROLL_START ? period : null;
+  const running = getPayPeriod(getBusinessDate(now));
+  const isListed =
+    period.start === day && day >= PAYROLL_START && day <= running.start;
+  return isListed ? period : null;
 }
 
 function formatMonthDay(day: string): { month: string; date: number } {

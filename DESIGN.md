@@ -89,6 +89,19 @@ Mapping (single source of truth lives in one `status-badge.tsx`, §10):
 | Payment state `paid` | success |
 | appointment Not clocked | danger |
 | appointment Missed clock | danger |
+| Pay period Running | progress (`Clock`) |
+| Pay period Ready to review | warning (`CircleDashed`) |
+| Pay period Finalized · to pay | info (`FileCheck2`) |
+| Pay period Paid | success (`CheckCircle2`) |
+| Pay period No pay | neutral |
+| Pay run Draft | neutral (`Pencil`) |
+| Pay run Finalized | info (`FileCheck2`) |
+| Pay run Paid | success (`CheckCircle2`) |
+| Pay run Off-cycle | progress |
+| Pay run Blocked / Blocks finalize / "N blocked" | danger (`Lock`) |
+| Payroll "N flags" | warning (`AlertTriangle`) |
+| Payroll "N unpaid shifts after finalize" | danger (`AlertTriangle`) |
+| pay line No Pay rate | danger (`CircleSlash`) |
 
 Appointment cards and list rows are tinted with their tone via `appointmentCardTone` (Missed clock wins, then Not clocked, then In progress, then the Payment state; Cancelled and appointments with neither stay untinted). The surface classes live in `CARD_TINT_CLASSES` in `status-badge.tsx`.
 

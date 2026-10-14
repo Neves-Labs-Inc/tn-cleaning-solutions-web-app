@@ -60,6 +60,8 @@ export type ProblemSession = {
   clientName: string | null;
   jobName: string | null;
   kind: ProblemKind;
+  // For an Open shift's "Clocked in 9:00 AM, no clock-out".
+  clockedInAt: string | null;
   href: string;
 };
 
@@ -67,6 +69,8 @@ export type RunAdjustment = {
   id: string;
   amountCents: number;
   reason: string;
+  // The session it points at, or null for one about the whole run.
+  appointmentEmployeeId: string | null;
   // "Oct 8 · Patel residence" for the appointment it points at.
   appointmentLabel: string | null;
 };
@@ -306,6 +310,7 @@ function splitLiveRows(
             clientName: row.client_name,
             jobName: row.job_name,
             kind,
+            clockedInAt: row.clocked_in_at,
             href: timeSheetHref(row.employee_id, row.scheduled_date),
           },
         ];
@@ -362,6 +367,7 @@ function buildAdjustments(
         id: item.id,
         amountCents: item.amount_cents,
         reason: item.reason,
+        appointmentEmployeeId: sessionId,
         appointmentLabel:
           date === null ? null : formatAppointmentLabel(date, clientName),
       };

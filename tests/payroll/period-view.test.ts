@@ -49,6 +49,7 @@ describe("buildPeriodView: draft runs", () => {
         clientName: "Patel residence",
         jobName: "Standard clean",
         kind: "missing_clock",
+        clockedInAt: null,
         href: "/solutions/time-tracking?cleaner=carla&from=2026-10-11&to=2026-10-11",
       },
     ]);
@@ -114,12 +115,14 @@ describe("buildPeriodView: draft runs", () => {
         id: "a1",
         amountCents: 2000,
         reason: "Tip from Mrs. Patel",
+        appointmentEmployeeId: "s1",
         appointmentLabel: "Oct 9 · Patel residence",
       },
       {
         id: "a2",
         amountCents: -1250,
         reason: "Overpaid last period",
+        appointmentEmployeeId: null,
         appointmentLabel: null,
       },
     ]);
@@ -212,6 +215,16 @@ describe("buildPeriodView: draft runs", () => {
     });
 
     assert.deepEqual(buildPeriodView(data, OCT_5, NOW).runs, []);
+  });
+});
+
+describe("buildPeriodView: problem sessions", () => {
+  it("keeps an Open shift's clock-in time for its explanation", () => {
+    const data = payrollData({ sessions: [openShift("p1", "ana")] });
+
+    const ana = only(buildPeriodView(data, OCT_5, NOW).runs);
+
+    assert.equal(only(ana.problemSessions).clockedInAt, "2026-10-08T13:00:00Z");
   });
 });
 

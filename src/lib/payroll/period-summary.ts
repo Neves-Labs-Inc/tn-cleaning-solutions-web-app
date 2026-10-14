@@ -14,6 +14,7 @@ export type PeriodRow = {
   cleanerCount: number;
   totalCents: number;
   blockedCount: number;
+  flagCount: number;
   stragglerCount: number;
   // "4 Cleaners · 2 draft · 1 to pay"
   caption: string;
@@ -67,6 +68,7 @@ function toPeriodRow(
     cleanerCount,
     totalCents: view.totals.totalCents,
     blockedCount: view.counts.blocked,
+    flagCount: view.runs.reduce((total, item) => total + item.flagCount, 0),
     stragglerCount: view.counts.stragglers,
     caption: formatCaption(cleanerCount, view.counts),
   };

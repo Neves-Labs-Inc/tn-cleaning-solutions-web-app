@@ -123,15 +123,18 @@ describe("finalizeOpensOn", () => {
 });
 
 describe("parsePeriodParam", () => {
-  it("reads a period start on or after the Payroll start", () => {
-    assert.deepEqual(parsePeriodParam("2026-10-19"), {
+  // Toronto: Wed Oct 21, 2026. Oct 19–Nov 1 is running.
+  const OCT_21 = new Date("2026-10-21T15:00:00Z");
+
+  it("reads a period start from the Payroll start through the running period", () => {
+    assert.deepEqual(parsePeriodParam("2026-10-19", OCT_21), {
       start: "2026-10-19",
       end: "2026-11-01",
     });
   });
 
   it("reads the first value of a repeated param", () => {
-    assert.deepEqual(parsePeriodParam(["2026-10-05", "2026-10-19"]), {
+    assert.deepEqual(parsePeriodParam(["2026-10-05", "2026-10-19"], OCT_21), {
       start: "2026-10-05",
       end: "2026-10-18",
     });
@@ -141,12 +144,15 @@ describe("parsePeriodParam", () => {
     "2026-10-06",
     "2026-09-21",
     "2026-02-30",
+    // Starts after the running period: it hasn't begun.
+    "2026-11-02",
+    "2030-01-07",
     "next",
     "",
     undefined,
   ]) {
     it(`refuses ${JSON.stringify(value)}`, () => {
-      assert.equal(parsePeriodParam(value), null);
+      assert.equal(parsePeriodParam(value, OCT_21), null);
     });
   }
 });

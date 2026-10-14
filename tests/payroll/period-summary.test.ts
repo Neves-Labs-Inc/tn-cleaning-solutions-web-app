@@ -57,6 +57,20 @@ describe("summarizePeriods: list rows", () => {
     assert.equal(october.href, "/solutions/payroll/2026-10-05");
   });
 
+  it("counts every run's flags", () => {
+    const data = payrollData({
+      sessions: [
+        session("s1", "ana", { is_odd_duration: true }),
+        openShift("s2", "ana"),
+        missingClock("s3", "carla"),
+      ],
+    });
+
+    const [, , october] = summarizePeriods(data, NOV_3).rows;
+
+    assert.equal(october.flagCount, 3);
+  });
+
   it("captions a period with no runs", () => {
     const [, , october] = summarizePeriods(payrollData(), NOV_3).rows;
 
