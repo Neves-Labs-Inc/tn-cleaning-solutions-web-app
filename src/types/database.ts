@@ -866,6 +866,7 @@ export type Database = {
           p_paid_date: string | null
           p_method: string
           p_reference: string | null
+          p_internal_note: string | null
         }
         Returns: Json
       }

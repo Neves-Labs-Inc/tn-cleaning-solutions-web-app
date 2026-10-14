@@ -1,4 +1,4 @@
--- Mark paid (invoice_mark_paid, 20261011160000), called as the admin.
+-- Mark paid (invoice_mark_paid, 20261011160000; Internal note 20261014220000), called as the admin.
 --
 -- Asserts the refusal code (DETAIL) of every refusal and their order, the rows a Mark paid leaves
 -- (the new paid invoice, its lines, the drafts it pulls appointments off, payment_methods) and
@@ -11,7 +11,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(45);
+select plan(48);
 
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
@@ -83,7 +83,7 @@ $$;
 create function public.pgtap_mark_paid_call(variadic numbers int[]) returns text
 	language sql
 	as $$
-	select format('select public.invoice_mark_paid(%L, %L, null, %L, null)',
+	select format('select public.invoice_mark_paid(%L, %L, null, %L, null, null)',
 		'c6100000-0000-4000-8000-000000000001',
 		(select jsonb_agg(jsonb_build_object(
 			'appointment_id', 'd6100000-0000-4000-8000-0000000000' || lpad(n::text, 2, '0'),
@@ -107,32 +107,32 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub": "a6100000-0000-4000-8000-000000000002", "role": "authenticated"}';
 
 select is(public.pgtap_mark_paid_refusal($$
-	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001', '[]', null, '', null)
+	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001', '[]', null, '', null, null)
 $$), 'not_admin', 'an employee gets not_admin before any other refusal');
 
 set local request.jwt.claims = '{"sub": "a6100000-0000-4000-8000-000000000001", "role": "authenticated", "app_metadata": {"role": "admin"}}';
 
 select is(public.pgtap_mark_paid_refusal($$
-	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001', '[]', null, '', null)
+	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001', '[]', null, '', null, null)
 $$), 'empty_lines', 'no lines is empty_lines, before the blank method');
 
 select is(public.pgtap_mark_paid_refusal($$
-	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001', null, null, 'Cash', null)
+	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001', null, null, 'Cash', null, null)
 $$), 'empty_lines', 'null lines is empty_lines');
 
 select is(public.pgtap_mark_paid_refusal($$
 	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000099',
-		'[{"appointment_id": "d6100000-0000-4000-8000-000000000001", "billed_amount_cents": 5000}]', null, 'Cash', null)
+		'[{"appointment_id": "d6100000-0000-4000-8000-000000000001", "billed_amount_cents": 5000}]', null, 'Cash', null, null)
 $$), 'visit_other_client', 'an unknown client is visit_other_client');
 
 select is(public.pgtap_mark_paid_refusal($$
 	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001',
-		'[{"appointment_id": "d6100000-0000-4000-8000-000000000099", "billed_amount_cents": 5000}]', null, 'Cash', null)
+		'[{"appointment_id": "d6100000-0000-4000-8000-000000000099", "billed_amount_cents": 5000}]', null, 'Cash', null, null)
 $$), 'visit_other_client', 'an unknown appointment is visit_other_client');
 
 select is(public.pgtap_mark_paid_refusal($$
 	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001',
-		'[{"appointment_id": "not-a-uuid", "billed_amount_cents": 5000}]', null, 'Cash', null)
+		'[{"appointment_id": "not-a-uuid", "billed_amount_cents": 5000}]', null, 'Cash', null, null)
 $$), 'visit_other_client', 'a malformed appointment id is visit_other_client, not a cast error');
 
 select is(public.pgtap_mark_paid_refusal(public.pgtap_mark_paid_call(8)),
@@ -147,7 +147,7 @@ select is(public.pgtap_mark_paid_refusal(public.pgtap_mark_paid_call(6, 10)),
 select is(public.pgtap_mark_paid_refusal(public.pgtap_mark_paid_call(9, 10)),
 	'invoice_paid', 'an appointment on a paid invoice is invoice_paid, before invoice_issued');
 
-select is(public.pgtap_mark_paid_refusal(format('select public.invoice_mark_paid(%L, %L, null, %L, null)',
+select is(public.pgtap_mark_paid_refusal(format('select public.invoice_mark_paid(%L, %L, null, %L, null, null)',
 	'c6100000-0000-4000-8000-000000000001',
 	'[{"appointment_id": "d6100000-0000-4000-8000-000000000009", "billed_amount_cents": 5000},
 	  {"appointment_id": "d6100000-0000-4000-8000-000000000001", "billed_amount_cents": -1}]', 'Cash')),
@@ -156,7 +156,7 @@ select is(public.pgtap_mark_paid_refusal(format('select public.invoice_mark_paid
 select is_empty($$
 	select amount
 	from unnest(array['null', '-1', '12.5', '"5000"']) amount
-	where public.pgtap_mark_paid_refusal(format('select public.invoice_mark_paid(%L, %L, %L, %L, null)',
+	where public.pgtap_mark_paid_refusal(format('select public.invoice_mark_paid(%L, %L, %L, %L, null, null)',
 		'c6100000-0000-4000-8000-000000000001',
 		'[{"appointment_id": "d6100000-0000-4000-8000-000000000001", "billed_amount_cents": ' || amount || '}]',
 		public.pgtap_mark_paid_today() + 1, '')) is distinct from 'unpriced_line'
@@ -164,10 +164,10 @@ $$, 'a missing, negative, fractional or string amount is unpriced_line, before p
 
 select is(public.pgtap_mark_paid_refusal($$
 	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001',
-		'[{"appointment_id": "d6100000-0000-4000-8000-000000000001"}]', null, 'Cash', null)
+		'[{"appointment_id": "d6100000-0000-4000-8000-000000000001"}]', null, 'Cash', null, null)
 $$), 'unpriced_line', 'a line with no amount at all is unpriced_line');
 
-select is(public.pgtap_mark_paid_refusal(format('select public.invoice_mark_paid(%L, %L, %L, %L, null)',
+select is(public.pgtap_mark_paid_refusal(format('select public.invoice_mark_paid(%L, %L, %L, %L, null, null)',
 	'c6100000-0000-4000-8000-000000000001',
 	'[{"appointment_id": "d6100000-0000-4000-8000-000000000001", "billed_amount_cents": 5000}]',
 	public.pgtap_mark_paid_today() + 1, '  ')),
@@ -175,7 +175,7 @@ select is(public.pgtap_mark_paid_refusal(format('select public.invoice_mark_paid
 
 select is(public.pgtap_mark_paid_refusal($$
 	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001',
-		'[{"appointment_id": "d6100000-0000-4000-8000-000000000001", "billed_amount_cents": 5000}]', null, E' \t ', null)
+		'[{"appointment_id": "d6100000-0000-4000-8000-000000000001", "billed_amount_cents": 5000}]', null, E' \t ', null, null)
 $$), 'method_required', 'a blank method is method_required');
 
 reset role;
@@ -205,7 +205,7 @@ select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001',
 	  {"appointment_id": "d6100000-0000-4000-8000-000000000003", "billed_amount_cents": 2500},
 	  {"appointment_id": "d6100000-0000-4000-8000-000000000005", "billed_amount_cents": 1000},
 	  {"appointment_id": "d6100000-0000-4000-8000-000000000001", "billed_amount_cents": 9000}]',
-	null, E'  Barter \t trade ', '  ref 42  ') as result;
+	null, E'  Barter \t trade ', '  ref 42  ', E' \n Gate code 4471\nSide door \t \n') as result;
 
 reset role;
 
@@ -220,6 +220,9 @@ $$, $$
 		'INV-002-SMI' || public.pgtap_mark_paid_year(), public.pgtap_mark_paid_today(), null::date,
 		public.pgtap_mark_paid_today(), 'Barter trade'::text, 'ref 42'::text)
 $$, 'the new invoice is paid, manual, issued and paid today with no due date, the method normalised and the reference trimmed');
+
+select is((select internal_note from public.invoices where id = (select (result ->> 'invoice_id')::uuid from pgtap_mark_paid_result)),
+	E'Gate code 4471\nSide door', 'the Internal note is stored on the new invoice, trimmed of edge whitespace and line breaks');
 
 select results_eq($$
 	select appointment_id, billed_amount_cents, billed_rate_cents, billed_minutes, is_archived, cancelled_at
@@ -270,7 +273,7 @@ set local role authenticated;
 create temporary table pgtap_mark_paid_zero on commit drop as
 select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001',
 	'[{"appointment_id": "d6100000-0000-4000-8000-000000000011", "billed_amount_cents": 0}]',
-	public.pgtap_mark_paid_today() - 3, 'BARTER TRADE', '   ') as result;
+	public.pgtap_mark_paid_today() - 3, 'BARTER TRADE', '   ', E' \r\n \t ') as result;
 
 reset role;
 
@@ -280,6 +283,9 @@ select results_eq($$
 $$, $$
 	values ('INV-003-SMI' || public.pgtap_mark_paid_year(), public.pgtap_mark_paid_today() - 3, 'Barter trade'::text, null::text)
 $$, 'a past paid date is kept, a method in another case is stored as the listed name and a blank reference is null');
+
+select is((select internal_note from public.invoices where id = (select (result ->> 'invoice_id')::uuid from pgtap_mark_paid_zero)),
+	null, 'a blank Internal note is stored as null');
 
 select is((select count(*)::int from public.payment_methods where lower(name) = 'barter trade'),
 	1, 'reusing a method in another case adds no row');
@@ -337,12 +343,15 @@ set local role authenticated;
 
 create temporary table pgtap_mark_paid_again on commit drop as
 select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001',
-	'[{"appointment_id": "d6100000-0000-4000-8000-000000000001", "billed_amount_cents": 9000}]', null, 'Cash', null) as result;
+	'[{"appointment_id": "d6100000-0000-4000-8000-000000000001", "billed_amount_cents": 9000}]', null, 'Cash', null, null) as result;
 
 reset role;
 
 select is((select result ->> 'invoice_number' from pgtap_mark_paid_again),
 	'INV-004-SMI' || public.pgtap_mark_paid_year(), 'a released appointment can be marked paid again, under a new number');
+
+select is((select internal_note from public.invoices where id = (select (result ->> 'invoice_id')::uuid from pgtap_mark_paid_again)),
+	null, 'a null Internal note is stored as null');
 
 
 -- Issue still numbers after Mark paid ----------------------------------------------------------
@@ -363,23 +372,23 @@ reset role;
 
 -- The SECURITY DEFINER contract ------------------------------------------------------------------
 
-select is((select prosecdef from pg_proc where oid = 'public.invoice_mark_paid(uuid, jsonb, date, text, text)'::regprocedure),
+select is((select prosecdef from pg_proc where oid = 'public.invoice_mark_paid(uuid, jsonb, date, text, text, text)'::regprocedure),
 	true, 'invoice_mark_paid runs as its owner');
 
-select is((select pg_get_userbyid(proowner) from pg_proc where oid = 'public.invoice_mark_paid(uuid, jsonb, date, text, text)'::regprocedure),
+select is((select pg_get_userbyid(proowner) from pg_proc where oid = 'public.invoice_mark_paid(uuid, jsonb, date, text, text, text)'::regprocedure),
 	'postgres', 'invoice_mark_paid is owned by postgres');
 
-select ok(has_function_privilege('authenticated', 'public.invoice_mark_paid(uuid, jsonb, date, text, text)', 'execute'),
+select ok(has_function_privilege('authenticated', 'public.invoice_mark_paid(uuid, jsonb, date, text, text, text)', 'execute'),
 	'authenticated can call invoice_mark_paid (it refuses non-admins itself)');
 
-select ok(has_function_privilege('anon', 'public.invoice_mark_paid(uuid, jsonb, date, text, text)', 'execute'),
+select ok(has_function_privilege('anon', 'public.invoice_mark_paid(uuid, jsonb, date, text, text, text)', 'execute'),
 	'anon keeps EXECUTE like the other invoice functions (ADR 0001)');
 
 set local role anon;
 set local request.jwt.claims = '{"role": "anon"}';
 
 select is(public.pgtap_mark_paid_refusal($$
-	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001', '[]', null, 'Cash', null)
+	select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001', '[]', null, 'Cash', null, null)
 $$), 'not_admin', 'an anonymous caller gets not_admin');
 
 reset role;

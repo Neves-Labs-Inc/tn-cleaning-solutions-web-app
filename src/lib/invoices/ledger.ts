@@ -22,6 +22,7 @@ export type PaymentInput = { paidDate: string | null; method: string; reference:
 export type MarkPaidInput = PaymentInput & {
   clientId: string
   lines: Array<{ appointmentId: string; amountCents: number }>
+  internalNote: string | null
 }
 export type PaymentMethod = { id: string; name: string; is_hidden: boolean; sort_order: number }
 export type BulkIssueOutcome = {
@@ -219,6 +220,7 @@ export class InvoiceLedger {
       p_paid_date: input.paidDate,
       p_method: input.method,
       p_reference: input.reference,
+      p_internal_note: input.internalNote,
     })
     const created = data as MarkPaidResult | null
     return this.settle('markPaid', { clientId: input.clientId }, error, {

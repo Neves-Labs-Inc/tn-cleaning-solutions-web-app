@@ -308,7 +308,8 @@ export async function markAppointmentsPaid(
   const clientId = id(formData, 'client_id')
   const appointmentIds = ids(formData, 'appointment_ids')
   const parsedPayment = payment(formData)
-  if (!clientId || !appointmentIds) return refuse('invalid_input')
+  const internalNote = optionalText(formData, 'internal_note', MAX_NOTES_LENGTH)
+  if (!clientId || !appointmentIds || internalNote === undefined) return refuse('invalid_input')
   if ('refusal' in parsedPayment) return parsedPayment.refusal
   const { input } = parsedPayment
   if (appointmentIds.length === 0) return refuse('empty_lines')
@@ -320,7 +321,7 @@ export async function markAppointmentsPaid(
   const lines = markPaidLines(formData, appointmentIds)
   if (!lines) return refuse('unpriced_line')
 
-  const result = await admin.ledger.markPaid({ clientId, lines, ...input })
+  const result = await admin.ledger.markPaid({ clientId, lines, internalNote, ...input })
   if (!result.ok) return toActionResult(result)
 
   // The ids passed the UUID parser, so the detail paths are never free text.

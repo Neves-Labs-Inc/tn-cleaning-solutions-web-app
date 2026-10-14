@@ -204,7 +204,7 @@ test('bulkIssue keeps going and reports each draft whose read failed', async () 
   })
 })
 
-test('markPaid sends the lines, paid date, method and reference to invoice_mark_paid and returns the new invoice', async () => {
+test('markPaid sends the lines, paid date, method, reference and internal note to invoice_mark_paid and returns the new invoice', async () => {
   const { ledger, rpcCalls } = setup({ appointments: [], invoice_appointments: [] }, () =>
     success({ invoice_id: 'inv-9', invoice_number: 'INV-007-SMI2026' })
   )
@@ -218,6 +218,7 @@ test('markPaid sends the lines, paid date, method and reference to invoice_mark_
     paidDate: '2026-10-10',
     method: 'Cash',
     reference: 'receipt 12',
+    internalNote: 'Gate code 4471',
   })
 
   assert.deepEqual(result, { ok: true, data: { invoiceId: 'inv-9', invoiceNumber: 'INV-007-SMI2026' } })
@@ -233,6 +234,7 @@ test('markPaid sends the lines, paid date, method and reference to invoice_mark_
         p_paid_date: '2026-10-10',
         p_method: 'Cash',
         p_reference: 'receipt 12',
+        p_internal_note: 'Gate code 4471',
       },
     },
   ])
@@ -247,6 +249,7 @@ test('markPaid returns a refusal by its code, in the appointment wording', async
     paidDate: null,
     method: 'Cash',
     reference: null,
+    internalNote: null,
   })
 
   assert.deepEqual(result, { ok: false, code: 'invoice_issued', message: messageFor('invoice_issued') })
@@ -265,6 +268,7 @@ test('markPaid keeps the raw message of an error that is not a refusal', async (
     paidDate: null,
     method: 'Cash',
     reference: null,
+    internalNote: null,
   })
 
   assert.deepEqual(result, { ok: false, code: 'unknown', message: 'connection reset' })
