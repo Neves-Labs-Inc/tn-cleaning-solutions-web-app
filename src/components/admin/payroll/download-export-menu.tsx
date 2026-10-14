@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Download,
   FileSpreadsheet,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -26,7 +27,13 @@ import {
 import { useFileDownload } from "@/hooks/use-file-download";
 import { cn } from "@/lib/utils";
 
-type ExportItem = { label: string; href: string; icon: LucideIcon };
+type ExportItem = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  // Replaces the hook's generic "export" wording; 403 and 404 keep the shared copy.
+  failedMessage?: string;
+};
 
 type DownloadExportMenuProps = {
   periodStart: string;
@@ -36,8 +43,7 @@ type DownloadExportMenuProps = {
 
 const DISABLED_REASON = "Finalize a run to export";
 
-// Every item uses this class (ticket 12 adds "Summary (PDF)"): 44px on phones via the control
-// height.
+// Every item uses this class: 44px on phones via the control height.
 const ITEM_CLASS_NAME =
   "min-h-(--control-height) cursor-pointer gap-2 px-3 text-sm transition-colors duration-fast active:bg-muted [&_svg]:size-4";
 
@@ -53,6 +59,12 @@ function getExportItems(periodStart: string): ExportItem[] {
       href: `${base}/export.xlsx`,
       icon: FileSpreadsheet,
     },
+    {
+      label: "Summary (PDF)",
+      href: `${base}/summary.pdf`,
+      icon: FileText,
+      failedMessage: "Couldn't download the summary. Try again.",
+    },
   ];
 }
 
@@ -67,8 +79,11 @@ export default function DownloadExportMenu({
   const isDisabled = !canExport || isPending;
   const items = getExportItems(periodStart);
 
-  function handleSelect(href: string): void {
-    void download(href, { onNotFound: () => router.refresh() });
+  function handleSelect(item: ExportItem): void {
+    void download(item.href, {
+      onNotFound: () => router.refresh(),
+      messages: { failed: item.failedMessage },
+    });
   }
 
   const trigger = (
@@ -128,7 +143,7 @@ export default function DownloadExportMenu({
             <DropdownMenuItem
               key={item.href}
               className={ITEM_CLASS_NAME}
-              onClick={() => handleSelect(item.href)}
+              onClick={() => handleSelect(item)}
             >
               <item.icon aria-hidden="true" />
               {item.label}
