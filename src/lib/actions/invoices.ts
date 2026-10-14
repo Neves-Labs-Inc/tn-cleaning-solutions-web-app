@@ -394,6 +394,20 @@ export async function unarchiveInvoice(_previous: unknown, formData: FormData): 
   return toActionResult(result, touched.appointmentIds)
 }
 
+// Posts invoice_id and internal_note. Allowed at any status and while archived; blank clears it.
+export async function setInternalNote(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
+  const invoiceId = id(formData, 'invoice_id')
+  const internalNote = optionalText(formData, 'internal_note', MAX_NOTES_LENGTH)
+  if (!invoiceId || internalNote === undefined) return refuse('invalid_input')
+
+  const admin = await requireAdmin()
+  if ('refusal' in admin) return admin.refusal
+
+  const result = await admin.ledger.setInternalNote(invoiceId, internalNote)
+  if (result.ok) revalidateInvoicing(invoiceId)
+  return toActionResult(result)
+}
+
 export async function setClientAutomaticInvoicing(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
   const clientId = id(formData, 'client_id')
   if (!clientId) return refuse('invalid_input')

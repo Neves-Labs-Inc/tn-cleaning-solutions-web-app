@@ -157,8 +157,11 @@ The record that an issued invoice was paid in full: the paid date, the Payment m
 How a Payment was made, chosen from a list the admin manages. The list starts with e-Transfer, Cash, Cheque and Credit card, and a new method typed in while recording a Payment joins it.
 
 **Archived invoice**:
-A draft, paid or void invoice hidden from the working list and read-only until it is unarchived. An invoice still owed (issued) can't be archived. Archiving a draft releases its Live claims, and its appointments become Excluded appointments if it was an Automatic draft.
+A draft, paid or void invoice hidden from the working list and read-only, except its Internal note, until it is unarchived. An invoice still owed (issued) can't be archived. Archiving a draft releases its Live claims, and its appointments become Excluded appointments if it was an Automatic draft.
 _Avoid_: deleted, hidden
+
+**Internal note**:
+An admin-only note on an invoice, editable at any status and while archived. Never shown or printed for the client. Not the invoice's Notes, which the client sees.
 
 **Outstanding**:
 What clients owe: the total of every issued invoice. An issued invoice with no due date is outstanding but never overdue. Drafts are not outstanding.

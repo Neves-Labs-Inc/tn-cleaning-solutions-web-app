@@ -478,6 +478,7 @@ export type Database = {
           paid_date: string | null
           payment_method: string | null
           payment_reference: string | null
+          internal_note: string | null
         }
         Insert: {
           id?: string
@@ -494,6 +495,7 @@ export type Database = {
           paid_date?: string | null
           payment_method?: string | null
           payment_reference?: string | null
+          internal_note?: string | null
         }
         Update: {
           id?: string
@@ -510,6 +512,7 @@ export type Database = {
           paid_date?: string | null
           payment_method?: string | null
           payment_reference?: string | null
+          internal_note?: string | null
         }
         Relationships: [
           {
@@ -863,6 +866,10 @@ export type Database = {
       }
       invoice_record_payment: {
         Args: { p_invoice_id: string; p_paid_date: string | null; p_method: string; p_reference: string | null }
+        Returns: undefined
+      }
+      invoice_set_internal_note: {
+        Args: { p_invoice_id: string; p_internal_note: string | null }
         Returns: undefined
       }
       invoice_unarchive: {

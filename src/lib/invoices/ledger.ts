@@ -251,6 +251,15 @@ export class InvoiceLedger {
     return this.settle('unarchive', { invoiceId }, error, null)
   }
 
+  // Allowed at any status and while archived; null clears the note.
+  async setInternalNote(invoiceId: string, internalNote: string | null): Promise<LedgerResult<null>> {
+    const { error } = await this.db.rpc('invoice_set_internal_note', {
+      p_invoice_id: invoiceId,
+      p_internal_note: internalNote,
+    })
+    return this.settle('setInternalNote', { invoiceId }, error, null)
+  }
+
   async setAutomaticInvoicing(clientId: string, isOn: boolean): Promise<LedgerResult<null>> {
     const { data, error } = await this.db
       .from('clients')

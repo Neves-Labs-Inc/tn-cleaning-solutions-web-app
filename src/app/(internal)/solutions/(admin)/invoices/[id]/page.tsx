@@ -6,6 +6,7 @@ import DraftDetailsForm from '@/components/invoices/draft-details-form'
 import InvoiceActions from '@/components/invoices/invoice-actions'
 import InvoiceBadges from '@/components/invoices/invoice-badges'
 import { InvoiceDetailProvider } from '@/components/invoices/invoice-detail-context'
+import InternalNoteCard from '@/components/invoices/internal-note-card'
 import InvoiceVisitsCard from '@/components/invoices/invoice-visits-card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
@@ -186,13 +187,13 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
             <Archive aria-hidden="true" />
             <AlertTitle>Archived · read-only</AlertTitle>
             <AlertDescription>
-              Unarchive it to make changes.
+              Unarchive it to make changes. Its internal note stays editable.
               {isDraft ? " Its appointments were released; unarchiving claims them again if no other invoice has." : ''}
             </AlertDescription>
           </Alert>
         ) : null}
 
-        {/* Phones stack Visits, Details, Payment, Notes; from lg Visits and Notes sit left, Details and Payment right. */}
+        {/* Phones stack Visits, Details, Payment, Notes, Internal note; from lg Visits, Notes and Internal note sit left, Details and Payment right. */}
         <div className="flex animate-in flex-col gap-6 fade-in-0 duration-slow lg:grid lg:grid-cols-3 lg:items-start">
           <div className="contents lg:col-span-2 lg:block lg:min-w-0 lg:space-y-6">
             <div className="order-1 min-w-0 lg:order-none">
@@ -221,6 +222,12 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
                 )}
               </Card>
             )}
+
+            {/* Every status, archived too. Keyed on the invoice, not the note, so another action's
+                refresh doesn't wipe typing. */}
+            <div className="order-5 min-w-0 lg:order-none">
+              <InternalNoteCard key={invoice.id} invoiceId={invoice.id} savedNote={invoice.internal_note ?? ''} />
+            </div>
           </div>
 
           <div className="contents lg:block lg:min-w-0 lg:space-y-6">

@@ -305,3 +305,25 @@ test('appointmentIdsOn returns a failed read as an unknown error instead of thro
 
   assert.deepEqual(result, { ok: false, code: 'unknown', message: 'connection reset' })
 })
+
+test('setInternalNote sends the invoice id and note to invoice_set_internal_note', async () => {
+  const { ledger, rpcCalls } = setup({ appointments: [], invoice_appointments: [] }, () => success())
+
+  const result = await ledger.setInternalNote('inv-1', 'Paid by e-transfer on Oct 3')
+
+  assert.deepEqual(result, { ok: true, data: null })
+  assert.deepEqual(rpcCalls, [
+    {
+      name: 'invoice_set_internal_note',
+      args: { p_invoice_id: 'inv-1', p_internal_note: 'Paid by e-transfer on Oct 3' },
+    },
+  ])
+})
+
+test('setInternalNote returns a refusal by its code', async () => {
+  const { ledger } = setup({ appointments: [], invoice_appointments: [] }, () => refusal('invoice_not_found'))
+
+  const result = await ledger.setInternalNote('inv-1', null)
+
+  assert.deepEqual(result, { ok: false, code: 'invoice_not_found', message: messageFor('invoice_not_found') })
+})
