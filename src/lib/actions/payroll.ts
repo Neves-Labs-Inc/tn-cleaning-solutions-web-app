@@ -6,14 +6,19 @@ import {
   isDateText,
   isUuid,
   parseAdjustmentForm,
+  parseMarkPaidRequest,
+  parsePayoutEdit,
   parseRunTarget,
   type AdjustmentFieldErrors,
+  type MarkPaidItem,
+  type PayoutEdit,
   type RunTarget,
 } from "@/lib/payroll/action-input";
 import {
   getPayrollErrorMessage,
   getPayrollErrorStatus,
 } from "@/lib/payroll/errors";
+import type { MarkPaidRow } from "@/lib/payroll/mark-paid";
 import { PayrollWriter, type FinalizeRow } from "@/lib/payroll/payroll-writer";
 import type { Result } from "@/lib/result";
 import { createClient } from "@/lib/supabase/server";
@@ -194,6 +199,38 @@ export async function removeCleanerFromPayPeriod(
   if (writer === null) return refuseNonAdmin();
   const result = await writer.removeCleaner(target);
   revalidatePayroll(target.periodStart);
+  return result;
+}
+
+// One call for a run's own Mark paid and for the bulk bar: one row per run, 'ok' or refused.
+// periodStart is only the page to refresh; the SQL checks the paid date against each run's period.
+export async function markPayRunsPaid(
+  periodStart: string,
+  items: MarkPaidItem[],
+  paidOn: string,
+): Promise<PayrollActionResult<MarkPaidRow[]>> {
+  const request = parseMarkPaidRequest(items, paidOn);
+  if (request === null || !isDateText(periodStart)) return refuseInput();
+
+  const writer = await getAdminWriter();
+  if (writer === null) return refuseNonAdmin();
+  const result = await writer.markPaid(request.items, request.paidOn);
+  revalidatePayroll(periodStart);
+  return result;
+}
+
+// periodStart is only the page to refresh; the SQL finds the run's period itself.
+export async function updatePayRunPayout(
+  periodStart: string,
+  edit: PayoutEdit,
+): Promise<PayrollActionResult> {
+  const parsed = parsePayoutEdit(edit);
+  if (parsed === null || !isDateText(periodStart)) return refuseInput();
+
+  const writer = await getAdminWriter();
+  if (writer === null) return refuseNonAdmin();
+  const result = await writer.updatePayout(parsed);
+  revalidatePayroll(periodStart);
   return result;
 }
 

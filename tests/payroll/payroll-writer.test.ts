@@ -105,4 +105,93 @@ describe("PayrollWriter", () => {
       status: 200,
     });
   });
+
+  it("sends each run's method with the shared paid date and reads a row per run", async () => {
+    const calls: unknown[][] = [];
+    const db = {
+      rpc: async (...args: unknown[]) => {
+        calls.push(args);
+        return {
+          data: [
+            { pay_run_id: "run-1", code: "ok", message: null, detail: null },
+            {
+              pay_run_id: "run-2",
+              code: "blocked",
+              message: "Fix this Cleaner's problem sessions",
+              detail: { open_shift: 1, missing_clock: 0, no_rate: 0 },
+            },
+          ],
+          error: null,
+        };
+      },
+    };
+    const writer = new PayrollWriter(db as never, {
+      warn: () => {},
+      error: () => {},
+    });
+
+    const result = await writer.markPaid(
+      [
+        { runId: "run-1", payoutMethod: "e-Transfer" },
+        { runId: "run-2", payoutMethod: "Cash" },
+      ],
+      "2026-10-20",
+    );
+
+    assert.deepEqual(calls, [
+      [
+        "mark_pay_runs_paid",
+        {
+          p_items: [
+            { run_id: "run-1", payout_method: "e-Transfer" },
+            { run_id: "run-2", payout_method: "Cash" },
+          ],
+          p_paid_on: "2026-10-20",
+        },
+      ],
+    ]);
+    assert.deepEqual(result, {
+      value: [
+        { payRunId: "run-1", code: "ok", message: null, detail: null },
+        {
+          payRunId: "run-2",
+          code: "blocked",
+          message: "Fix this Cleaner's problem sessions",
+          detail: { open_shift: 1, missing_clock: 0, no_rate: 0 },
+        },
+      ],
+      error: null,
+      status: 200,
+    });
+  });
+
+  it("refuses a payout edit on an unpaid run with its message", async () => {
+    const writer = writerReturning(refusal("not_paid"));
+
+    assert.deepEqual(
+      await writer.updatePayout({
+        runId: "run-1",
+        payoutMethod: "Cash",
+        paidOn: "2026-10-20",
+      }),
+      {
+        value: null,
+        error: "Only a paid Pay run's payout can be edited.",
+        status: 409,
+      },
+    );
+  });
+
+  it("maps a refused future paid date on a payout edit to its message", async () => {
+    const writer = writerReturning(refusal("paid_on_future"));
+
+    const result = await writer.updatePayout({
+      runId: "run-1",
+      payoutMethod: "Cash",
+      paidOn: "2026-10-30",
+    });
+
+    assert.equal(result.error, "The paid date can't be in the future");
+    assert.equal(result.status, 409);
+  });
 });

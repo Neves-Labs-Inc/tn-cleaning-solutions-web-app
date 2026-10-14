@@ -41,6 +41,7 @@ export function usePeriodWorkspace(view: PeriodView): PeriodWorkspace {
     return {
       periodStart: view.period.start,
       periodLabel: view.label,
+      periodEnd: view.period.end,
       isEnded,
       offCycleCleanerIds: new Set(offCycleRuns.map((run) => run.cleaner.id)),
       unpaidOffCycleCleanerIds: new Set(
@@ -61,6 +62,7 @@ export function usePeriodWorkspace(view: PeriodView): PeriodWorkspace {
     runs,
     view.period.start,
     view.label,
+    view.period.end,
     isEnded,
     adjustmentFormKeys,
     expand,

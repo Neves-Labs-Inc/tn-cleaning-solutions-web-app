@@ -193,6 +193,21 @@ describe("getRunStateLine", () => {
     });
   });
 
+  it("says what blocks a finalized run from being marked paid", () => {
+    const finalized = run("r-ana", "ana", { status: "finalized" });
+    const { view, run: stored } = onlyRun(
+      payrollData({
+        runs: [finalized],
+        sessions: [claimed(missingClock("s1", "ana"), finalized)],
+      }),
+    );
+
+    assert.deepEqual(getRunStateLine(stored, view.status), {
+      tone: "destructive",
+      text: "Fix 1 Missing clock to mark paid",
+    });
+  });
+
   it("says when and how a paid run was paid", () => {
     const paid = run("r-ana", "ana", {
       status: "paid",

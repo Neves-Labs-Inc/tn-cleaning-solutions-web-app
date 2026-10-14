@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 
 import {
   parseAdjustmentForm,
+  parseMarkPaidRequest,
+  parsePayoutEdit,
   parseRunTarget,
   parseSignedDollarsToCents,
 } from "../../src/lib/payroll/action-input.ts";
@@ -168,6 +170,94 @@ describe("parseRunTarget", () => {
   it("refuses a date that doesn't exist", () => {
     assert.equal(
       parseRunTarget({ employeeId: EMPLOYEE_ID, periodStart: "2026-02-30" }),
+      null,
+    );
+  });
+});
+
+const RUN_ID = "9a3e1f40-7c2b-4d5e-8f61-0a1b2c3d4e5f";
+const OTHER_RUN_ID = "1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d";
+
+describe("parseMarkPaidRequest", () => {
+  it("reads each run's method and the shared paid date", () => {
+    assert.deepEqual(
+      parseMarkPaidRequest(
+        [
+          { runId: RUN_ID, payoutMethod: "e-Transfer" },
+          { runId: OTHER_RUN_ID, payoutMethod: "Cash" },
+        ],
+        "2026-10-20",
+      ),
+      {
+        items: [
+          { runId: RUN_ID, payoutMethod: "e-Transfer" },
+          { runId: OTHER_RUN_ID, payoutMethod: "Cash" },
+        ],
+        paidOn: "2026-10-20",
+      },
+    );
+  });
+
+  it("passes a blank method through, so the SQL names that run", () => {
+    const parsed = parseMarkPaidRequest(
+      [{ runId: RUN_ID, payoutMethod: "" }],
+      "2026-10-20",
+    );
+
+    assert.deepEqual(parsed?.items, [{ runId: RUN_ID, payoutMethod: "" }]);
+  });
+
+  it("refuses no runs, a run listed twice, a malformed id or paid date", () => {
+    const item = { runId: RUN_ID, payoutMethod: "Cash" };
+
+    assert.equal(parseMarkPaidRequest([], "2026-10-20"), null);
+    assert.equal(parseMarkPaidRequest([item, item], "2026-10-20"), null);
+    assert.equal(
+      parseMarkPaidRequest([{ ...item, runId: "run-1" }], "2026-10-20"),
+      null,
+    );
+    assert.equal(parseMarkPaidRequest([item], "2026-02-30"), null);
+    assert.equal(parseMarkPaidRequest("nope", "2026-10-20"), null);
+  });
+
+  it("refuses a method that isn't text or is longer than the field allows", () => {
+    assert.equal(
+      parseMarkPaidRequest([{ runId: RUN_ID, payoutMethod: 4 }], "2026-10-20"),
+      null,
+    );
+    assert.equal(
+      parseMarkPaidRequest(
+        [{ runId: RUN_ID, payoutMethod: "x".repeat(61) }],
+        "2026-10-20",
+      ),
+      null,
+    );
+  });
+});
+
+describe("parsePayoutEdit", () => {
+  it("reads the run, its method and paid date", () => {
+    assert.deepEqual(
+      parsePayoutEdit({
+        runId: RUN_ID,
+        payoutMethod: "Cash",
+        paidOn: "2026-10-20",
+      }),
+      { runId: RUN_ID, payoutMethod: "Cash", paidOn: "2026-10-20" },
+    );
+  });
+
+  it("refuses a malformed run id or paid date", () => {
+    assert.equal(
+      parsePayoutEdit({
+        runId: "run-1",
+        payoutMethod: "Cash",
+        paidOn: "2026-10-20",
+      }),
+      null,
+    );
+    assert.equal(
+      parsePayoutEdit({ runId: RUN_ID, payoutMethod: "Cash", paidOn: "" }),
       null,
     );
   });

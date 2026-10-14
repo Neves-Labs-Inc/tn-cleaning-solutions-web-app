@@ -1,8 +1,14 @@
 // Relative imports: node --test runs this file without the @/ alias.
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 
-import type { AdjustmentInput, RunTarget } from "./action-input.ts";
+import type {
+  AdjustmentInput,
+  MarkPaidItem,
+  PayoutEdit,
+  RunTarget,
+} from "./action-input.ts";
 import type { BulkResultRow } from "./bulk-result.ts";
+import type { MarkPaidRow } from "./mark-paid.ts";
 import {
   getPayrollErrorStatus,
   toPayrollError,
@@ -121,6 +127,46 @@ export class PayrollWriter {
     });
     if (error) return this.#fail("start off-cycle run", target, error);
     return { value: { runId: data }, error: null, status: STATUS_CREATED };
+  }
+
+  // Marks each run paid on one date; a refused run is a row, not a failure.
+  async markPaid(
+    items: MarkPaidItem[],
+    paidOn: string,
+  ): Promise<Result<MarkPaidRow[]>> {
+    const { data, error } = await this.#db.rpc("mark_pay_runs_paid", {
+      p_items: items.map((item) => ({
+        run_id: item.runId,
+        payout_method: item.payoutMethod,
+      })),
+      p_paid_on: paidOn,
+    });
+    if (error) {
+      const runIds = items.map((item) => item.runId);
+      return this.#fail("mark paid", { runIds, paidOn }, error);
+    }
+
+    const rows = (data ?? []).map((row) => ({
+      payRunId: row.pay_run_id,
+      code: row.code,
+      message: row.message,
+      detail: row.detail,
+    }));
+    return { value: rows, error: null, status: STATUS_OK };
+  }
+
+  async updatePayout(edit: PayoutEdit): Promise<Result<null>> {
+    const { error } = await this.#db.rpc("update_pay_run_payout", {
+      p_run_id: edit.runId,
+      p_payout_method: edit.payoutMethod,
+      p_paid_on: edit.paidOn,
+    });
+    // The method is free text, so it stays out of the logs.
+    if (error) {
+      const context = { runId: edit.runId, paidOn: edit.paidOn };
+      return this.#fail("update payout", context, error);
+    }
+    return { value: null, error: null, status: STATUS_OK };
   }
 
   #fail<T>(

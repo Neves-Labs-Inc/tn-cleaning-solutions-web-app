@@ -1,6 +1,7 @@
 "use client";
 
 import AddCleanerDialog from "@/components/admin/payroll/add-cleaner-dialog";
+import MarkPaidBulkButton from "@/components/admin/payroll/mark-paid-bulk-button";
 import PayPeriodEmpty from "@/components/admin/payroll/pay-period-empty";
 import PayRunList from "@/components/admin/payroll/pay-run-list";
 import { PeriodActionsContext } from "@/components/admin/payroll/period-actions-context";
@@ -88,7 +89,18 @@ export default function PeriodWorkspace({
       </div>
 
       {selection === null ? null : (
-        <PeriodBulkBar selection={selection} bulk={bulk} views={selectedRuns} />
+        <PeriodBulkBar
+          selection={selection}
+          bulk={bulk}
+          views={selectedRuns}
+          markPaidSlot={
+            <MarkPaidBulkButton
+              runs={selectedRuns}
+              disabled={bulk.isPending}
+              onPaid={selection.clear}
+            />
+          }
+        />
       )}
     </PeriodActionsContext.Provider>
   );

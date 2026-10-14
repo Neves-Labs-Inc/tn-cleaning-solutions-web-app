@@ -155,6 +155,8 @@ export function getRunStateLine(
   let line: RunStateLine = { tone: "paid", text: describePaidRun(run) };
   if (run.status === "draft") {
     line = getDraftStateLine(run, status);
+  } else if (run.status === "finalized" && run.blockedReason !== null) {
+    line = { tone: "destructive", text: run.blockedReason };
   } else if (run.status === "finalized") {
     line = { tone: "muted", text: "Finalized · not paid yet" };
   }

@@ -18,6 +18,8 @@ type PayoutMethodInputProps = {
   error?: string | null;
   describedBy?: string;
   disabled?: boolean;
+  placeholder?: string;
+  className?: string;
   ref?: React.Ref<HTMLInputElement>;
 };
 
@@ -32,6 +34,8 @@ export function PayoutMethodInput({
   error,
   describedBy,
   disabled,
+  placeholder,
+  className,
   ref,
 }: PayoutMethodInputProps): React.ReactNode {
   // One datalist per input, so several on one screen (Mark paid rows) never share an id.
@@ -52,6 +56,8 @@ export function PayoutMethodInput({
         defaultValue={defaultValue}
         onChange={onChange}
         disabled={disabled}
+        placeholder={placeholder}
+        className={className}
         aria-invalid={Boolean(error)}
         aria-describedby={describedBy}
       />

@@ -38,7 +38,7 @@ type RunActionsInput = {
 const SERVER_ERROR_STATUS = 500;
 
 // The visible row's expand toggle: the table and the cards both render every row.
-function findRowToggle(key: string): HTMLElement | null {
+export function findRowToggle(key: string): HTMLElement | null {
   const toggles = document.querySelectorAll<HTMLElement>(
     `[data-run-key="${CSS.escape(key)}"] [aria-expanded]`,
   );

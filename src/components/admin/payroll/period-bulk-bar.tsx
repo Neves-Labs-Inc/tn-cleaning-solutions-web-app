@@ -23,7 +23,7 @@ type PeriodBulkBarProps = {
   bulk: BulkFinalize;
   // The selected runs.
   views: PeriodRun[];
-  // Ticket 09's Mark paid button; nothing renders until then.
+  // The Mark paid button, right of Finalize.
   markPaidSlot?: React.ReactNode;
 };
 
@@ -44,6 +44,9 @@ export default function PeriodBulkBar({
   const totalCents = views.reduce((total, run) => total + run.totalCents, 0);
   const skipped = describeSkippedDrafts(views);
   const hasSlot = markPaidSlot !== null;
+  // Mark paid takes the primary style once the selection has finalized runs.
+  const isFinalizeSecondary =
+    hasSlot && views.some((run) => run.status === "finalized");
 
   const clearButton = (
     <Button
@@ -113,15 +116,18 @@ export default function PeriodBulkBar({
           )}
         >
           <div className="hidden xl:block">{clearButton}</div>
-          {markPaidSlot}
           <SubmitButton
+            variant={isFinalizeSecondary ? "outline" : "default"}
             label={getFinalizeLabel(readyCount)}
             pendingLabel="Finalizing…"
             icon={<FileCheck2 aria-hidden="true" />}
             isPending={bulk.isPending}
             disabled={readyCount === 0}
-            className={PRESS_CLASS_NAME}
+            className={
+              isFinalizeSecondary ? OUTLINE_PRESS_CLASS_NAME : PRESS_CLASS_NAME
+            }
           />
+          {markPaidSlot}
         </div>
       </form>
     </div>

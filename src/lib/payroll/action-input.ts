@@ -1,5 +1,6 @@
 // Relative imports: node --test runs this file without the @/ alias.
 import { isCalendarDate } from "../dates/calendar.ts";
+import { MAX_PAYOUT_METHOD_LENGTH } from "../employees/employee-form.ts";
 import {
   AMOUNT_TOO_LARGE_MESSAGE,
   parseDollarsToCents,
@@ -27,6 +28,15 @@ export type AdjustmentFormResult =
   | { success: false; fieldErrors: AdjustmentFieldErrors };
 
 export type RunTarget = { employeeId: string; periodStart: string };
+
+export type MarkPaidItem = { runId: string; payoutMethod: string };
+
+export type MarkPaidRequest = { items: MarkPaidItem[]; paidOn: string };
+
+export type PayoutEdit = MarkPaidItem & { paidOn: string };
+
+// One mark_pay_runs_paid call takes one savepoint per run; no period has anywhere near this many.
+const MAX_MARK_PAID_ITEMS = 200;
 
 export const ADJUSTMENT_AMOUNT_ERROR = "Enter an amount, e.g. 20 or -12.50";
 export const ADJUSTMENT_REASON_ERROR = "Add a reason the Cleaner will see";
@@ -122,6 +132,53 @@ export function parseRunTarget(input: {
   const { employeeId, periodStart } = input;
   const isValid = isUuid(employeeId) && isDateText(periodStart);
   return isValid ? { employeeId, periodStart } : null;
+}
+
+// Blank passes: the SQL refuses it per run (method_required), so the dialog can name that run.
+function isPayoutMethodText(value: unknown): value is string {
+  return typeof value === "string" && value.length <= MAX_PAYOUT_METHOD_LENGTH;
+}
+
+function parseMarkPaidItem(value: unknown): MarkPaidItem | null {
+  const item =
+    typeof value === "object" && value !== null
+      ? (value as Record<string, unknown>)
+      : {};
+  const { runId, payoutMethod } = item;
+  const isValid = isUuid(runId) && isPayoutMethodText(payoutMethod);
+  return isValid ? { runId, payoutMethod } : null;
+}
+
+// Mark paid from the page: each run with its method, one paid date. null when anything is
+// malformed or a run is listed twice; the SQL checks the payout rules.
+export function parseMarkPaidRequest(
+  items: unknown,
+  paidOn: unknown,
+): MarkPaidRequest | null {
+  const raw = Array.isArray(items) ? items : [];
+  const parsed = raw.flatMap((value) => {
+    const item = parseMarkPaidItem(value);
+    return item === null ? [] : [item];
+  });
+  const runIds = new Set(parsed.map((item) => item.runId));
+  const isValid =
+    isDateText(paidOn) &&
+    parsed.length > 0 &&
+    parsed.length === raw.length &&
+    runIds.size === parsed.length &&
+    parsed.length <= MAX_MARK_PAID_ITEMS;
+  return isValid ? { items: parsed, paidOn } : null;
+}
+
+// Edit payout from the page. null when anything is malformed.
+export function parsePayoutEdit(input: {
+  runId: unknown;
+  payoutMethod: unknown;
+  paidOn: unknown;
+}): PayoutEdit | null {
+  const item = parseMarkPaidItem(input);
+  const { paidOn } = input;
+  return item !== null && isDateText(paidOn) ? { ...item, paidOn } : null;
 }
 
 // A yyyy-MM-dd calendar date, from a caller that may send anything.

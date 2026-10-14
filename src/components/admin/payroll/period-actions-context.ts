@@ -10,6 +10,8 @@ export type PeriodActions = {
   periodStart: string;
   // "Oct 5–18", for toasts.
   periodLabel: string;
+  // The period's last day: the earliest paid date Mark paid accepts.
+  periodEnd: string;
   isEnded: boolean;
   // Cleaners with an off-cycle run in the period: their regular run can't be undone.
   offCycleCleanerIds: ReadonlySet<string>;
