@@ -62,6 +62,8 @@ jobs:
               - 'supabase/**'
               - 'src/types/database.ts'
               - '.github/workflows/ci.yml'
+              - 'scripts/data-purge/**'
+              - 'tests/data-purge/**'
 
   db:
     needs: changes
@@ -101,6 +103,12 @@ jobs:
 
       - name: Check database types for drift
         run: npm run db:check-types
+
+      # The one-time data purge, run only against this local stack and always rolled back.
+      - name: Test the data purge script
+        run: node --test "tests/data-purge/*.test.ts"
+        env:
+          PURGE_TEST_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
   deploy:
     needs: [app, changes, db]
