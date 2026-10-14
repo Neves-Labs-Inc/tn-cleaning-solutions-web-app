@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  fetchMyPaidRuns,
   fetchPayPeriodData,
   fetchPayPeriodsOverview,
 } from "../../src/lib/payroll/queries.ts";
@@ -238,5 +239,61 @@ describe("fetchPayPeriodsOverview", () => {
     const fake = createFakeSupabase(tables(), ["pay_period_sessions"]);
 
     await assert.rejects(fetchPayPeriodsOverview(fake.db, NOV_3));
+  });
+});
+
+describe("fetchMyPaidRuns", () => {
+  it("reads every row of the three My pay views, past the 1000-row cap", async () => {
+    const lineIds = seedIds("line", SESSION_COUNT);
+    const fake = createFakeSupabase({
+      pay_runs_employee_view: [
+        {
+          id: "r-oct5",
+          period_start: OCT_5.start,
+          kind: "regular",
+          paid_on: "2026-10-20",
+          payout_method: "Cash",
+          total_cents: 6000,
+        },
+      ],
+      pay_run_lines_employee_view: lineIds.map((id) => ({
+        id,
+        pay_run_id: "r-oct5",
+        scheduled_date: "2026-10-08",
+        client_name: "Patel residence",
+        minutes: 180,
+        rate_cents: 2000,
+        amount_cents: 6000,
+      })),
+      pay_adjustments_employee_view: [
+        {
+          id: "adj-1",
+          pay_run_id: "r-oct5",
+          amount_cents: 1500,
+          reason: "Gas money",
+          linked_scheduled_date: null,
+          linked_client_name: null,
+          created_at: "2026-10-19T15:00:00Z",
+        },
+      ],
+    });
+
+    const data = await fetchMyPaidRuns(fake.db);
+
+    assert.deepEqual(
+      data.runs.map((row) => row.id),
+      ["r-oct5"],
+    );
+    assert.equal(data.lines.length, SESSION_COUNT);
+    assert.deepEqual(
+      data.adjustments.map((row) => row.reason),
+      ["Gas money"],
+    );
+  });
+
+  it("throws when a view fails to load, for the error boundary", async () => {
+    const fake = createFakeSupabase({}, ["pay_run_lines_employee_view"]);
+
+    await assert.rejects(fetchMyPaidRuns(fake.db));
   });
 });

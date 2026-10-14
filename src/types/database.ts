@@ -993,6 +993,41 @@ export type Database = {
         }
         Relationships: []
       }
+      pay_adjustments_employee_view: {
+        Row: {
+          id: string
+          pay_run_id: string
+          amount_cents: number
+          reason: string
+          linked_scheduled_date: string | null
+          linked_client_name: string | null
+          created_at: string
+        }
+        Relationships: []
+      }
+      pay_run_lines_employee_view: {
+        Row: {
+          id: string
+          pay_run_id: string
+          scheduled_date: string
+          client_name: string
+          minutes: number
+          rate_cents: number
+          amount_cents: number
+        }
+        Relationships: []
+      }
+      pay_runs_employee_view: {
+        Row: {
+          id: string
+          period_start: string
+          kind: string
+          paid_on: string
+          payout_method: string
+          total_cents: number
+        }
+        Relationships: []
+      }
       jobs_employee_view: {
         Row: {
           id: string

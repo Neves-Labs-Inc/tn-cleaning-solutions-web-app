@@ -9,6 +9,11 @@ import type {
   PayRunRow,
   PaySessionRow,
 } from "./payroll-data.ts";
+import type {
+  MyPayAdjustmentRow,
+  MyPayLineRow,
+  MyPayRunRow,
+} from "./my-pay.ts";
 import { getPayPeriod, PAYROLL_START } from "./period.ts";
 import { getBusinessDate } from "../schedule/business-time.ts";
 
@@ -238,4 +243,45 @@ export function fetchPayPeriodsOverview(
 ): Promise<PayrollData> {
   const running = getPayPeriod(getBusinessDate(now));
   return fetchPayrollData(db, { from: PAYROLL_START, to: running.start });
+}
+
+const MY_RUN_COLUMNS =
+  "id, period_start, kind, paid_on, payout_method, total_cents";
+const MY_LINE_COLUMNS =
+  "id, pay_run_id, scheduled_date, client_name, minutes, rate_cents, amount_cents";
+const MY_ADJUSTMENT_COLUMNS =
+  "id, pay_run_id, amount_cents, reason, linked_scheduled_date, linked_client_name, created_at";
+
+// The signed-in Cleaner's own paid Pay runs, their frozen lines and their Adjustments, for My pay
+// (buildMyPay shapes them). The My pay views return only the caller's own paid rows, so no
+// employee id is passed; an admin reads empty results.
+export async function fetchMyPaidRuns(db: Db): Promise<{
+  runs: MyPayRunRow[];
+  lines: MyPayLineRow[];
+  adjustments: MyPayAdjustmentRow[];
+}> {
+  const [runs, lines, adjustments] = await Promise.all([
+    readAllPages<MyPayRunRow>((from, to) =>
+      db
+        .from("pay_runs_employee_view")
+        .select(MY_RUN_COLUMNS)
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    readAllPages<MyPayLineRow>((from, to) =>
+      db
+        .from("pay_run_lines_employee_view")
+        .select(MY_LINE_COLUMNS)
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+    readAllPages<MyPayAdjustmentRow>((from, to) =>
+      db
+        .from("pay_adjustments_employee_view")
+        .select(MY_ADJUSTMENT_COLUMNS)
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
+  ]);
+  return { runs, lines, adjustments };
 }

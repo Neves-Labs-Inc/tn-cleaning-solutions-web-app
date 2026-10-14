@@ -18,9 +18,10 @@ export default function EmployeeTabBar(): React.ReactNode {
 		>
 			<span
 				aria-hidden="true"
-				style={{ transform: `translateX(${Math.max(activeIndex, 0) * 100}%)` }}
+				// One tab wide, whatever the tab count; slides by its own width.
+				style={{ width: `${100 / navItems.length}%`, transform: `translateX(${Math.max(activeIndex, 0) * 100}%)` }}
 				className={cn(
-					'pointer-events-none absolute top-0 left-0 h-0.5 w-1/3 rounded-full bg-primary transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.25,1,0.5,1)]',
+					'pointer-events-none absolute top-0 left-0 h-0.5 rounded-full bg-primary transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.25,1,0.5,1)]',
 					activeIndex < 0 && 'opacity-0'
 				)}
 			/>
