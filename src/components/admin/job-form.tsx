@@ -2,10 +2,18 @@
 
 import Link from 'next/link'
 import { unstable_rethrow } from 'next/navigation'
-import { useActionState } from 'react'
+import { useActionState, useId } from 'react'
 import { useFormStatus } from 'react-dom'
 
 import { Button } from '@/components/ui/button'
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -20,6 +28,7 @@ type JobFormProps = {
     description: string | null
     hourly_rate_cents: number
     estimated_duration_minutes: number | null
+    pay_premium_cents: number
   }
 }
 
@@ -84,6 +93,12 @@ export function JobForm({ job }: JobFormProps) {
   }
 
   const [state, formAction] = useActionState(handleSave, initialState)
+  const premiumId = useId()
+  const premiumHintId = `${premiumId}-hint`
+  const premiumErrorId = `${premiumId}-error`
+  const premiumError = 'fieldErrors' in state ? state.fieldErrors?.pay_premium_cents : undefined
+  // A premium of 0 is "none", so the field stays blank rather than showing 0.00.
+  const premiumDefault = job && job.pay_premium_cents > 0 ? (job.pay_premium_cents / 100).toFixed(2) : ''
 
   return (
     <section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
@@ -99,7 +114,7 @@ export function JobForm({ job }: JobFormProps) {
         ) : null}
 
         <div className="space-y-1.5">
-          <Label htmlFor="name" className="text-sm font-medium text-neutral-700">
+          <Label htmlFor="name">
             Name
           </Label>
           <Input
@@ -110,7 +125,6 @@ export function JobForm({ job }: JobFormProps) {
             defaultValue={job?.name ?? ''}
             aria-invalid={'fieldErrors' in state && Boolean(state.fieldErrors?.name)}
             aria-describedby={'fieldErrors' in state && state.fieldErrors?.name ? 'name-error' : undefined}
-            className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
             placeholder="Standard Deep Cleaning"
           />
           {'fieldErrors' in state && state.fieldErrors?.name ? (
@@ -121,21 +135,20 @@ export function JobForm({ job }: JobFormProps) {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="description" className="text-sm font-medium text-neutral-700">
+          <Label htmlFor="description">
             Description
           </Label>
           <Textarea
             id="description"
             name="description"
             defaultValue={job?.description ?? ''}
-            className="min-h-28 rounded-xl border-neutral-200 bg-white px-3.5 py-2.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
             placeholder="Describe what this service includes."
           />
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="hourly_rate_cents" className="text-sm font-medium text-neutral-700">
+            <Label htmlFor="hourly_rate_cents">
               Hourly Rate ($/hour)
             </Label>
             <Input
@@ -156,7 +169,6 @@ export function JobForm({ job }: JobFormProps) {
                   ? 'rate-help rate-error'
                   : 'rate-help'
               }
-              className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
               placeholder="45.00"
             />
             <p id="rate-help" className={helperText}>
@@ -172,7 +184,7 @@ export function JobForm({ job }: JobFormProps) {
           <div className="space-y-1.5">
             <Label
               htmlFor="estimated_duration_minutes"
-              className="text-sm font-medium text-neutral-700"
+             
             >
               Est. Duration (minutes)
             </Label>
@@ -192,7 +204,6 @@ export function JobForm({ job }: JobFormProps) {
                   ? 'duration-help duration-error'
                   : 'duration-help'
               }
-              className="h-11 rounded-xl border-neutral-200 bg-white px-3.5 text-sm text-neutral-950 shadow-sm transition-colors placeholder:text-neutral-400 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
               placeholder="120"
             />
             <p id="duration-help" className={helperText}>
@@ -204,6 +215,44 @@ export function JobForm({ job }: JobFormProps) {
               </p>
             ) : null}
           </div>
+        </div>
+
+        <div className="border-t pt-5">
+          <FieldSet>
+            <FieldLegend
+              variant="label"
+              className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+            >
+              Cleaner pay
+            </FieldLegend>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field data-invalid={premiumError ? true : undefined}>
+                <FieldLabel htmlFor={premiumId}>Job pay premium ($/h)</FieldLabel>
+                <Input
+                  id={premiumId}
+                  name="pay_premium_cents"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  enterKeyHint="done"
+                  placeholder="3.00"
+                  defaultValue={premiumDefault}
+                  aria-invalid={premiumError ? true : undefined}
+                  aria-describedby={premiumError ? `${premiumHintId} ${premiumErrorId}` : premiumHintId}
+                  className="hover:border-foreground/30"
+                />
+                <FieldDescription id={premiumHintId}>
+                  Added to every Cleaner&apos;s Pay rate on this Job. Leave blank for none. Changes apply to all
+                  shifts not yet paid.
+                </FieldDescription>
+                {premiumError ? (
+                  <FieldError id={premiumErrorId} className="animate-in fade-in-0 duration-fast">
+                    {premiumError}
+                  </FieldError>
+                ) : null}
+              </Field>
+            </div>
+          </FieldSet>
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-neutral-100 pt-4">

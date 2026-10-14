@@ -37,6 +37,11 @@ export function formatRate(cents: number): string {
   return `${formatCents(cents)}/h`
 }
 
+// A Job pay premium shown beside a Job rate; "None" keeps $0 from reading as a second price.
+export function formatPremium(cents: number): string {
+  return cents === 0 ? 'None' : `+${formatRate(cents)}`
+}
+
 const MINUTES_PER_HOUR = 60
 
 // 150 -> "2.5h", 180 -> "3h", 105 -> "1.75h"; 100 -> "1h 40m", 40 -> "40m" (1.67h would not multiply

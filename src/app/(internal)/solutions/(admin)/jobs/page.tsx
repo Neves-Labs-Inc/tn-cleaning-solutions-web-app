@@ -12,12 +12,12 @@ export default async function JobsPage() {
 		await Promise.all([
 			supabase
 				.from('jobs')
-				.select('id, name, description, hourly_rate_cents, estimated_duration_minutes, is_archived')
+				.select('id, name, description, hourly_rate_cents, estimated_duration_minutes, pay_premium_cents, is_archived')
 				.eq('is_archived', false)
 				.order('name', { ascending: true }),
 			supabase
 				.from('jobs')
-				.select('id, name, description, hourly_rate_cents, estimated_duration_minutes, is_archived')
+				.select('id, name, description, hourly_rate_cents, estimated_duration_minutes, pay_premium_cents, is_archived')
 				.eq('is_archived', true)
 				.order('name', { ascending: true }),
 		])
