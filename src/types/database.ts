@@ -49,6 +49,7 @@ export type Database = {
           started_at: string | null
           address: string | null
           e_transfer_email: string | null
+          default_payout_method: string | null
           is_active: boolean
           created_at: string
           updated_at: string
@@ -62,6 +63,7 @@ export type Database = {
           started_at?: string | null
           address?: string | null
           e_transfer_email?: string | null
+          default_payout_method?: string | null
           is_active: boolean
           created_at?: string
           updated_at?: string
@@ -75,6 +77,7 @@ export type Database = {
           started_at?: string | null
           address?: string | null
           e_transfer_email?: string | null
+          default_payout_method?: string | null
           is_active?: boolean
           created_at?: string
           updated_at?: string
@@ -174,6 +177,7 @@ export type Database = {
           name: string
           description: string | null
           hourly_rate_cents: number
+          pay_premium_cents: number
           estimated_duration_minutes: number | null
           created_at: string
           updated_at: string
@@ -184,6 +188,7 @@ export type Database = {
           name: string
           description?: string | null
           hourly_rate_cents: number
+          pay_premium_cents?: number
           estimated_duration_minutes?: number | null
           created_at?: string
           updated_at?: string
@@ -194,6 +199,7 @@ export type Database = {
           name?: string
           description?: string | null
           hourly_rate_cents?: number
+          pay_premium_cents?: number
           estimated_duration_minutes?: number | null
           created_at?: string
           updated_at?: string
@@ -696,6 +702,192 @@ export type Database = {
           },
         ]
       }
+      pay_rates: {
+        Row: {
+          id: string
+          employee_id: string
+          hourly_rate_cents: number
+          effective_from: string
+          is_archived: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          hourly_rate_cents: number
+          effective_from: string
+          is_archived?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          hourly_rate_cents?: number
+          effective_from?: string
+          is_archived?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'pay_rates_employee_id_fkey'
+            columns: ['employee_id']
+            isOneToOne: false
+            referencedRelation: 'employees'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      // Written only by the Payroll SECURITY DEFINER functions; authenticated has SELECT only.
+      pay_runs: {
+        Row: {
+          id: string
+          employee_id: string
+          period_start: string
+          kind: 'regular' | 'off_cycle'
+          status: 'draft' | 'finalized' | 'paid'
+          finalized_at: string | null
+          paid_on: string | null
+          payout_method: string | null
+          paid_at: string | null
+          created_at: string
+          created_by: string
+        }
+        Insert: {
+          id?: string
+          employee_id: string
+          period_start: string
+          kind: 'regular' | 'off_cycle'
+          status?: 'draft' | 'finalized' | 'paid'
+          finalized_at?: string | null
+          paid_on?: string | null
+          payout_method?: string | null
+          paid_at?: string | null
+          created_at?: string
+          created_by: string
+        }
+        Update: {
+          id?: string
+          employee_id?: string
+          period_start?: string
+          kind?: 'regular' | 'off_cycle'
+          status?: 'draft' | 'finalized' | 'paid'
+          finalized_at?: string | null
+          paid_on?: string | null
+          payout_method?: string | null
+          paid_at?: string | null
+          created_at?: string
+          created_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'pay_runs_employee_id_fkey'
+            columns: ['employee_id']
+            isOneToOne: false
+            referencedRelation: 'employees'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      // The claim. The frozen columns are null until the run is paid, then all set.
+      pay_run_lines: {
+        Row: {
+          id: string
+          pay_run_id: string
+          appointment_employee_id: string
+          scheduled_date: string | null
+          client_name: string | null
+          job_name: string | null
+          minutes: number | null
+          rate_cents: number | null
+          amount_cents: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          pay_run_id: string
+          appointment_employee_id: string
+          scheduled_date?: string | null
+          client_name?: string | null
+          job_name?: string | null
+          minutes?: number | null
+          rate_cents?: number | null
+          amount_cents?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          pay_run_id?: string
+          appointment_employee_id?: string
+          scheduled_date?: string | null
+          client_name?: string | null
+          job_name?: string | null
+          minutes?: number | null
+          rate_cents?: number | null
+          amount_cents?: number | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'pay_run_lines_pay_run_id_fkey'
+            columns: ['pay_run_id']
+            isOneToOne: false
+            referencedRelation: 'pay_runs'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'pay_run_lines_appointment_employee_id_fkey'
+            columns: ['appointment_employee_id']
+            isOneToOne: true
+            referencedRelation: 'appointment_employees'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      pay_adjustments: {
+        Row: {
+          id: string
+          pay_run_id: string
+          amount_cents: number
+          reason: string
+          appointment_employee_id: string | null
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          pay_run_id: string
+          amount_cents: number
+          reason: string
+          appointment_employee_id?: string | null
+          created_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          pay_run_id?: string
+          amount_cents?: number
+          reason?: string
+          appointment_employee_id?: string | null
+          created_by?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'pay_adjustments_pay_run_id_fkey'
+            columns: ['pay_run_id']
+            isOneToOne: false
+            referencedRelation: 'pay_runs'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'pay_adjustments_appointment_employee_id_fkey'
+            columns: ['appointment_employee_id']
+            isOneToOne: false
+            referencedRelation: 'appointment_employees'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       appointment_employees_employee_view: {
@@ -763,6 +955,38 @@ export type Database = {
           total_cents: number
           effective_status: 'draft' | 'issued' | 'paid' | 'void' | 'overdue'
           activity_date: string | null
+        }
+        Relationships: []
+      }
+      // Admin-only (20261014120000). A session on a paid run reports its claim's frozen values.
+      pay_period_sessions: {
+        Row: {
+          employee_id: string
+          period_start: string
+          appointment_id: string
+          appointment_employee_id: string
+          scheduled_date: string
+          scheduled_start_time: string
+          scheduled_end_time: string
+          client_name: string | null
+          job_name: string | null
+          appointment_status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+          is_payable: boolean
+          clocked_in_at: string | null
+          clocked_out_at: string | null
+          state: 'upcoming' | 'not_clocked' | 'in_progress' | 'open' | 'closed'
+          is_open_shift: boolean
+          is_missing_clock: boolean
+          is_odd_duration: boolean
+          clocked_minutes: number | null
+          base_rate_cents: number | null
+          pay_premium_cents: number | null
+          effective_rate_cents: number | null
+          amount_cents: number | null
+          has_no_rate: boolean
+          pay_run_id: string | null
+          pay_run_kind: 'regular' | 'off_cycle' | null
+          pay_run_status: 'draft' | 'finalized' | 'paid' | null
         }
         Relationships: []
       }
@@ -879,6 +1103,18 @@ export type Database = {
       invoice_void: {
         Args: { p_invoice_id: string }
         Returns: undefined
+      }
+      pay_period_has_ended: {
+        Args: { day: string }
+        Returns: boolean
+      }
+      pay_period_start: {
+        Args: { day: string }
+        Returns: string
+      }
+      payroll_settings: {
+        Args: Record<PropertyKey, never>
+        Returns: { pay_period_anchor: string; payroll_start: string }
       }
     }
   }
