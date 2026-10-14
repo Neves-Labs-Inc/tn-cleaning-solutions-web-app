@@ -1,10 +1,10 @@
 -- Payroll: Mark paid, payout edits and frozen amounts.
 --
 -- .scratch/payroll-v2/spec.md and ticket 03; CONTEXT.md "Pay run", "Payout method". Builds on
--- 20261014120000 (tables, pay view) and 20261014130000 (payroll_error, helpers, lock order). The
--- paid_pay_run clock lock is 20261014150100. Business time is America/Toronto.
+-- 20261014230000 (tables, pay view) and 20261014231000 (payroll_error, helpers, lock order). The
+-- paid_pay_run clock lock is 20261014233100. Business time is America/Toronto.
 --
--- CONTRACT (as 20261014130000: SECURITY DEFINER, search_path '', admin only with not_admin first,
+-- CONTRACT (as 20261014231000: SECURITY DEFINER, search_path '', admin only with not_admin first,
 -- lock order employees row then the period's pay_runs rows via private.lock_pay_period)
 --
 --   * A paid run never goes back to unpaid: no function sets status away from 'paid'.
@@ -42,7 +42,7 @@
 --   DROP FUNCTION "public"."mark_pay_runs_paid"("jsonb", "date");
 --   DROP FUNCTION "private"."mark_pay_run_paid"("uuid", "text", "date");
 --   DROP FUNCTION "private"."check_payout"("public"."pay_runs", "text", "date");
---   then re-run section 1 of 20261014130000 (payroll_error) with CREATE OR REPLACE.
+--   then re-run section 1 of 20261014231000 (payroll_error) with CREATE OR REPLACE.
 
 
 -- 1. payroll_error -------------------------------------------------------------------------------

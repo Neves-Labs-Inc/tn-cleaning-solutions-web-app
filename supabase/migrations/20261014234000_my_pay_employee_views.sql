@@ -1,6 +1,6 @@
 -- My pay: a Cleaner reads her own paid Pay runs, their frozen lines and their Adjustments.
 --
--- pay_runs, pay_run_lines and pay_adjustments are admin-only through RLS (20261014120000), and an
+-- pay_runs, pay_run_lines and pay_adjustments are admin-only through RLS (20261014230000), and an
 -- employee policy on them would hand her every column: draft and finalized runs, the claim's
 -- appointment_employee_id, created_by. Three narrow doors instead, the shape of the employee views
 -- (20261004120000, 20261011170000): a SECURITY DEFINER table function in "private" (never exposed

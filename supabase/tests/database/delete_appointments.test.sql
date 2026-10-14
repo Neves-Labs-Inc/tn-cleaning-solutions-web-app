@@ -39,7 +39,7 @@ insert into auth.users (id, email) values
 	('a9000000-0000-4000-8000-000000000001', 'pgtap.delete.admin@example.test'),
 	('a9000000-0000-4000-8000-000000000002', 'pgtap.delete.employee@example.test');
 
-insert into public.employees (id, user_id, full_name, is_active, is_archived, address, e_transfer_email) values
+insert into public.employees (id, user_id, full_name, is_active, is_archived, address, e_transfer_contact) values
 	('e9000000-0000-4000-8000-000000000001', 'a9000000-0000-4000-8000-000000000002', 'Delete Employee', true, false, '1 A St', 'a@pay.test');
 
 -- Manual while the fixtures are built, so completing a visit joins no draft; Automatic before the calls.

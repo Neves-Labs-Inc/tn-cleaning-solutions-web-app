@@ -1,5 +1,5 @@
 -- Mark paid, payout edits, frozen amounts and the paid_pay_run clock lock, asserted as admin,
--- employee and anon (20261014150000 and 20261014150100).
+-- employee and anon (20261014233000 and 20261014233100).
 --
 -- These tests pin the per-run results, the refusal codes (DETAIL), the stored runs and claims and
 -- what the pay view reports, never how the functions are written.

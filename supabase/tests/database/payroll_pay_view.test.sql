@@ -1,5 +1,5 @@
 -- Payroll settings, Pay period math, the pay tables and the pay view, asserted as admin, employee
--- and anon (20261014120000).
+-- and anon (20261014230000).
 --
 -- The pay view mirrors the Time Sheet rules in src/lib/time-sheets/session-view.ts: grace = the
 -- visit's Toronto wall-clock scheduled end + 1 h, Odd duration under 0.5x or over 1.5x the scheduled

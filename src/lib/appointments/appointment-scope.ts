@@ -34,7 +34,8 @@ export type ScopeCandidate = {
   lines: ScopeLine[];
 };
 
-export type SkipReason = "paid_invoice";
+// paid_pay_run comes only from the SQL functions' locked re-check: the planner reads no Payroll rows.
+export type SkipReason = "paid_invoice" | "paid_pay_run";
 export type SkippedVisit = { id: string; reason: SkipReason };
 
 export type ScopePlan = {

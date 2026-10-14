@@ -1,5 +1,5 @@
 -- pay_runs_employee_view, pay_run_lines_employee_view and pay_adjustments_employee_view, asserted
--- as the caller (20261014160000).
+-- as the caller (20261014234000).
 --
 -- A Cleaner reads her own paid Pay runs, their frozen lines and their Adjustments: never a
 -- teammate's, never a draft or finalized run, and no admin-only column. An admin and anon get

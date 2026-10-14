@@ -100,7 +100,7 @@ Taking an appointment out of cancelled; its status is recalculated from its cloc
 _Avoid_: uncancel, reopen
 
 **Deleted appointment**:
-An appointment an admin removed for good, with its crew rows, clocks, Clock corrections, Odd duration acknowledgements and invoice lines; it leaves the calendar, every Time sheet and every invoice. A draft left with no live line is removed and an issued invoice left with nothing to charge is voided. It is refused (skipped) while the appointment has any line on a paid invoice: void the invoice first. Only an admin can delete, and it can't be undone. Unlike a cancelled appointment, which stays visible and can be restored, a deleted one leaves no trace (deliberately, though Ontario ESA and CRA want Clock corrections kept 6 years).
+An appointment an admin removed for good, with its crew rows, clocks, Clock corrections, Odd duration acknowledgements and invoice lines; it leaves the calendar, every Time sheet and every invoice. A draft left with no live line is removed and an issued invoice left with nothing to charge is voided. It is refused (skipped) while the appointment has any line on a paid invoice (void the invoice first) or a session on a paid Pay run. A claim on an unpaid Pay run is released, and an Adjustment pointing at a deleted session stays without it. Only an admin can delete, and it can't be undone. Unlike a cancelled appointment, which stays visible and can be restored, a deleted one leaves no trace (deliberately, though Ontario ESA and CRA want Clock corrections kept 6 years).
 _Avoid_: archived appointment, removed appointment
 
 **Series**:
@@ -115,7 +115,7 @@ _Avoid_: protected visit
 A Series edit that applies, from one appointment onward, only the fields the admin changed, and leaves Protected appointments as they are.
 
 **Cancel and delete scopes**:
-How far a cancel or a delete reaches from one appointment in a Series: **This visit** (that appointment only), **This and following** (every unarchived appointment in the Series on or after its date, any status), or **Whole series** (every unarchived appointment in the Series, any date or status). An appointment outside a Series has only This visit. Appointments on a paid invoice are skipped and reported. Cancel never changes the Series itself; a This and following delete ends the Series the day before the appointment, and a Whole series delete removes the Series, leaving any skipped appointments standalone.
+How far a cancel or a delete reaches from one appointment in a Series: **This visit** (that appointment only), **This and following** (every unarchived appointment in the Series on or after its date, any status), or **Whole series** (every unarchived appointment in the Series, any date or status). An appointment outside a Series has only This visit. Appointments on a paid invoice or with a session on a paid Pay run are skipped and reported. Cancel never changes the Series itself; a This and following delete ends the Series the day before the appointment, and a Whole series delete removes the Series, leaving any skipped appointments standalone.
 
 ### Pricing
 

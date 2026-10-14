@@ -4,7 +4,7 @@ import { fromBusinessWallClock } from "../schedule/business-time.ts";
 
 // The time-sheet rules for one session (one appointment_employees row: one Cleaner on one
 // visit). Pure: `now` is always passed in. SQL mirrors the state, flag and minute rules in the pay
-// view `pay_period_sessions` (20261014120000); change both together.
+// view `pay_period_sessions` (20261014230000); change both together.
 
 export const FLAG_GRACE_HOURS = 1;
 export const ODD_LOW_RATIO = 0.5;

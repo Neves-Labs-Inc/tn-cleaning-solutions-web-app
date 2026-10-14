@@ -1,5 +1,5 @@
 -- Finalize, Undo finalize, Adjustments, Add Cleaner and Off-cycle runs, asserted as admin, employee
--- and anon (20261014130000).
+-- and anon (20261014231000).
 --
 -- These tests pin the per-target results, the refusal codes (DETAIL) and the stored runs, claims
 -- and Adjustments, never how the functions are written.

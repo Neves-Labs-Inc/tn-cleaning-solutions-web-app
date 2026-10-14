@@ -19,7 +19,7 @@
 // RPCs the invoice ledger calls through the typed session client; `p_lines` is the Billed amounts
 // TypeScript priced. It also lists the two Clock correction functions (20261010120000), which refuse
 // through `clock_error` the same way, with the overlap's clashing assignment id in `hint`, and the
-// Payroll write functions (20261014130000, 20261014150000), which refuse through `payroll_error`;
+// Payroll write functions (20261014231000, 20261014233000), which refuse through `payroll_error`;
 // `finalize_pay_runs` and `mark_pay_runs_paid` instead return one row per target with `code` 'ok'
 // or the refusal code. The
 // other SQL functions are called through untyped clients and stay out until a
@@ -967,7 +967,7 @@ export type Database = {
         }
         Relationships: []
       }
-      // Admin-only (20261014120000). A session on a paid run reports its claim's frozen values.
+      // Admin-only (20261014230000). A session on a paid run reports its claim's frozen values.
       pay_period_sessions: {
         Row: {
           employee_id: string

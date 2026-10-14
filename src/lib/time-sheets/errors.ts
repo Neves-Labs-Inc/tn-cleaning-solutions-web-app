@@ -2,7 +2,7 @@
 import { formatBusinessTime } from "../schedule/business-time.ts";
 
 // Mirrors the CASE block of clock_error() in the newest migration that defines it
-// (supabase/migrations/20261014150100_paid_pay_run_clock_lock.sql); tests/time-sheets/errors.test.ts
+// (supabase/migrations/20261014233100_paid_pay_run_clock_lock.sql); tests/time-sheets/errors.test.ts
 // fails when the two drift.
 export const CLOCK_ERROR_CODES = [
   "not_admin",

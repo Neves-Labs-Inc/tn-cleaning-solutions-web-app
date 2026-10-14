@@ -30,7 +30,7 @@ const STATUS_OK = 200;
 const STATUS_CREATED = 201;
 const STATUS_SERVER_ERROR = 500;
 
-// The Payroll writes the period page makes. Each calls one SQL function (20261014130000), which
+// The Payroll writes the period page makes. Each calls one SQL function (20261014231000), which
 // checks the admin role and every rule; a payroll_error refusal comes back as a readable 4xx
 // Result, anything else as a logged 500 with a generic message.
 export class PayrollWriter {

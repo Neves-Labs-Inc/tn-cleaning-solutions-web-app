@@ -1,5 +1,5 @@
 // Mirrors the CASE block of payroll_error() in the newest migration that defines it
-// (supabase/migrations/20261014150000_payroll_mark_paid.sql); tests/payroll/errors.test.ts fails
+// (supabase/migrations/20261014233000_payroll_mark_paid.sql); tests/payroll/errors.test.ts fails
 // when the two drift.
 export const PAYROLL_ERROR_CODES = [
   "not_admin",

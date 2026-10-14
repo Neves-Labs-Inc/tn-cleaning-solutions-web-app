@@ -4,7 +4,7 @@
 -- and correct_session_clocks from 20261010120000 (its contract still holds) to fill in the
 -- "Payroll: refuse here" step: after the Cleaner's employees row is locked (step 4) and before any
 -- clock validation, correct_session_clocks refuses paid_pay_run when the session has a claim on a
--- paid run (20261014150000 freezes those amounts). The lock is per session, never per visit, and
+-- paid run (20261014233000 freezes those amounts). The lock is per session, never per visit, and
 -- a finalized but unpaid run's clocks stay editable. A clear (both clocks null) is refused too.
 --
 -- clock_error's CASE block stays the only WHEN '...' THEN in its body; src/lib/time-sheets/errors.ts

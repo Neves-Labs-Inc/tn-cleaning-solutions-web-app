@@ -2,7 +2,7 @@
 --
 -- .scratch/payroll-v2/spec.md and ticket 02; CONTEXT.md "Pay run", "Adjustment", "Off-cycle run";
 -- ADR docs/adr/0001-invoice-writes-in-sql-functions-and-status-trigger.md. Tables and the pay view
--- are 20261014120000. Business time is America/Toronto.
+-- are 20261014230000. Business time is America/Toronto.
 --
 -- DEFINITIONS, for Cleaner C and Pay period P (computed from pay_period_sessions):
 --

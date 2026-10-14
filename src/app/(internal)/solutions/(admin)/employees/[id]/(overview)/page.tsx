@@ -43,7 +43,7 @@ type AppointmentActivity = {
 	}
 }
 
-// Mirrors payroll_settings() (20261014120000). Ticket 06's Payroll module will own these; until then
+// Mirrors payroll_settings() (20261014230000). Ticket 06's Payroll module will own these; until then
 // the period start is computed here, the same way pay_period_start() does.
 const PAY_PERIOD_ANCHOR = '2026-10-05'
 const PAYROLL_START = '2026-10-05'

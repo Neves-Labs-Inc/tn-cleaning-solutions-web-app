@@ -1,4 +1,4 @@
--- The e-Transfer contact rename (20261014140000) and who can read a Cleaner's pay details: her Pay
+-- The e-Transfer contact rename (20261014232000) and who can read a Cleaner's pay details: her Pay
 -- rates, default Payout method and e-Transfer contact. Also pins the live-rate date clash the Pay
 -- section maps to "She already has a rate from this date", on add and on Restore.
 --
