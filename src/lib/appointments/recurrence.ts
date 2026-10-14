@@ -69,12 +69,15 @@ function occurrenceAt(anchor: Date, interval: Interval, index: number): Date {
   return date;
 }
 
-export function recurrenceDates(input: {
+type RecurrenceInput = {
   anchorDate: string;
   interval: Interval;
   endDate: string | null;
   maxOccurrences: number | null;
-}): string[] {
+};
+
+// Dates from the firstIndex-th occurrence on; max occurrences and the 365 cap count only returned dates.
+function generateDates(input: RecurrenceInput, firstIndex: number): string[] {
   const { anchorDate, interval, endDate, maxOccurrences } = input;
   const anchor = parseDate(anchorDate);
   const isOpenEnded = endDate === null && maxOccurrences === null;
@@ -84,12 +87,21 @@ export function recurrenceDates(input: {
   const limit = Math.min(maxOccurrences ?? MAX_DATES, MAX_DATES);
 
   const dates: string[] = [];
-  for (let index = 0; dates.length < limit; index++) {
+  for (let index = firstIndex; dates.length < limit; index++) {
     const date = formatDate(occurrenceAt(anchor, interval, index));
     if (lastDate !== null && date > lastDate) break;
     dates.push(date);
   }
   return dates;
+}
+
+export function recurrenceDates(input: RecurrenceInput): string[] {
+  return generateDates(input, 0);
+}
+
+// The dates after the anchor, for a "This and following" edit where the anchor visit already exists.
+export function followingRecurrenceDates(input: RecurrenceInput): string[] {
+  return generateDates(input, 1);
 }
 
 export function intervalLabel(interval: Interval): string {

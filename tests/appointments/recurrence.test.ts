@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   INTERVAL_CAPS,
+  followingRecurrenceDates,
   intervalLabel,
   recurrenceDates,
   type Interval,
@@ -194,6 +195,76 @@ describe("recurrenceDates", () => {
         365,
       );
     });
+  });
+});
+
+describe("followingRecurrenceDates", () => {
+  const WEEKLY: Interval = { unit: "week", count: 1 };
+
+  it("starts one interval after the anchor, on the same weekday", () => {
+    assert.deepEqual(
+      followingRecurrenceDates({
+        anchorDate: "2026-03-10",
+        interval: { unit: "week", count: 2 },
+        endDate: "2026-04-21",
+        maxOccurrences: null,
+      }),
+      ["2026-03-24", "2026-04-07", "2026-04-21"],
+    );
+  });
+
+  it("returns max occurrences following dates, not counting the anchor", () => {
+    assert.deepEqual(
+      followingRecurrenceDates({
+        anchorDate: "2026-03-10",
+        interval: WEEKLY,
+        endDate: null,
+        maxOccurrences: 1,
+      }),
+      ["2026-03-17"],
+    );
+  });
+
+  it("returns up to 365 following dates", () => {
+    const dates = followingRecurrenceDates({
+      anchorDate: "2026-01-01",
+      interval: { unit: "day", count: 1 },
+      endDate: "2030-01-01",
+      maxOccurrences: 500,
+    });
+
+    assert.equal(dates.length, 365);
+    assert.equal(dates[0], "2026-01-02");
+  });
+
+  it("runs six months from the anchor when open-ended", () => {
+    const dates = followingRecurrenceDates({
+      anchorDate: "2026-01-15",
+      interval: { unit: "month", count: 1 },
+      endDate: null,
+      maxOccurrences: null,
+    });
+
+    assert.deepEqual(dates, [
+      "2026-02-15",
+      "2026-03-15",
+      "2026-04-15",
+      "2026-05-15",
+      "2026-06-15",
+      "2026-07-15",
+    ]);
+  });
+
+  it("returns nothing when the end date is the anchor", () => {
+    assert.deepEqual(
+      followingRecurrenceDates({
+        anchorDate: "2026-03-10",
+        interval: WEEKLY,
+        endDate: "2026-03-10",
+        maxOccurrences: null,
+      }),
+      [],
+    );
   });
 });
 

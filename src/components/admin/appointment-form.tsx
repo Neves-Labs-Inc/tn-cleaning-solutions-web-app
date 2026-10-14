@@ -11,7 +11,7 @@ import { OUTLINE_PRESS_CLASS_NAME, PRESS_CLASS_NAME } from '@/components/admin/d
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import { Field, FieldDescription, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import SubmitButton from '@/components/ui/submit-button'
 import { Textarea } from '@/components/ui/textarea'
@@ -33,6 +33,7 @@ import { browserListStorage, listReturnHref } from '@/lib/appointments/list-retu
 import { planCrewChange } from '@/lib/appointments/crew'
 import { cn } from '@/lib/utils'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
+import type { IntervalUnit } from '@/lib/appointments/recurrence'
 
 // One live assignment's clocks, for the crew field's removal warnings.
 export type CrewClock = { employeeId: string; closedMinutes: number; hasClockIn: boolean }
@@ -73,7 +74,8 @@ type AppointmentFormProps = {
   }
   recurrenceSeries?: {
     id: string
-    frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly'
+    interval_unit: IntervalUnit
+    interval_count: number
     start_date: string
     end_date: string | null
     max_occurrences: number | null
@@ -90,6 +92,8 @@ const initialState: AppointmentActionResult = {
 
 const SCHEDULED_DATE_ERROR_ID = 'scheduled_date-error'
 const RECURRENCE_END_DATE_ERROR_ID = 'recurrence_end_date-error'
+const RECURRENCE_INTERVAL_COUNT_ERROR_ID = 'recurrence_interval_count-error'
+const RECURRENCE_INTERVAL_UNIT_ERROR_ID = 'recurrence_interval_unit-error'
 // An archived employee drops out of the employee list but can still hold clocked time here.
 const REMOVED_EMPLOYEE_NAME = 'A removed employee'
 const RECURRENCE_HEADING_ID = 'recurrence-settings-heading'
@@ -113,6 +117,65 @@ function FieldError({ id, message }: FieldErrorProps) {
     >
       {message}
     </p>
+  )
+}
+
+type RepeatsEveryFieldsProps = {
+  defaultCount: number
+  defaultUnit: IntervalUnit
+  countError: string | undefined
+  unitError: string | undefined
+  countRef: React.Ref<HTMLInputElement>
+  unitRef: React.Ref<HTMLSelectElement>
+}
+
+// Create and "This and all future" edit both render this group, so the two can't drift.
+function RepeatsEveryFields({
+  defaultCount,
+  defaultUnit,
+  countError,
+  unitError,
+  countRef,
+  unitRef,
+}: RepeatsEveryFieldsProps) {
+  return (
+    <FieldSet className="min-w-0 gap-2 sm:col-span-2">
+      <FieldLegend className="mb-2 text-sm font-medium text-foreground">Repeats every</FieldLegend>
+      {/* No max and no required: empty and over-cap reach the server so the cap-specific copy shows. */}
+      <div className="flex items-start gap-2 sm:max-w-sm">
+        <Input
+          ref={countRef}
+          id="recurrence_interval_count"
+          name="recurrence_interval_count"
+          type="number"
+          inputMode="numeric"
+          min="1"
+          step="1"
+          enterKeyHint="next"
+          aria-label="Number of units"
+          defaultValue={defaultCount}
+          aria-invalid={countError ? true : undefined}
+          aria-describedby={countError ? RECURRENCE_INTERVAL_COUNT_ERROR_ID : undefined}
+          className="w-20 shrink-0 tabular-nums"
+        />
+        <NativeSelect
+          ref={unitRef}
+          id="recurrence_interval_unit"
+          name="recurrence_interval_unit"
+          aria-label="Unit"
+          defaultValue={defaultUnit}
+          aria-invalid={unitError ? true : undefined}
+          aria-describedby={unitError ? RECURRENCE_INTERVAL_UNIT_ERROR_ID : undefined}
+          className="min-w-0 flex-1"
+        >
+          <NativeSelectOption value="day">Days</NativeSelectOption>
+          <NativeSelectOption value="week">Weeks</NativeSelectOption>
+          <NativeSelectOption value="month">Months</NativeSelectOption>
+        </NativeSelect>
+      </div>
+      <FieldError id={RECURRENCE_INTERVAL_UNIT_ERROR_ID} message={unitError} />
+      <FieldError id={RECURRENCE_INTERVAL_COUNT_ERROR_ID} message={countError} />
+    </FieldSet>
   )
 }
 
@@ -201,24 +264,32 @@ export function AppointmentForm({
   const fieldErrors = 'fieldErrors' in state ? state.fieldErrors : undefined
   const scheduledDateError = fieldErrors?.scheduled_date
   const recurrenceEndDateError = fieldErrors?.recurrence_end_date
+  const intervalCountError = fieldErrors?.recurrence_interval_count
+  const intervalUnitError = fieldErrors?.recurrence_interval_unit
+  const intervalCountRef = useRef<HTMLInputElement>(null)
+  const intervalUnitRef = useRef<HTMLSelectElement>(null)
   const formError = 'error' in state ? state.error : ''
   const formErrorRef = useRef<HTMLDivElement>(null)
 
-  // A refused date is fixed in place, so focus lands on it when the action returns.
+  // A refused field is fixed in place, so focus lands on the first one when the action returns.
   useEffect(() => {
     if (scheduledDateError) {
       scheduledDateRef.current?.focus()
+    } else if (intervalUnitError) {
+      intervalUnitRef.current?.focus()
+    } else if (intervalCountError) {
+      intervalCountRef.current?.focus()
     }
-  }, [state, scheduledDateError])
+  }, [state, scheduledDateError, intervalUnitError, intervalCountError])
 
   // A refusal renders at the top of a long form, out of view after a mobile save: bring it to the admin.
   useEffect(() => {
-    if (formError && !scheduledDateError) {
+    if (formError && !scheduledDateError && !intervalUnitError && !intervalCountError) {
       const isReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       formErrorRef.current?.focus({ preventScroll: true })
       formErrorRef.current?.scrollIntoView({ block: 'center', behavior: isReducedMotion ? 'auto' : 'smooth' })
     }
-  }, [state, formError, scheduledDateError])
+  }, [state, formError, scheduledDateError, intervalUnitError, intervalCountError])
 
   // Dispatched by hand rather than through <form action>: React resets an action form's fields after
   // every submit, and a refused save must keep what the admin typed.
@@ -520,23 +591,15 @@ export function AppointmentForm({
             {isRecurring ? <input type="hidden" name="is_recurring" value="on" /> : null}
 
             {isRecurring ? (
-              <div className={`grid gap-4 sm:grid-cols-3 ${ENTER_CLASSES}`}>
-                <Field className="min-w-0">
-                <FieldLabel htmlFor="recurrence_frequency" className={LABEL_CLASSES}>
-                  Frequency
-                </FieldLabel>
-                <NativeSelect
-                  id="recurrence_frequency"
-                  name="recurrence_frequency"
-                  defaultValue="weekly"
-                  className="w-full"
-                >
-                  <NativeSelectOption value="daily">Daily</NativeSelectOption>
-                  <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
-                  <NativeSelectOption value="biweekly">Biweekly</NativeSelectOption>
-                  <NativeSelectOption value="monthly">Monthly</NativeSelectOption>
-                </NativeSelect>
-              </Field>
+              <div className={`grid gap-4 sm:grid-cols-2 ${ENTER_CLASSES}`}>
+                <RepeatsEveryFields
+                  defaultCount={1}
+                  defaultUnit="week"
+                  countError={intervalCountError}
+                  unitError={intervalUnitError}
+                  countRef={intervalCountRef}
+                  unitRef={intervalUnitRef}
+                />
 
                 <Field className="min-w-0">
                 <FieldLabel htmlFor="recurrence_end_date" className={LABEL_CLASSES}>
@@ -609,24 +672,15 @@ export function AppointmentForm({
             </div>
 
             {showRecurringEditFields ? (
-              <div className={`grid gap-4 sm:grid-cols-3 ${ENTER_CLASSES}`}>
-                <Field className="min-w-0">
-                <FieldLabel htmlFor="recurrence_frequency" className={LABEL_CLASSES}>
-                  Frequency
-                </FieldLabel>
-                <NativeSelect
-                  id="recurrence_frequency"
-                  name="recurrence_frequency"
-                  defaultValue={recurrenceSeries.frequency}
-                  required={showRecurringEditFields}
-                  className="w-full"
-                >
-                  <NativeSelectOption value="daily">Daily</NativeSelectOption>
-                  <NativeSelectOption value="weekly">Weekly</NativeSelectOption>
-                  <NativeSelectOption value="biweekly">Biweekly</NativeSelectOption>
-                  <NativeSelectOption value="monthly">Monthly</NativeSelectOption>
-                </NativeSelect>
-              </Field>
+              <div className={`grid gap-4 sm:grid-cols-2 ${ENTER_CLASSES}`}>
+                <RepeatsEveryFields
+                  defaultCount={recurrenceSeries.interval_count}
+                  defaultUnit={recurrenceSeries.interval_unit}
+                  countError={intervalCountError}
+                  unitError={intervalUnitError}
+                  countRef={intervalCountRef}
+                  unitRef={intervalUnitRef}
+                />
 
                 <Field className="min-w-0">
                 <FieldLabel htmlFor="recurrence_end_date" className={LABEL_CLASSES}>

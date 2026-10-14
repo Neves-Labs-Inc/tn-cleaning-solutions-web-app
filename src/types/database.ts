@@ -255,7 +255,8 @@ export type Database = {
       recurrence_series: {
         Row: {
           id: string
-          frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly'
+          interval_unit: 'day' | 'week' | 'month'
+          interval_count: number
           start_date: string
           end_date: string | null
           max_occurrences: number | null
@@ -269,7 +270,8 @@ export type Database = {
         }
         Insert: {
           id?: string
-          frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly'
+          interval_unit: 'day' | 'week' | 'month'
+          interval_count?: number
           start_date: string
           end_date?: string | null
           max_occurrences?: number | null
@@ -283,7 +285,8 @@ export type Database = {
         }
         Update: {
           id?: string
-          frequency?: 'daily' | 'weekly' | 'biweekly' | 'monthly'
+          interval_unit?: 'day' | 'week' | 'month'
+          interval_count?: number
           start_date?: string
           end_date?: string | null
           max_occurrences?: number | null

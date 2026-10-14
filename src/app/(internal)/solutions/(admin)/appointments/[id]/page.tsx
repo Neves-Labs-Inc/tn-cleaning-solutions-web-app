@@ -17,6 +17,7 @@ import PageHeader from '@/components/ui/page-header'
 import StatusBadge, { appointmentDisplayBadge } from '@/components/ui/status-badge'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 import { isMissedClock, isNotClocked } from '@/lib/appointments/overview'
+import { intervalLabel, type IntervalUnit } from '@/lib/appointments/recurrence'
 import { loadAppointmentBilling } from '@/lib/invoices/appointment-billing'
 import {
   APPOINTMENT_PRICE_COLUMNS,
@@ -60,7 +61,8 @@ type AppointmentDetailRow = PriceableAppointment & {
   } | null
   recurrence_series: {
     id: string
-    frequency: 'daily' | 'weekly' | 'biweekly' | 'monthly'
+    interval_unit: IntervalUnit
+    interval_count: number
     start_date: string
     end_date: string | null
     max_occurrences: number | null
@@ -95,7 +97,7 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
         clients!inner ( id, name, phone, email ),
         jobs!inner ( id, name, estimated_duration_minutes, description ),
         client_locations ( id, label, address ),
-        recurrence_series ( id, frequency, start_date, end_date, max_occurrences, is_active )
+        recurrence_series ( id, interval_unit, interval_count, start_date, end_date, max_occurrences, is_active )
       `
     )
     .eq('id', id)
@@ -253,8 +255,10 @@ export default async function AppointmentDetailPage({ params }: AppointmentDetai
             <article className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm shadow-emerald-950/5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-700">Recurrence</h2>
               <p className="mt-2 text-sm text-neutral-900">
-                {appointment.recurrence_series.frequency.charAt(0).toUpperCase()}
-                {appointment.recurrence_series.frequency.slice(1)} schedule
+                {intervalLabel({
+                  unit: appointment.recurrence_series.interval_unit,
+                  count: appointment.recurrence_series.interval_count,
+                })}
               </p>
               <p className="mt-1 text-xs text-neutral-600">
                 Starts {format(parseISO(appointment.recurrence_series.start_date), 'MMM d, yyyy')}
