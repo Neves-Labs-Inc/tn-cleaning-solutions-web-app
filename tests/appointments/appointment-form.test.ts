@@ -7,10 +7,11 @@ import {
   parseUpdateRecurrenceFormData,
 } from "../../src/lib/appointments/appointment-form.ts";
 
-function form(fields: Record<string, string>): FormData {
+// An undefined value leaves the field out of the form entirely.
+function form(fields: Record<string, string | undefined>): FormData {
   const formData = new FormData();
   for (const [name, value] of Object.entries(fields)) {
-    formData.set(name, value);
+    if (value !== undefined) formData.set(name, value);
   }
   return formData;
 }
@@ -26,7 +27,8 @@ const VISIT = {
 const RECURRING_VISIT = {
   ...VISIT,
   is_recurring: "on",
-  recurrence_frequency: "weekly",
+  recurrence_interval_count: "1",
+  recurrence_interval_unit: "week",
 };
 
 const visitParsers = [
@@ -175,7 +177,8 @@ describe("parseUpdateRecurrenceFormData", () => {
   const SERIES = {
     edit_scope: "future",
     recurrence_series_id: "series-1",
-    recurrence_frequency: "weekly",
+    recurrence_interval_count: "1",
+    recurrence_interval_unit: "week",
   };
 
   it("accepts a normal end date", () => {
@@ -209,6 +212,162 @@ describe("parseUpdateRecurrenceFormData", () => {
     assert.equal(result.success, false);
     assert.deepEqual(!result.success && result.fieldErrors, {
       recurrence_end_date: "Enter a valid end date.",
+    });
+  });
+});
+
+const CAP_CASES = [
+  ["day", 365],
+  ["week", 52],
+  ["month", 24],
+] as const;
+
+const recurrenceParsers = [
+  [
+    "parseCreateAppointmentFormData interval",
+    (fields: Record<string, string | undefined>) =>
+      parseCreateAppointmentFormData(form({ ...RECURRING_VISIT, ...fields })),
+  ],
+  [
+    "parseUpdateRecurrenceFormData interval",
+    (fields: Record<string, string | undefined>) =>
+      parseUpdateRecurrenceFormData(
+        form({
+          edit_scope: "future",
+          recurrence_series_id: "series-1",
+          recurrence_interval_count: "1",
+          recurrence_interval_unit: "week",
+          ...fields,
+        }),
+      ),
+  ],
+] as const;
+
+for (const [name, parse] of recurrenceParsers) {
+  describe(name, () => {
+    it("reads every 3 weeks as the interval", () => {
+      const result = parse({
+        recurrence_interval_count: "3",
+        recurrence_interval_unit: "week",
+      });
+
+      assert.equal(result.success, true);
+      assert.deepEqual(result.success && result.data.recurrence_interval, {
+        unit: "week",
+        count: 3,
+      });
+    });
+
+    for (const [unit, cap] of CAP_CASES) {
+      it(`accepts ${cap} ${unit}s, the cap`, () => {
+        const result = parse({
+          recurrence_interval_count: String(cap),
+          recurrence_interval_unit: unit,
+        });
+
+        assert.deepEqual(result.success && result.data.recurrence_interval, {
+          unit,
+          count: cap,
+        });
+      });
+
+      it(`refuses ${cap + 1} ${unit}s with the ${unit} cap in the message`, () => {
+        const result = parse({
+          recurrence_interval_count: String(cap + 1),
+          recurrence_interval_unit: unit,
+        });
+
+        assert.deepEqual(!result.success && result.fieldErrors, {
+          recurrence_interval_count: `Enter a whole number from 1 to ${cap}.`,
+        });
+      });
+    }
+
+    for (const [label, count] of [
+      ["zero", "0"],
+      ["a decimal", "1.5"],
+      ["an empty count", ""],
+      ["a negative count", "-2"],
+      ["text", "abc"],
+      ["exponent notation", "1e1"],
+    ] as const) {
+      it(`refuses ${label} under the count field`, () => {
+        const result = parse({
+          recurrence_interval_count: count,
+          recurrence_interval_unit: "week",
+        });
+
+        assert.deepEqual(!result.success && result.fieldErrors, {
+          recurrence_interval_count: "Enter a whole number from 1 to 52.",
+        });
+      });
+    }
+
+    it("refuses a missing count under the count field", () => {
+      const result = parse({
+        recurrence_interval_count: undefined,
+        recurrence_interval_unit: "month",
+      });
+
+      assert.deepEqual(!result.success && result.fieldErrors, {
+        recurrence_interval_count: "Enter a whole number from 1 to 24.",
+      });
+    });
+
+    for (const unit of ["biweekly", "year", ""]) {
+      it(`refuses the unit "${unit}" with only the unit error`, () => {
+        const result = parse({
+          recurrence_interval_count: "999",
+          recurrence_interval_unit: unit,
+        });
+
+        assert.deepEqual(!result.success && result.fieldErrors, {
+          recurrence_interval_unit: "Select a repeat unit.",
+        });
+      });
+    }
+  });
+}
+
+describe("interval outside the recurring scopes", () => {
+  it("ignores the interval on a one-off create", () => {
+    const result = parseCreateAppointmentFormData(
+      form({
+        ...VISIT,
+        recurrence_interval_count: "0",
+        recurrence_interval_unit: "biweekly",
+      }),
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(result.success && result.data.recurrence_interval, null);
+  });
+
+  it("ignores the interval on an occurrence-scope edit", () => {
+    const result = parseUpdateRecurrenceFormData(
+      form({
+        edit_scope: "occurrence",
+        recurrence_interval_count: "0",
+        recurrence_interval_unit: "biweekly",
+      }),
+    );
+
+    assert.equal(result.success, true);
+    assert.equal(result.success && result.data.recurrence_interval, null);
+  });
+
+  it("validates the interval on a series-scope edit", () => {
+    const result = parseUpdateRecurrenceFormData(
+      form({
+        edit_scope: "series",
+        recurrence_series_id: "series-1",
+        recurrence_interval_count: "25",
+        recurrence_interval_unit: "month",
+      }),
+    );
+
+    assert.deepEqual(!result.success && result.fieldErrors, {
+      recurrence_interval_count: "Enter a whole number from 1 to 24.",
     });
   });
 });

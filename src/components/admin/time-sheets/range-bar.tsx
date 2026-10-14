@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 type RangeBarProps = {
   range: WeekRange;
   cleanerId?: string;
+  q?: string;
 };
 
 type InvalidField = "from" | "to";
@@ -41,6 +42,7 @@ function validateRange(
 export default function RangeBar({
   range,
   cleanerId,
+  q,
 }: RangeBarProps): React.ReactNode {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -62,7 +64,7 @@ export default function RangeBar({
 
   function navigate(parts: { from?: string; to?: string }) {
     startTransition(() => {
-      router.push(buildTimeSheetsHref({ ...parts, cleaner: cleanerId }));
+      router.push(buildTimeSheetsHref({ ...parts, cleaner: cleanerId, q }));
     });
   }
 

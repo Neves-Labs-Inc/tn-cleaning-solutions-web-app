@@ -55,6 +55,24 @@ export function summarizeCleaners(views: SessionView[], cleaners: CleanerRef[]):
     );
 }
 
+// Folds case and accents so "barbara" finds "Bárbara".
+function foldForSearch(text: string): string {
+  return text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+}
+
+// A blank query keeps everyone; matching is a folded substring of the full name, order kept.
+export function filterSummariesByName(
+  summaries: CleanerSummary[],
+  query: string,
+): CleanerSummary[] {
+  const needle = foldForSearch(query.trim());
+  if (!needle) return summaries;
+
+  return summaries.filter((summary) =>
+    foldForSearch(summary.cleaner.full_name).includes(needle),
+  );
+}
+
 // The Cleaner's own month: every listed live session counts, only closed ones add minutes.
 export function summarizeCleanerMonth(records: TimeSheetRecord[]): CleanerMonthSummary {
   const liveRecords = records.filter((record) => !record.is_removed);

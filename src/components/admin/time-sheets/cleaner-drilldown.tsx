@@ -60,6 +60,8 @@ type CleanerDrilldownProps = {
   >;
   days: DrilldownDay[];
   range: WeekRange;
+  // The summary search, carried so "All cleaners" and the range bar keep it.
+  q?: string;
 };
 
 type PanelKind = "history" | "ack" | "fix";
@@ -74,6 +76,7 @@ export default function CleanerDrilldown({
   summary,
   days,
   range,
+  q,
 }: CleanerDrilldownProps): React.ReactNode {
   const [openPanel, setOpenPanel] = useState<OpenPanel>(null);
   const focusReturnId = useRef<string | null>(null);
@@ -222,7 +225,7 @@ export default function CleanerDrilldown({
     <div className="animate-in space-y-6 fade-in-0 duration-slow lg:space-y-8">
       <div className="space-y-2">
         <Link
-          href={buildTimeSheetsHref({ from: range.from, to: range.to })}
+          href={buildTimeSheetsHref({ from: range.from, to: range.to, q })}
           className={cn(
             buttonVariants({ variant: "ghost" }),
             "-ml-3 cursor-pointer gap-1.5",
@@ -234,7 +237,7 @@ export default function CleanerDrilldown({
         <PageHeader title={cleaner.full_name} />
       </div>
 
-      <RangeBar range={range} cleanerId={cleaner.id} />
+      <RangeBar range={range} cleanerId={cleaner.id} q={q} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatTile

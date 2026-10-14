@@ -32,3 +32,5 @@ Do these in order.
 
 5. **GitHub branch ruleset on `main`**: require a PR and the status checks `app` and `db`. A skipped `db` counts as passing.
 6. **After merging**: check that Vercel creates no Git deployments for PRs, and that a merge makes exactly one production deployment, from the Action.
+
+One-off production data purge (October 2026): see [docs/data-purge-2026-10.md](data-purge-2026-10.md).

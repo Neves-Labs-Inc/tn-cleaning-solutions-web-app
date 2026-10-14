@@ -30,12 +30,12 @@ One Cleaner's sessions for a date range, placed by each appointment's scheduled 
 A session with a clock-in but no clock-out. It appears on a Time sheet as in progress, but never counts toward totals or pay.
 
 **Removed session**:
-The session of a Cleaner taken off an appointment's crew after she had clocks, a Clock correction or an acknowledgement. It is kept for good and stays on her Time sheet, shown struck through as removed, for both the admin and the Cleaner, but it never counts toward totals, pay or Appointment status. Putting the Cleaner back on the crew starts a new session.
+The session of a Cleaner taken off an appointment's crew after she had clocks, a Clock correction or an acknowledgement. It is kept unless its appointment is deleted, and stays on her Time sheet, shown struck through as removed, for both the admin and the Cleaner, but it never counts toward totals, pay or Appointment status. Putting the Cleaner back on the crew starts a new session.
 _Avoid_: deleted session, archived shift
 
 **Clock correction**:
-An admin changing a session's clocks after the fact: editing a time, closing an Open shift, entering the clocks for an assigned Cleaner who never clocked in, or clearing a session's clocks. Every one is kept for good with who, when, the old and new times, and an optional reason, and the session is marked edited. Entering clocks for a Cleaner who never clocked in needs a clock-out once the appointment is an hour past its scheduled end. It counts exactly like a clock the Cleaner made, so it can move Appointment status. It is refused on a cancelled appointment, on a Cleaner no longer on the crew, if it would overlap another of the Cleaner's sessions, or on a session already on a paid Pay run (a crewmate's unpaid session on the same appointment stays editable), but allowed on a Manual completion.
-_Avoid_: correction on its own (ambiguous), override, manual session
+An admin changing a session's clocks after the fact: editing a time, closing an Open shift, entering the clocks for an assigned Cleaner who never clocked in, or clearing a session's clocks. Every one is kept unless its appointment is deleted, with who, when, the old and new times, and an optional reason, and the session is marked edited. Entering clocks for a Cleaner who never clocked in needs a clock-out once the appointment is an hour past its scheduled end. It counts exactly like a clock the Cleaner made, so it can move Appointment status. It is refused on a cancelled appointment, on a Cleaner no longer on the crew, if it would overlap another of the Cleaner's sessions, or on an appointment in a paid Pay run, but allowed on a Manual completion.
+_Avoid_: correction (that is a Pay run fix), override, manual session
 
 **Time sheet flag**:
 A warning an admin sees on a session that may need fixing before pay. The problem flags are an Open shift still open an hour after the appointment's scheduled end, a Missing clock, and an Odd duration that hasn't been acknowledged. A session with a Clock correction is marked edited, but that is not a problem. An Open shift or Missing clock stops that Cleaner's Pay run from being finalized until it is fixed; other Cleaners' runs are not held back. An Odd duration only warns. Cleaners don't see them.
@@ -46,7 +46,7 @@ An assigned Cleaner who never clocked in on an appointment an hour past its sche
 _Avoid_: no-show (it may be a forgotten clock-in)
 
 **Odd duration**:
-A closed session whose Clocked time is under half or over one and a half times the appointment's scheduled length. An admin can acknowledge it with a note; the acknowledgement lapses if the clock times change.
+A closed session whose Clocked time is under half or over one and a half times the appointment's scheduled length. An admin can acknowledge it with a note; the acknowledgement lapses if the clock times change, and is kept unless its appointment is deleted.
 
 **Pay run**:
 What one Cleaner is owed for a Pay period: her closed shifts in it not on another Pay run, and its Adjustments. It is a draft until finalized: computed live from the source data, never stored. Finalizing claims its shifts so no other Pay run includes them, but its amounts still follow the source data until it is marked paid. Once paid, its amounts are frozen and its sessions' clocks are locked.
@@ -99,6 +99,10 @@ _Avoid_: force complete
 Taking an appointment out of cancelled; its status is recalculated from its clocks.
 _Avoid_: uncancel, reopen
 
+**Deleted appointment**:
+An appointment an admin removed for good, with its crew rows, clocks, Clock corrections, Odd duration acknowledgements and invoice lines; it leaves the calendar, every Time sheet and every invoice. A draft left with no live line is removed and an issued invoice left with nothing to charge is voided. It is refused (skipped) while the appointment has any line on a paid invoice: void the invoice first. Only an admin can delete, and it can't be undone. Unlike a cancelled appointment, which stays visible and can be restored, a deleted one leaves no trace (deliberately, though Ontario ESA and CRA want Clock corrections kept 6 years).
+_Avoid_: archived appointment, removed appointment
+
 **Series**:
 A set of recurring appointments for one client and Job, generated from a recurrence rule and the Series' default crew, times and notes. Every Series is kept generated 6 months ahead until its end date or count stops it; an appointment removed from it is never generated again.
 _Avoid_: recurrence, recurring appointment
@@ -109,6 +113,9 @@ _Avoid_: protected visit
 
 **This and following**:
 A Series edit that applies, from one appointment onward, only the fields the admin changed, and leaves Protected appointments as they are.
+
+**Cancel and delete scopes**:
+How far a cancel or a delete reaches from one appointment in a Series: **This visit** (that appointment only), **This and following** (every unarchived appointment in the Series on or after its date, any status), or **Whole series** (every unarchived appointment in the Series, any date or status). An appointment outside a Series has only This visit. Appointments on a paid invoice are skipped and reported. Cancel never changes the Series itself; a This and following delete ends the Series the day before the appointment, and a Whole series delete removes the Series, leaving any skipped appointments standalone.
 
 ### Pricing
 
@@ -167,8 +174,11 @@ The record that an issued invoice was paid in full: the paid date, the Payment m
 How a Payment was made, chosen from a list the admin manages. The list starts with e-Transfer, Cash, Cheque and Credit card, and a new method typed in while recording a Payment joins it.
 
 **Archived invoice**:
-A draft, paid or void invoice hidden from the working list and read-only until it is unarchived. An invoice still owed (issued) can't be archived. Archiving a draft releases its Live claims, and its appointments become Excluded appointments if it was an Automatic draft.
+A draft, paid or void invoice hidden from the working list and read-only, except its Internal note, until it is unarchived. An invoice still owed (issued) can't be archived. Archiving a draft releases its Live claims, and its appointments become Excluded appointments if it was an Automatic draft.
 _Avoid_: deleted, hidden
+
+**Internal note**:
+An admin-only note on an invoice, editable at any status and while archived. Never shown or printed for the client. Not the invoice's Notes, which the client sees.
 
 **Outstanding**:
 What clients owe: the total of every issued invoice. An issued invoice with no due date is outstanding but never overdue. Drafts are not outstanding.

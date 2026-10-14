@@ -249,7 +249,7 @@ set local request.jwt.claims = '{"sub": "a6000000-0000-4000-8000-000000000001", 
 
 select lives_ok($$
 	select public.invoice_create_draft('c6000000-0000-4000-8000-000000000001',
-		array[public.pgtap_trigger_visit_id(10)], null, 'Rebill')
+		array[public.pgtap_trigger_visit_id(10)], null, 'Rebill', null)
 $$, 'the visit of a Cancelled line can be claimed by a new draft');
 
 reset role;

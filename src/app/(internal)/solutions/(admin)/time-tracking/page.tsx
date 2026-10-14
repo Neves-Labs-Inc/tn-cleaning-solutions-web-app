@@ -6,13 +6,16 @@ import CleanerSummaryList from "@/components/admin/time-sheets/cleaner-summary";
 import RangeBar from "@/components/admin/time-sheets/range-bar";
 import TimeSheetsSummarySkeleton from "@/components/admin/time-sheets/summary-skeleton";
 import SummaryTiles from "@/components/admin/time-sheets/summary-tiles";
+import TimeSheetsSearch from "@/components/admin/time-sheets/time-sheets-search";
 import PageHeader from "@/components/ui/page-header";
+import { singleParam } from "@/lib/admin/list-query";
 import { createClient } from "@/lib/supabase/server";
 import { buildDrilldownDays } from "@/lib/time-sheets/drilldown-days";
 import { fetchAdminSessions } from "@/lib/time-sheets/queries";
 import { resolveWeekRange, type WeekRange } from "@/lib/time-sheets/range";
 import { buildSessionView } from "@/lib/time-sheets/session-view";
 import {
+  filterSummariesByName,
   summarizeCleaners,
   type CleanerRef,
 } from "@/lib/time-sheets/summaries";
@@ -22,13 +25,16 @@ type AdminTimeSheetsPageProps = {
     from?: string | string[];
     to?: string | string[];
     cleaner?: string | string[];
+    q?: string | string[];
   }>;
 };
 
 type SummaryPageProps = {
   range: WeekRange;
   cleanerId?: string;
-  children: React.ReactNode;
+  q: string;
+  cleaners: CleanerRef[];
+  now: Date;
 };
 
 async function fetchActiveCleaners(): Promise<CleanerRef[]> {
@@ -45,6 +51,7 @@ async function fetchActiveCleaners(): Promise<CleanerRef[]> {
 
 type SummaryBodyProps = {
   range: WeekRange;
+  q: string;
   cleaners: CleanerRef[];
   now: Date;
 };
@@ -52,11 +59,13 @@ type SummaryBodyProps = {
 type CleanerContentProps = {
   range: WeekRange;
   cleanerId: string;
+  q: string;
   now: Date;
 };
 
 async function SummaryBody({
   range,
+  q,
   cleaners,
   now,
 }: SummaryBodyProps): Promise<React.ReactNode> {
@@ -68,30 +77,36 @@ async function SummaryBody({
   return (
     <div className="animate-in space-y-6 fade-in-0 duration-slow lg:space-y-8">
       <SummaryTiles summaries={summaries} />
-      <CleanerSummaryList summaries={summaries} range={range} />
+      <CleanerSummaryList
+        summaries={filterSummariesByName(summaries, q)}
+        totalCount={summaries.length}
+        range={range}
+        q={q}
+      />
     </div>
   );
-}
-
-// Reads on its own so the header and range bar stay on screen while it streams in.
-async function SummaryContent({
-  range,
-  now,
-}: Omit<SummaryBodyProps, "cleaners">): Promise<React.ReactNode> {
-  const cleaners = await fetchActiveCleaners();
-  return <SummaryBody range={range} cleaners={cleaners} now={now} />;
 }
 
 function SummaryPage({
   range,
   cleanerId,
-  children,
+  q,
+  cleaners,
+  now,
 }: SummaryPageProps): React.ReactNode {
   return (
     <div className="space-y-6 lg:space-y-8">
       <PageHeader title="Time Sheets" />
-      <RangeBar range={range} cleanerId={cleanerId} />
-      {children}
+      <RangeBar range={range} cleanerId={cleanerId} q={q} />
+      <TimeSheetsSearch range={range} q={q} showSearch={cleaners.length > 0}>
+        {/* The key is range-only, so typing a search never remounts it or shows the skeleton. */}
+        <Suspense
+          key={`${range.from}:${range.to}`}
+          fallback={<TimeSheetsSummarySkeleton />}
+        >
+          <SummaryBody range={range} q={q} cleaners={cleaners} now={now} />
+        </Suspense>
+      </TimeSheetsSearch>
     </div>
   );
 }
@@ -101,15 +116,20 @@ function SummaryPage({
 async function CleanerContent({
   range,
   cleanerId,
+  q,
   now,
 }: CleanerContentProps): Promise<React.ReactNode> {
   const cleaners = await fetchActiveCleaners();
   const selected = cleaners.find((cleaner) => cleaner.id === cleanerId);
   if (!selected) {
     return (
-      <SummaryPage range={range} cleanerId={cleanerId}>
-        <SummaryBody range={range} cleaners={cleaners} now={now} />
-      </SummaryPage>
+      <SummaryPage
+        range={range}
+        cleanerId={cleanerId}
+        q={q}
+        cleaners={cleaners}
+        now={now}
+      />
     );
   }
 
@@ -124,6 +144,7 @@ async function CleanerContent({
       summary={summary}
       days={buildDrilldownDays(views)}
       range={range}
+      q={q}
     />
   );
 }
@@ -137,6 +158,7 @@ export default async function AdminTimeSheetsPage({
   const cleanerId = Array.isArray(params.cleaner)
     ? params.cleaner[0]
     : params.cleaner;
+  const q = singleParam(params.q)?.trim() ?? "";
 
   if (cleanerId) {
     return (
@@ -145,20 +167,18 @@ export default async function AdminTimeSheetsPage({
         key={`${cleanerId}:${range.from}:${range.to}`}
         fallback={<CleanerDrilldownSkeleton />}
       >
-        <CleanerContent range={range} cleanerId={cleanerId} now={now} />
+        <CleanerContent
+          range={range}
+          cleanerId={cleanerId}
+          q={q}
+          now={now}
+        />
       </Suspense>
     );
   }
 
+  const cleaners = await fetchActiveCleaners();
   return (
-    <SummaryPage range={range}>
-      {/* A new key per range remounts the boundary, so the skeleton shows on every range change. */}
-      <Suspense
-        key={`${range.from}:${range.to}`}
-        fallback={<TimeSheetsSummarySkeleton />}
-      >
-        <SummaryContent range={range} now={now} />
-      </Suspense>
-    </SummaryPage>
+    <SummaryPage range={range} q={q} cleaners={cleaners} now={now} />
   );
 }

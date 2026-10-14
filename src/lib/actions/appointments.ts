@@ -7,7 +7,6 @@ import {
   parseUpdateAppointmentFormData,
   parseUpdateRecurrenceFormData,
   type AppointmentFieldErrors,
-  type RecurrenceFrequency,
 } from '@/lib/appointments/appointment-form'
 import {
   hasSessionHistory,
@@ -17,7 +16,6 @@ import {
 } from '@/lib/appointments/crew'
 import { toAppointmentErrorMessage, type DatabaseLikeError } from '@/lib/appointments/errors'
 import {
-  canCancel,
   canEdit,
   canMarkComplete,
   canRestore,
@@ -27,6 +25,7 @@ import {
   type AppointmentStatus,
 } from '@/lib/appointments/lifecycle'
 import { completeAppointments } from '@/lib/appointments/needs-completion'
+import { followingRecurrenceDates, recurrenceDates } from '@/lib/appointments/recurrence'
 import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -36,65 +35,11 @@ export type AppointmentActionResult =
   | { success: true; data?: { id?: string; ids?: string[] } }
   | { success: false; error: string; fieldErrors?: AppointmentFieldErrors }
 
-function formatDate(date: Date) {
-  const year = date.getUTCFullYear()
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(date.getUTCDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function parseDate(dateString: string) {
-  const [year, month, day] = dateString.split('-').map(Number)
-  return new Date(Date.UTC(year, month - 1, day))
-}
-
-function addDays(date: Date, amount: number) {
-  const next = new Date(date)
-  next.setUTCDate(next.getUTCDate() + amount)
-  return next
-}
-
-function addMonths(date: Date, amount: number) {
-  const day = date.getUTCDate()
-  const base = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1))
-  base.setUTCMonth(base.getUTCMonth() + amount)
-
-  const endOfTargetMonth = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0)).getUTCDate()
-  base.setUTCDate(Math.min(day, endOfTargetMonth))
-  return base
-}
-
-function generateRecurrenceDates(
-  startDate: string,
-  frequency: RecurrenceFrequency,
-  endDate: string | null,
-  maxOccurrences: number | null
-): string[] {
-  const start = parseDate(startDate)
-  const effectiveLimit = Math.min(maxOccurrences ?? (endDate ? 365 : 26), 365)
-  const dates: string[] = []
-
-  let current = start
-  while (dates.length < effectiveLimit) {
-    const currentString = formatDate(current)
-    if (endDate && currentString > endDate) {
-      break
-    }
-
-    dates.push(currentString)
-
-    if (frequency === 'daily') {
-      current = addDays(current, 1)
-    } else if (frequency === 'weekly') {
-      current = addDays(current, 7)
-    } else if (frequency === 'biweekly') {
-      current = addDays(current, 14)
-    } else {
-      current = addMonths(current, 1)
-    }
-  }
-
-  return dates
+// Reached only if the parser let a recurring scope through without an interval.
+const MISSING_INTERVAL_RESULT: AppointmentActionResult = {
+  success: false,
+  error: 'Please correct the highlighted fields.',
+  fieldErrors: { recurrence_interval_unit: 'Select a repeat unit.' },
 }
 
 async function requireAdminRole(): Promise<{ success: true } | { success: false; error: string }> {
@@ -143,18 +88,23 @@ export async function createAppointment(
   if (!parsed.success) {
     return parsed
   }
+  if (parsed.data.is_recurring && !parsed.data.recurrence_interval) {
+    return MISSING_INTERVAL_RESULT
+  }
 
   let createdAppointmentIds: string[] = []
 
   try {
     const adminClient = createAdminClient()
 
-    if (parsed.data.is_recurring && parsed.data.recurrence_frequency) {
+    const interval = parsed.data.recurrence_interval
+    if (parsed.data.is_recurring && interval) {
       const recurrenceInsert: TablesInsert<'recurrence_series'> = {
         client_id: parsed.data.client_id,
         job_id: parsed.data.job_id,
         location_id: parsed.data.location_id,
-        frequency: parsed.data.recurrence_frequency,
+        interval_unit: interval.unit,
+        interval_count: interval.count,
         start_date: parsed.data.scheduled_date,
         end_date: parsed.data.recurrence_end_date,
         max_occurrences: parsed.data.recurrence_max_occurrences,
@@ -171,18 +121,18 @@ export async function createAppointment(
         return { success: false, error: toAppointmentErrorMessage(recurrenceError, 'createAppointment') }
       }
 
-      const recurrenceDates = generateRecurrenceDates(
-        parsed.data.scheduled_date,
-        parsed.data.recurrence_frequency,
-        parsed.data.recurrence_end_date,
-        parsed.data.recurrence_max_occurrences
-      )
+      const seriesDates = recurrenceDates({
+        anchorDate: parsed.data.scheduled_date,
+        interval,
+        endDate: parsed.data.recurrence_end_date,
+        maxOccurrences: parsed.data.recurrence_max_occurrences,
+      })
 
-      if (recurrenceDates.length === 0) {
+      if (seriesDates.length === 0) {
         return { success: false, error: 'No recurrence dates were generated.' }
       }
 
-      const appointmentInserts: TablesInsert<'appointments'>[] = recurrenceDates.map((scheduledDate) => ({
+      const appointmentInserts: TablesInsert<'appointments'>[] = seriesDates.map((scheduledDate) => ({
         client_id: parsed.data.client_id,
         job_id: parsed.data.job_id,
         recurrence_series_id: recurrenceSeries.id,
@@ -374,14 +324,8 @@ export async function updateAppointment(
         return { success: false, error: 'Recurrence series is required for this edit scope.' }
       }
 
-      if (!parsedRecurrence.data.recurrence_frequency) {
-        return {
-          success: false,
-          error: 'Please correct the highlighted fields.',
-          fieldErrors: {
-            recurrence_frequency: 'Select a recurrence frequency.',
-          },
-        }
+      if (!parsedRecurrence.data.recurrence_interval) {
+        return MISSING_INTERVAL_RESULT
       }
 
       const recurrenceSeriesId = parsedRecurrence.data.recurrence_series_id
@@ -411,11 +355,16 @@ export async function updateAppointment(
       if (!recurrenceSeriesId) {
         return { success: false, error: 'Recurrence series is required for this edit scope.' }
       }
+      const interval = parsedRecurrence.data.recurrence_interval
+      if (!interval) {
+        return MISSING_INTERVAL_RESULT
+      }
 
       const { error: recurrenceUpdateError } = await adminClient
         .from('recurrence_series')
         .update({
-          frequency: parsedRecurrence.data.recurrence_frequency,
+          interval_unit: interval.unit,
+          interval_count: interval.count,
           end_date: parsedRecurrence.data.recurrence_end_date,
           max_occurrences: parsedRecurrence.data.recurrence_max_occurrences,
         })
@@ -581,11 +530,16 @@ export async function updateAppointment(
         if (!recurrenceSeriesId) {
           return { success: false, error: 'Recurrence series is required for this edit scope.' }
         }
+        const interval = parsedRecurrence.data.recurrence_interval
+        if (!interval) {
+          return MISSING_INTERVAL_RESULT
+        }
 
         const { error: recurrenceUpdateError } = await adminClient
           .from('recurrence_series')
           .update({
-            frequency: parsedRecurrence.data.recurrence_frequency,
+            interval_unit: interval.unit,
+            interval_count: interval.count,
             end_date: parsedRecurrence.data.recurrence_end_date,
             max_occurrences: parsedRecurrence.data.recurrence_max_occurrences,
           })
@@ -647,16 +601,16 @@ export async function updateAppointment(
 
         const preservedDates = preservedSeriesDates(cleanupPlan, laterAppointments ?? [], deletedIds)
 
-        const nextDate = formatDate(addDays(parseDate(appointment.scheduled_date), 1))
-        const recurrenceDates = generateRecurrenceDates(
-          nextDate,
-          parsedRecurrence.data.recurrence_frequency as RecurrenceFrequency,
-          parsedRecurrence.data.recurrence_end_date,
-          parsedRecurrence.data.recurrence_max_occurrences
-        ).filter((scheduledDate) => !preservedDates.has(scheduledDate))
+        // The cadence restarts from the edited visit's saved date; that visit itself already exists.
+        const regeneratedDates = followingRecurrenceDates({
+          anchorDate: appointment.scheduled_date,
+          interval,
+          endDate: parsedRecurrence.data.recurrence_end_date,
+          maxOccurrences: parsedRecurrence.data.recurrence_max_occurrences,
+        }).filter((scheduledDate) => !preservedDates.has(scheduledDate))
 
-        if (recurrenceDates.length > 0) {
-          const appointmentInserts: TablesInsert<'appointments'>[] = recurrenceDates.map((scheduledDate) => ({
+        if (regeneratedDates.length > 0) {
+          const appointmentInserts: TablesInsert<'appointments'>[] = regeneratedDates.map((scheduledDate) => ({
             client_id: appointment.client_id,
             job_id: appointment.job_id,
             recurrence_series_id: appointment.recurrence_series_id,
@@ -756,40 +710,6 @@ async function loadAppointmentForLifecycle(id: string): Promise<LifecycleLoadRes
 function revalidateAppointment(id: string) {
   revalidatePath('/solutions/appointments')
   revalidatePath(`/solutions/appointments/${id}`)
-}
-
-export async function cancelAppointment(id: string): Promise<AppointmentActionResult> {
-  const loaded = await loadAppointmentForLifecycle(id)
-  if (!loaded.success) return loaded
-
-  if (!canCancel(loaded.appointment.status)) {
-    return { success: false, error: 'This appointment is already cancelled.' }
-  }
-
-  // A paid-invoice trigger refuses with P0001 and a message the admin must read; it passes through.
-  const { data, error } = await createAdminClient()
-    .from('appointments')
-    .update({ status: 'cancelled' })
-    .eq('id', id)
-    .eq('is_archived', false)
-    .eq('status', loaded.appointment.status)
-    .select('id')
-    .maybeSingle()
-
-  if (error) {
-    return { success: false, error: toAppointmentErrorMessage(error, 'cancelAppointment') }
-  }
-
-  if (!data) {
-    return {
-      success: false,
-      error: 'The appointment changed while you were cancelling it. Refresh and try again.',
-    }
-  }
-
-  revalidateAppointment(id)
-
-  return { success: true, data: { id } }
 }
 
 export async function restoreAppointment(id: string): Promise<AppointmentActionResult> {
