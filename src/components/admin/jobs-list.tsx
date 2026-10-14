@@ -21,7 +21,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { useAppointmentsCache } from '@/hooks/use-appointments-cache'
 import { archiveJobs, restoreJobs } from '@/lib/actions/jobs'
 import { appointmentsKeys } from '@/lib/appointments/appointments-keys'
-import { formatRate } from '@/lib/pricing/money'
+import { formatPremium, formatRate } from '@/lib/pricing/money'
 import { cn } from '@/lib/utils'
 
 export type JobRow = {
@@ -30,6 +30,7 @@ export type JobRow = {
 	description: string | null
 	hourly_rate_cents: number
 	estimated_duration_minutes: number | null
+	pay_premium_cents: number
 	is_archived: boolean
 }
 
@@ -322,6 +323,17 @@ function JobCard({ job, archived, selectMode, selected, onToggle }: JobCardProps
 
 			<CardContent className="px-5 py-4">
 				<p className="min-h-11 text-sm leading-6 text-neutral-600">{shortDescription(job.description)}</p>
+				<dl className="mt-3 flex items-baseline justify-between gap-3 border-t pt-3">
+					<dt className="text-xs text-muted-foreground">Job pay premium</dt>
+					<dd
+						className={cn(
+							'text-sm font-medium tabular-nums text-foreground',
+							job.pay_premium_cents === 0 && 'font-normal text-muted-foreground',
+						)}
+					>
+						{formatPremium(job.pay_premium_cents)}
+					</dd>
+				</dl>
 			</CardContent>
 		</>
 	)

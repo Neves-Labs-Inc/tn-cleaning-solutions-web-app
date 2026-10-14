@@ -5,6 +5,7 @@ import {
   AMOUNT_TOO_LARGE_MESSAGE,
   durationMinutes,
   formatCents,
+  formatPremium,
   formatRate,
   hourlyAmountCents,
   MAX_AMOUNT_CENTS,
@@ -89,4 +90,9 @@ test('an invoice total is the sum of already-rounded lines, never a rounded sum'
   assert.equal(lineCents, 3334)
   assert.equal(total, 10002)
   assert.notEqual(total, Math.round((6667 * 30 * 3) / 60))
+})
+
+test('formatPremium reads None for no premium and a plus-signed rate otherwise', () => {
+  assert.equal(formatPremium(0), 'None')
+  assert.equal(formatPremium(300), '+$3.00/h')
 })

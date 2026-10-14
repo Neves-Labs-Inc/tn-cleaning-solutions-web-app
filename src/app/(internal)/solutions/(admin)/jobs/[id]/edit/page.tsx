@@ -15,7 +15,7 @@ export default async function EditJobPage({ params }: EditJobPageProps) {
 
   const { data: job, error } = await supabase
     .from('jobs')
-    .select('id, name, description, hourly_rate_cents, estimated_duration_minutes, is_archived')
+    .select('id, name, description, hourly_rate_cents, estimated_duration_minutes, pay_premium_cents, is_archived')
     .eq('id', id)
     .maybeSingle()
 
@@ -48,6 +48,7 @@ export default async function EditJobPage({ params }: EditJobPageProps) {
           description: job.description,
           hourly_rate_cents: job.hourly_rate_cents,
           estimated_duration_minutes: job.estimated_duration_minutes,
+          pay_premium_cents: job.pay_premium_cents,
         }}
       />
     </div>

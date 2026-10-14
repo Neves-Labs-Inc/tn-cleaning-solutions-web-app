@@ -89,6 +89,19 @@ Mapping (single source of truth lives in one `status-badge.tsx`, §10):
 | Payment state `paid` | success |
 | appointment Not clocked | danger |
 | appointment Missed clock | danger |
+| Pay period Running | progress (`Clock`) |
+| Pay period Ready to review | warning (`CircleDashed`) |
+| Pay period Finalized · to pay | info (`FileCheck2`) |
+| Pay period Paid | success (`CheckCircle2`) |
+| Pay period No pay | neutral |
+| Pay run Draft | neutral (`Pencil`) |
+| Pay run Finalized | info (`FileCheck2`) |
+| Pay run Paid | success (`CheckCircle2`) |
+| Pay run Off-cycle | progress |
+| Pay run Blocked / Blocks finalize / "N blocked" | danger (`Lock`) |
+| Payroll "N flags" | warning (`AlertTriangle`) |
+| Payroll "N unpaid shifts after finalize" | danger (`AlertTriangle`) |
+| pay line No Pay rate | danger (`CircleSlash`) |
 
 Appointment cards and list rows are tinted with their tone via `appointmentCardTone` (Missed clock wins, then Not clocked, then In progress, then the Payment state; Cancelled and appointments with neither stay untinted). The surface classes live in `CARD_TINT_CLASSES` in `status-badge.tsx`.
 
@@ -178,8 +191,8 @@ Design at **375 × 667 first**, then 390/430, then `sm` 640, `md` 768, `lg` 1024
 Replace the current top pill nav (`src/components/employee/employee-nav.tsx`) with:
 
 - **Top bar** (`h-14`, sticky, `bg-background/90 backdrop-blur`, `border-b`): on list screens shows the "TN" mark + page title; on detail screens shows a **Back** button (left, 44×44, `ArrowLeft` + "Schedule") and the page title. No "Ready for shift" pill, no eyebrow text.
-- **Bottom tab bar** (`fixed inset-x-0 bottom-0 z-40 h-14`, `border-t`, `bg-background/95 backdrop-blur`, `pb-[env(safe-area-inset-bottom)]`): three tabs — **Schedule** (`CalendarDays`), **Time Sheets** (`Clock3`), **Profile** (`UserRound`). Each tab is a `Link` that fills the full height (≥ 44px tall, ≥ 64px wide), icon 24px over a `text-xs font-medium` label. Active = `text-primary` + icon filled weight (`strokeWidth={2.5}`); inactive = `text-muted-foreground`. `aria-current="page"` on the active one. Pressing feedback: `active:bg-muted` on the tab.
-- At `md:` and up the bottom bar hides (`md:hidden`) and the same three items render as a horizontal nav in the top bar (`hidden md:flex`). Same component, two slots.
+- **Bottom tab bar** (`fixed inset-x-0 bottom-0 z-40 h-14`, `border-t`, `bg-background/95 backdrop-blur`, `pb-[env(safe-area-inset-bottom)]`): four tabs — **Schedule** (`CalendarDays`), **Time Sheets** (`Clock3`), **My pay** (`Wallet`), **Profile** (`UserRound`). Each tab is a `Link` that fills the full height (≥ 44px tall, ≥ 64px wide), icon 24px over a `text-xs font-medium` label. Active = `text-primary` + icon filled weight (`strokeWidth={2.5}`); inactive = `text-muted-foreground`. `aria-current="page"` on the active one. Pressing feedback: `active:bg-muted` on the tab. The active indicator (2px top bar) is `1 / navItems.length` wide and slides by its own width to the active tab.
+- At `md:` and up the bottom bar hides (`md:hidden`) and the same four items render as a horizontal nav in the top bar (`hidden md:flex`). Same component, two slots.
 - Back always goes to the parent list (`/solutions/schedule`), not `router.back()` — predictable after a refresh or deep link.
 
 ### 7.2 Admin

@@ -20,6 +20,8 @@ Source: client meeting 2026-10-13, requirements 6 and 7.
 - every invoice of every status, and every invoice line;
 - every time-sheet session, Clock correction and Odd duration acknowledgement;
 - the invoice number counters, so numbering restarts at 001;
+- once Payroll is deployed, every Pay run with its claimed shifts and Adjustments
+  (they point at the sessions being removed); before that, these count 0;
 - every Job with `is_archived = true`, and the client negotiated rates for those Jobs.
 
 **Keeps**
@@ -27,7 +29,8 @@ Source: client meeting 2026-10-13, requirements 6 and 7.
 - clients and client locations;
 - employees;
 - active Jobs and their negotiated rates;
-- payment methods.
+- payment methods;
+- Pay rates (once Payroll is deployed).
 
 ## 2. Preconditions
 

@@ -7,7 +7,8 @@ truncate public.appointments, public.recurrence_series, public.appointment_emplo
 	public.invoice_appointments, public.invoices, public.clock_corrections,
 	public.odd_duration_acknowledgements, public.invoice_number_counters, public.jobs,
 	public.client_job_pricing, public.clients, public.client_locations, public.employees,
-	public.payment_methods;
+	public.payment_methods, public.pay_rates, public.pay_runs, public.pay_run_lines,
+	public.pay_adjustments;
 
 insert into auth.users (id, email) values
 	('a7000000-0000-4000-8000-000000000001', 'purge.test.admin@example.test'),
@@ -112,3 +113,24 @@ insert into public.invoice_appointments (invoice_id, appointment_id, is_archived
 	('97000000-0000-4000-8000-000000000001', 'd7000000-0000-4000-8000-000000000005', false, null);
 
 insert into public.invoice_number_counters (year, last_value) values (2026, 5);
+
+-- Payroll: 1 Pay rate (kept), 2 Pay runs (paid and finalized), 2 claims, 1 Adjustment on a session.
+insert into public.pay_rates (employee_id, hourly_rate_cents, effective_from) values
+	('e7000000-0000-4000-8000-00000000000a', 2000, '2026-10-05');
+
+insert into public.pay_runs
+	(id, employee_id, period_start, kind, status, finalized_at, paid_on, payout_method, paid_at, created_by) values
+	('87000000-0000-4000-8000-000000000001', 'e7000000-0000-4000-8000-00000000000a', '2026-10-05', 'regular', 'paid',
+	 '2026-10-19 12:00+00', '2026-10-20', 'e-Transfer', '2026-10-20 12:00+00', 'a7000000-0000-4000-8000-000000000001'),
+	('87000000-0000-4000-8000-000000000002', 'e7000000-0000-4000-8000-00000000000b', '2026-10-05', 'regular', 'finalized',
+	 '2026-10-19 12:00+00', null, null, null, 'a7000000-0000-4000-8000-000000000001');
+
+insert into public.pay_run_lines
+	(pay_run_id, appointment_employee_id, scheduled_date, client_name, job_name, minutes, rate_cents, amount_cents) values
+	('87000000-0000-4000-8000-000000000001', 'f7000000-0000-4000-8000-000000000002', '2026-09-15', 'Client One',
+	 'Active job, null flag', 120, 2000, 4000),
+	('87000000-0000-4000-8000-000000000002', 'f7000000-0000-4000-8000-000000000003', null, null, null, null, null, null);
+
+insert into public.pay_adjustments (pay_run_id, amount_cents, reason, appointment_employee_id, created_by) values
+	('87000000-0000-4000-8000-000000000001', 500, 'fixture', 'f7000000-0000-4000-8000-000000000002',
+	 'a7000000-0000-4000-8000-000000000001');

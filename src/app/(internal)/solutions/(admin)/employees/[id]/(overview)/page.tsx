@@ -5,8 +5,12 @@ import { notFound } from 'next/navigation'
 
 import { buildTimeSheetsHref } from '@/components/admin/time-sheets/time-sheets-href'
 import { Button, buttonVariants } from '@/components/ui/button'
+import type { PayRateRow } from '@/lib/employees/pay-rates-view'
+import { getBusinessDate } from '@/lib/schedule/business-time'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/server'
+
+import { PaySection } from './pay-section'
 
 type EmployeeDetailPageProps = {
 	params: Promise<{ id: string }>
@@ -18,7 +22,8 @@ type EmployeeRow = {
 	phone: string | null
 	started_at: string | null
 	address: string | null
-	e_transfer_email: string | null
+	default_payout_method: string | null
+	e_transfer_contact: string | null
 	is_active: boolean
 	is_archived: boolean
 }
@@ -38,6 +43,23 @@ type AppointmentActivity = {
 	}
 }
 
+// Mirrors payroll_settings() (20261014230000). Ticket 06's Payroll module will own these; until then
+// the period start is computed here, the same way pay_period_start() does.
+const PAY_PERIOD_ANCHOR = '2026-10-05'
+const PAYROLL_START = '2026-10-05'
+const PAY_PERIOD_DAYS = 14
+const MS_PER_DAY = 86_400_000
+
+// UTC date arithmetic on yyyy-MM-dd strings, so no day shifts with the server's time zone.
+function getPayPeriodStart(day: string): string {
+	const anchor = Date.parse(`${PAY_PERIOD_ANCHOR}T00:00:00Z`)
+	const daysSinceAnchor = Math.round((Date.parse(`${day}T00:00:00Z`) - anchor) / MS_PER_DAY)
+	const periodIndex = Math.floor(daysSinceAnchor / PAY_PERIOD_DAYS)
+	const start = new Date(anchor + periodIndex * PAY_PERIOD_DAYS * MS_PER_DAY).toISOString().slice(0, 10)
+	// No Pay period exists in Payroll before the Payroll start.
+	return start < PAYROLL_START ? PAYROLL_START : start
+}
+
 function clockStatus(activity: AppointmentActivity) {
 	if (!activity.clocked_in_at) {
 		return 'Not clocked in'
@@ -54,41 +76,53 @@ export default async function EmployeeDetailPage({ params }: EmployeeDetailPageP
 	const { id } = await params
 	const supabase = await createClient()
 
-	const [{ data: employee, error: employeeError }, { data: activity, error: activityError }] =
-		await Promise.all([
-			supabase
-				.from('employees')
-				.select(
-					'id, full_name, phone, started_at, address, e_transfer_email, is_active, is_archived'
-				)
-				.eq('id', id)
-				.maybeSingle(),
-			supabase
-				.from('appointment_employees')
-				.select(
-					`
-						clocked_in_at,
-						clocked_out_at,
-						appointments!inner (
-							scheduled_date,
-							status,
-							jobs!inner ( name ),
-							clients!inner ( name )
-						)
-					`
-				)
-				.eq('employee_id', id)
-				// A visit she was removed from isn't her activity; NULL counts as live.
-				.not('is_archived', 'is', true)
-				.order('created_at', { ascending: false })
-				.limit(5),
-		])
+	const [
+		{ data: employee, error: employeeError },
+		{ data: activity, error: activityError },
+		{ data: payRates, error: payRatesError },
+	] = await Promise.all([
+		supabase
+			.from('employees')
+			.select(
+				'id, full_name, phone, started_at, address, default_payout_method, e_transfer_contact, is_active, is_archived'
+			)
+			.eq('id', id)
+			.maybeSingle(),
+		supabase
+			.from('appointment_employees')
+			.select(
+				`
+					clocked_in_at,
+					clocked_out_at,
+					appointments!inner (
+						scheduled_date,
+						status,
+						jobs!inner ( name ),
+						clients!inner ( name )
+					)
+				`
+			)
+			.eq('employee_id', id)
+			// A visit she was removed from isn't her activity; NULL counts as live.
+			.not('is_archived', 'is', true)
+			.order('created_at', { ascending: false })
+			.limit(5),
+		supabase
+			.from('pay_rates')
+			.select('id, hourly_rate_cents, effective_from, is_archived, created_at')
+			.eq('employee_id', id)
+			.order('effective_from', { ascending: false }),
+	])
 
 	if (employeeError || !employee || employee.is_archived) {
 		notFound()
 	}
 
+	if (payRatesError) console.error('Failed to load Pay rates for employee', id, payRatesError)
+
 	const recentActivity = (activity ?? []) as unknown as AppointmentActivity[]
+	const today = getBusinessDate(new Date())
+	const rates: PayRateRow[] | null = payRatesError ? null : (payRates ?? [])
 
 	return (
 		<div className="space-y-6">
@@ -151,16 +185,19 @@ export default async function EmployeeDetailPage({ params }: EmployeeDetailPageP
 						<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Address</p>
 						<p className="mt-1 text-sm text-neutral-700">{employee.address || 'No address on file'}</p>
 					</div>
-					<div>
-						<p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-							E-transfer Email
-						</p>
-						<p className="mt-1 text-sm text-neutral-700">
-							{employee.e_transfer_email || 'No e-transfer email on file'}
-						</p>
-					</div>
 				</div>
 			</section>
+
+			<PaySection
+				employeeId={employee.id}
+				employeeName={employee.full_name}
+				rates={rates}
+				today={today}
+				payrollStart={PAYROLL_START}
+				payrollHref={`/solutions/payroll/${getPayPeriodStart(today)}`}
+				defaultPayoutMethod={employee.default_payout_method}
+				eTransferContact={employee.e_transfer_contact}
+			/>
 
 			<section className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
 				<div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -24,6 +24,10 @@ import StatTile from '@/components/ui/stat-tile'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { fetchPayPeriodsOverview } from '@/lib/payroll/queries'
+import { summarizePeriods } from '@/lib/payroll/period-summary'
+import type { BannerLine } from '@/lib/payroll/period-summary'
+import PayrollBanner from './payroll-banner'
 
 const RECEIVABLES_HREF = '/solutions/invoices/receivables'
 
@@ -41,6 +45,16 @@ async function loadReceivablesSummary(db: Db): Promise<ReceivablesSummary | null
     }
 }
 
+// A failed read returns null so the banner is simply absent; the rest of the dashboard still loads.
+async function loadPayrollBanner(db: Db): Promise<BannerLine[] | null> {
+    try {
+        const now = new Date()
+        return summarizePeriods(await fetchPayPeriodsOverview(db, now), now).bannerLines
+    } catch (error) {
+        console.error('Dashboard payroll failed to load', error)
+        return null
+    }
+}
 
 export default async function DashboardPage() {
     const supabase = await createClient()
@@ -54,6 +68,7 @@ export default async function DashboardPage() {
         todayAppointmentsResult,
         upcomingAppointmentsResult,
         receivables,
+        payrollBannerLines,
     ] = await Promise.all([
         supabase
             .from('appointments')
@@ -81,6 +96,7 @@ export default async function DashboardPage() {
             .limit(8),
 
         loadReceivablesSummary(supabase),
+        loadPayrollBanner(supabase),
     ])
 
     const loadError = todayAppointmentsResult.error ?? upcomingAppointmentsResult.error
@@ -93,6 +109,8 @@ export default async function DashboardPage() {
             <section className="rounded-3xl border border-emerald-900/40 bg-linear-to-br from-emerald-950 via-emerald-900 to-neutral-900 px-5 py-6 sm:px-8 sm:py-7 shadow-lg shadow-emerald-950/20">
                 <p className="text-2xl sm:text-3xl font-bold tracking-tight text-white">Admin Dashboard</p>
             </section>
+
+            {payrollBannerLines && payrollBannerLines.length > 0 ? <PayrollBanner lines={payrollBannerLines} /> : null}
 
             {loadError ? (
                 <section className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{loadError.message}</section>

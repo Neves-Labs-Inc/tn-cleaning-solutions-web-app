@@ -16,6 +16,7 @@ import {
   Menu,
   UserRound,
   Users,
+  Wallet,
 } from 'lucide-react'
 
 import { APPOINTMENTS_PATH } from '@/lib/appointments/overview'
@@ -29,6 +30,7 @@ const navItems = [
   { label: 'Jobs', href: '/solutions/jobs', icon: BriefcaseBusiness },
   { label: 'Employees', href: '/solutions/employees', icon: UserRound },
   { label: 'Time Sheets', href: '/solutions/time-tracking', icon: Clock },
+  { label: 'Payroll', href: '/solutions/payroll', icon: Wallet },
   { label: 'Invoices', href: '/solutions/invoices', icon: FileText },
   { label: 'Profile', href: '/solutions/profile', icon: UserRound },
 ] as const

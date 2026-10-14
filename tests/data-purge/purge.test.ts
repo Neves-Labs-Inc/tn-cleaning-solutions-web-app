@@ -157,6 +157,9 @@ const FIXTURE_COUNTS_BEFORE = {
   clock_corrections: 1,
   odd_duration_acknowledgements: 1,
   invoice_number_counters: 1,
+  pay_run_lines: 2,
+  pay_adjustments: 1,
+  pay_runs: 2,
   "jobs (archived)": 2,
   "client_job_pricing (archived jobs)": 3,
   clients: 2,
@@ -165,6 +168,7 @@ const FIXTURE_COUNTS_BEFORE = {
   "jobs (active)": 2,
   "client_job_pricing (active jobs)": 2,
   payment_methods: 2,
+  pay_rates: 1,
 };
 
 const FIXTURE_COUNTS_AFTER = {
@@ -176,6 +180,9 @@ const FIXTURE_COUNTS_AFTER = {
   clock_corrections: 0,
   odd_duration_acknowledgements: 0,
   invoice_number_counters: 0,
+  pay_run_lines: 0,
+  pay_adjustments: 0,
+  pay_runs: 0,
   "jobs (archived)": 0,
   "client_job_pricing (archived jobs)": 0,
   clients: 2,
@@ -184,6 +191,7 @@ const FIXTURE_COUNTS_AFTER = {
   "jobs (active)": 2,
   "client_job_pricing (active jobs)": 2,
   payment_methods: 2,
+  pay_rates: 1,
 };
 
 const PURGED_TABLES = [
@@ -195,6 +203,9 @@ const PURGED_TABLES = [
   "clock_corrections",
   "odd_duration_acknowledgements",
   "invoice_number_counters",
+  "pay_run_lines",
+  "pay_adjustments",
+  "pay_runs",
 ];
 
 const KEPT_TABLES = [
@@ -204,6 +215,7 @@ const KEPT_TABLES = [
   "jobs",
   "client_job_pricing",
   "payment_methods",
+  "pay_rates",
 ];
 
 // Every kept row in full (active jobs and their rates only), so "contents unchanged" compares
@@ -216,6 +228,7 @@ const KEPT_FINGERPRINT_SQL = `select md5(string_agg(row_text, '|' order by row_t
   union all select 'client_job_pricing:' || t::text from public.client_job_pricing t
     join public.jobs j on j.id = t.job_id where j.is_archived is not true
   union all select 'payment_methods:' || t::text from public.payment_methods t
+  union all select 'pay_rates:' || t::text from public.pay_rates t
 ) kept`;
 
 const ALL_TABLE_COUNTS_SQL = `select string_agg(name || ':' || n, ',' order by name) from (${[
@@ -343,7 +356,8 @@ rollback;
       "appointment_employees:3,appointments:7,client_job_pricing:5," +
         "client_locations:2,clients:2,clock_corrections:1,employees:2," +
         "invoice_appointments:4,invoice_number_counters:1,invoices:6,jobs:4," +
-        "odd_duration_acknowledgements:1,payment_methods:2,recurrence_series:2",
+        "odd_duration_acknowledgements:1,pay_adjustments:1,pay_rates:1,pay_run_lines:2," +
+        "pay_runs:2,payment_methods:2,recurrence_series:2",
     );
     assert.equal(assertions.counts_after, assertions.counts_before);
     assert.equal(assertions.kept_after, assertions.kept_before);
@@ -377,7 +391,7 @@ for (const confirmArgs of [
       assert.doesNotMatch(run.stdout, /COMMITTED/);
       const [after] = readCountTables(run.stdout, "AFTER");
       const removedAfter = after.filter((row) => row.action === "remove");
-      assert.equal(removedAfter.length, 10);
+      assert.equal(removedAfter.length, 13);
       assert.ok(removedAfter.every((row) => row.rows === 0));
 
       const countsAfter = readAssertions(runSession(countsSql).stdout).counts;

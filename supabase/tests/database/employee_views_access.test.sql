@@ -23,7 +23,7 @@ insert into auth.users (id, email) values
 	('a0000000-0000-4000-8000-000000000004', 'pgtap.employee.inactive@example.test'),
 	('a0000000-0000-4000-8000-000000000005', 'pgtap.employee.archived@example.test');
 
-insert into public.employees (id, user_id, full_name, is_active, is_archived, address, e_transfer_email) values
+insert into public.employees (id, user_id, full_name, is_active, is_archived, address, e_transfer_contact) values
 	('e0000000-0000-4000-8000-00000000000a', 'a0000000-0000-4000-8000-000000000002', 'Employee A', true, false, '1 A St', 'a@pay.test'),
 	('e0000000-0000-4000-8000-00000000000b', 'a0000000-0000-4000-8000-000000000003', 'Employee B', true, false, '2 B St', 'b@pay.test'),
 	('e0000000-0000-4000-8000-00000000000c', 'a0000000-0000-4000-8000-000000000004', 'Inactive Employee', false, false, '3 C St', 'c@pay.test'),
@@ -79,8 +79,8 @@ select hasnt_column('public', 'jobs_employee_view', 'hourly_rate_cents',
 	'jobs view has no hourly_rate_cents column');
 select hasnt_column('public', 'employees_employee_view', 'address',
 	'employees view has no address column');
-select hasnt_column('public', 'employees_employee_view', 'e_transfer_email',
-	'employees view has no e_transfer_email column');
+select hasnt_column('public', 'employees_employee_view', 'e_transfer_contact',
+	'employees view has no e_transfer_contact column');
 
 
 -- Advisor stand-in: no view in public runs with definer rights ---------------------------------

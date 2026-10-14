@@ -1,12 +1,25 @@
 // Plain .ts so node:test can load it; status-badge.tsx re-exports these, keeping
 // the status-to-tone mapping next to the component (DESIGN.md §3.2, §10).
-import { CheckCircle2, CircleDashed, Clock, Hourglass, Pencil, ReceiptText, UserMinus } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleDashed,
+  CircleSlash,
+  Clock,
+  FileCheck2,
+  Hourglass,
+  Lock,
+  Pencil,
+  ReceiptText,
+  UserMinus,
+} from "lucide-react";
 
 import type { AppointmentStatus } from '../../lib/helpers/dashboard'
 import type { PaymentState } from '../../lib/invoices/payment-state'
 import type { InvoiceEffectiveStatus, LineState } from '../../lib/invoices/view'
 import { formatBusinessTime } from '../../lib/schedule/business-time.ts'
 import type { FlagKind, SessionView } from "../../lib/time-sheets/session-view";
+import type { PeriodStatusKind, RunStatus } from "../../lib/payroll/period-view.ts";
 import type { ScheduleAppointment } from '../../lib/appointments/overview'
 import type { ClockStatus, StatusBadgeSpec, StatusTone } from './status-badge'
 
@@ -194,3 +207,31 @@ export function timeSheetFlagBadges(view: TimeSheetBadgeView): StatusBadgeSpec[]
   ];
   return badges.filter((badge) => badge !== null);
 }
+
+// Payroll (DESIGN.md §3.2). Count pills ("2 blocked", "3 flags", "1 unpaid shift after
+// finalize") keep these tones and icons and swap in their own label.
+export const PAY_PERIOD_STATUS_BADGES: Record<PeriodStatusKind, StatusBadgeSpec> = {
+  running: { tone: "progress", label: "Running", icon: Clock },
+  ready_to_review: { tone: "warning", label: "Ready to review", icon: CircleDashed },
+  to_pay: { tone: "info", label: "Finalized · to pay", icon: FileCheck2 },
+  paid: { tone: "success", label: "Paid", icon: CheckCircle2 },
+  no_pay: { tone: "neutral", label: "No pay" },
+};
+
+export const PAY_RUN_STATUS_BADGES: Record<RunStatus, StatusBadgeSpec> = {
+  draft: { tone: "neutral", label: "Draft", icon: Pencil },
+  finalized: { tone: "info", label: "Finalized", icon: FileCheck2 },
+  paid: { tone: "success", label: "Paid", icon: CheckCircle2 },
+};
+
+export const OFF_CYCLE_BADGE: StatusBadgeSpec = { tone: "progress", label: "Off-cycle" };
+export const BLOCKED_BADGE: StatusBadgeSpec = { tone: "danger", label: "Blocked", icon: Lock };
+export const FLAG_COUNT_BADGE: StatusBadgeSpec = { tone: "warning", label: "Flags", icon: AlertTriangle };
+export const UNPAID_AFTER_FINALIZE_BADGE: StatusBadgeSpec = {
+  tone: "danger",
+  label: "Unpaid shift after finalize",
+  icon: AlertTriangle,
+};
+export const NO_PAY_RATE_BADGE: StatusBadgeSpec = { tone: "danger", label: "No Pay rate", icon: CircleSlash };
+// A pay line whose session has a Clock correction, like the time sheets' Edited pill.
+export const EDITED_BADGE: StatusBadgeSpec = { tone: "neutral", label: "Edited", icon: Pencil };
