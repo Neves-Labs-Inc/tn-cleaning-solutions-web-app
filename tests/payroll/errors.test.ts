@@ -12,15 +12,20 @@ import {
 const MIGRATIONS_DIR = join(import.meta.dirname, "../../supabase/migrations");
 const UNKNOWN_MESSAGE = "Couldn't save. Try again.";
 
+// The CASE block of the newest migration that (re)defines payroll_error: later migrations replace it.
 function readSqlErrorCodes(): Set<string> {
-  const [migration] = readdirSync(MIGRATIONS_DIR).filter((name) =>
-    /_payroll_write_functions\.sql$/.test(name),
-  );
-  assert.ok(migration, "no payroll write functions migration found");
+  const definition = /CREATE (?:OR REPLACE )?FUNCTION "public"\."payroll_error"\(/;
+  const migration = readdirSync(MIGRATIONS_DIR)
+    .filter((name) => name.endsWith(".sql"))
+    .sort()
+    .map((name) => readFileSync(join(MIGRATIONS_DIR, name), "utf8"))
+    .findLast((source) => definition.test(source));
+  assert.ok(migration, "no migration defines payroll_error");
 
-  const source = readFileSync(join(MIGRATIONS_DIR, migration), "utf8");
+  const body = migration.slice(migration.search(definition));
+  const functionBody = body.slice(0, body.indexOf("$$;"));
   return new Set(
-    [...source.matchAll(/WHEN '([a-z_]+)' THEN/g)].map((match) => match[1]),
+    [...functionBody.matchAll(/WHEN '([a-z_]+)' THEN/g)].map((match) => match[1]),
   );
 }
 
@@ -48,6 +53,26 @@ describe("payroll errors", () => {
       code: "run_paid",
       message: "This Pay run is paid and can't change.",
     });
+  });
+
+  it("maps a refused payout edit on an unpaid run to its message", () => {
+    assert.deepEqual(toPayrollError(refusal("not_paid")), {
+      code: "not_paid",
+      message: "Only a paid Pay run's payout can be edited.",
+    });
+  });
+
+  it("gives the Mark paid refusal messages for a bulk result row", () => {
+    assert.equal(getPayrollErrorMessage("method_required"), "Enter a Payout method");
+    assert.equal(getPayrollErrorMessage("paid_on_future"), "The paid date can't be in the future");
+    assert.equal(
+      getPayrollErrorMessage("paid_on_before_period_end"),
+      "The paid date can't be before the Pay period ends",
+    );
+    assert.equal(
+      getPayrollErrorMessage("not_finalized"),
+      "This Pay run isn't finalized, or it's already paid.",
+    );
   });
 
   it("gives the message for a code read from a bulk result row", () => {

@@ -13,15 +13,20 @@ const MIGRATIONS_DIR = join(import.meta.dirname, "../../supabase/migrations");
 const UNKNOWN_MESSAGE = "Couldn't save. Try again.";
 const OVERLAP_ID = "f0000000-0000-4000-8000-000000000006";
 
+// The CASE block of the newest migration that (re)defines clock_error: later migrations replace it.
 function readSqlErrorCodes(): Set<string> {
-  const [migration] = readdirSync(MIGRATIONS_DIR).filter((name) =>
-    /_clock_corrections\.sql$/.test(name),
-  );
-  assert.ok(migration, "no clock corrections migration found");
+  const definition = /CREATE (?:OR REPLACE )?FUNCTION "public"\."clock_error"\(/;
+  const migration = readdirSync(MIGRATIONS_DIR)
+    .filter((name) => name.endsWith(".sql"))
+    .sort()
+    .map((name) => readFileSync(join(MIGRATIONS_DIR, name), "utf8"))
+    .findLast((source) => definition.test(source));
+  assert.ok(migration, "no migration defines clock_error");
 
-  const source = readFileSync(join(MIGRATIONS_DIR, migration), "utf8");
+  const body = migration.slice(migration.search(definition));
+  const functionBody = body.slice(0, body.indexOf("$$;"));
   return new Set(
-    [...source.matchAll(/WHEN '([a-z_]+)' THEN/g)].map((match) => match[1]),
+    [...functionBody.matchAll(/WHEN '([a-z_]+)' THEN/g)].map((match) => match[1]),
   );
 }
 
@@ -52,6 +57,7 @@ describe("clock errors", () => {
     ["session_open", "form", "Only a closed session can be acknowledged."],
     ["clocks_changed", "form", "The clocks changed since you opened this. Reload and try again."],
     ["note_required", "note", "Add a note saying why this length is fine"],
+    ["paid_pay_run", "form", "This shift is on a paid Pay run; its clocks are locked."],
   ] as const;
 
   for (const [code, field, message] of expected) {

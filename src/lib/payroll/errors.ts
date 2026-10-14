@@ -1,6 +1,6 @@
-// Mirrors the CASE block of payroll_error() in
-// supabase/migrations/20261014130000_payroll_write_functions.sql; tests/payroll/errors.test.ts
-// fails when the two drift.
+// Mirrors the CASE block of payroll_error() in the newest migration that defines it
+// (supabase/migrations/20261014150000_payroll_mark_paid.sql); tests/payroll/errors.test.ts fails
+// when the two drift.
 export const PAYROLL_ERROR_CODES = [
   "not_admin",
   "period_not_ended",
@@ -19,6 +19,11 @@ export const PAYROLL_ERROR_CODES = [
   "run_not_empty",
   "no_stragglers",
   "draft_exists",
+  "method_required",
+  "paid_on_required",
+  "paid_on_future",
+  "paid_on_before_period_end",
+  "not_paid",
 ] as const;
 
 export type PayrollErrorCode = (typeof PAYROLL_ERROR_CODES)[number];
@@ -43,7 +48,7 @@ const PAYROLL_ERROR_MESSAGES: Record<PayrollErrorCode, string> = {
   nothing_to_finalize: "There's no draft Pay run to finalize.",
   blocked: "Fix this Cleaner's problem sessions and Pay rate to finalize.",
   run_not_found: "This Pay run no longer exists. Reload and try again.",
-  not_finalized: "Only a finalized, unpaid Pay run can go back to draft.",
+  not_finalized: "This Pay run isn't finalized, or it's already paid.",
   has_later_run:
     "This Cleaner has an off-cycle run in this period, so this run can't go back to draft.",
   run_paid: "This Pay run is paid and can't change.",
@@ -56,6 +61,11 @@ const PAYROLL_ERROR_MESSAGES: Record<PayrollErrorCode, string> = {
     "This Pay run has shifts, Adjustments or problem sessions, so it can't be removed.",
   no_stragglers: "This Cleaner has no unpaid shifts after finalize in this period.",
   draft_exists: "This Cleaner already has an unpaid off-cycle run in this period.",
+  method_required: "Enter a Payout method",
+  paid_on_required: "Enter the paid date",
+  paid_on_future: "The paid date can't be in the future",
+  paid_on_before_period_end: "The paid date can't be before the Pay period ends",
+  not_paid: "Only a paid Pay run's payout can be edited.",
 };
 
 export function isPayrollErrorCode(value: unknown): value is PayrollErrorCode {

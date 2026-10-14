@@ -1,9 +1,9 @@
 // Relative import: node --test runs this file without the @/ alias.
 import { formatBusinessTime } from "../schedule/business-time.ts";
 
-// Mirrors the CASE block of clock_error() in
-// supabase/migrations/20261010120000_clock_corrections.sql; tests/time-sheets/errors.test.ts fails
-// when the two drift.
+// Mirrors the CASE block of clock_error() in the newest migration that defines it
+// (supabase/migrations/20261014150100_paid_pay_run_clock_lock.sql); tests/time-sheets/errors.test.ts
+// fails when the two drift.
 export const CLOCK_ERROR_CODES = [
   "not_admin",
   "session_not_found",
@@ -18,6 +18,7 @@ export const CLOCK_ERROR_CODES = [
   "session_open",
   "clocks_changed",
   "note_required",
+  "paid_pay_run",
 ] as const;
 
 export type ClockErrorCode = (typeof CLOCK_ERROR_CODES)[number];
@@ -91,6 +92,10 @@ const CLOCK_ERRORS: Record<ClockErrorCode, ClockError> = {
   note_required: {
     field: "note",
     message: "Add a note saying why this length is fine",
+  },
+  paid_pay_run: {
+    field: "form",
+    message: "This shift is on a paid Pay run; its clocks are locked.",
   },
 };
 

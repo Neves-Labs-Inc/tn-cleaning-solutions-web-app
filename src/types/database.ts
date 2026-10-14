@@ -19,8 +19,9 @@
 // RPCs the invoice ledger calls through the typed session client; `p_lines` is the Billed amounts
 // TypeScript priced. It also lists the two Clock correction functions (20261010120000), which refuse
 // through `clock_error` the same way, with the overlap's clashing assignment id in `hint`, and the
-// Payroll write functions (20261014130000), which refuse through `payroll_error`; `finalize_pay_runs`
-// instead returns one row per target with `code` 'ok' or the refusal code. The
+// Payroll write functions (20261014130000, 20261014150000), which refuse through `payroll_error`;
+// `finalize_pay_runs` and `mark_pay_runs_paid` instead return one row per target with `code` 'ok'
+// or the refusal code. The
 // other SQL functions are called through untyped clients and stay out until a
 // typed caller needs them. Every invoice function refuses through `invoice_error`: the PostgREST
 // error's `details` is the code.
@@ -1158,6 +1159,19 @@ export type Database = {
       start_off_cycle_run: {
         Args: { p_employee_id: string; p_period_start: string }
         Returns: string
+      }
+      mark_pay_runs_paid: {
+        Args: { p_items: Json; p_paid_on: string }
+        Returns: {
+          pay_run_id: string
+          code: string
+          message: string | null
+          detail: Json | null
+        }[]
+      }
+      update_pay_run_payout: {
+        Args: { p_run_id: string; p_payout_method: string; p_paid_on: string }
+        Returns: undefined
       }
     }
   }
