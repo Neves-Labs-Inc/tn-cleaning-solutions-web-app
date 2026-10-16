@@ -1,5 +1,6 @@
 import type { Tables } from "@/types/database";
 // Relative import: node --test runs this file without the @/ alias.
+import { getClockedMinutes } from "../clocked-minutes.ts";
 import { fromBusinessWallClock } from "../schedule/business-time.ts";
 
 // The time-sheet rules for one session (one appointment_employees row: one Cleaner on one
@@ -143,12 +144,6 @@ function getFixAction(state: SessionState, scheduledStart: Date, now: Date): Fix
     fixAction = "add";
   }
   return fixAction;
-}
-
-// Whole minutes of Clocked time between two clocks, never negative.
-export function getClockedMinutes(clockIn: string, clockOut: string): number {
-  const elapsed = Date.parse(clockOut) - Date.parse(clockIn);
-  return Math.max(0, Math.floor(elapsed / MS_PER_MINUTE));
 }
 
 export function buildSessionView(row: AdminSessionRow, now: Date): SessionView {

@@ -166,6 +166,17 @@ describe("buildSessionView: odd duration", () => {
     assert.equal(buildSessionView(row, AFTER_GRACE).clockedMinutes, 180);
   });
 
+  it("is not odd when seconds alone would drop it under half the scheduled length", () => {
+    const row = sessionRow({
+      clocked_in_at: "2026-10-14T13:00:40+00:00",
+      clocked_out_at: "2026-10-14T14:30:10+00:00",
+    });
+    const view = buildSessionView(row, AFTER_GRACE);
+
+    assert.equal(view.clockedMinutes, 90);
+    assert.deepEqual(view.flags, []);
+  });
+
   it("is acknowledged, not flagged, when an acknowledgement matches the current clocks", () => {
     const row = sessionRow({
       clocked_in_at: "2026-10-14T13:00:00.123456+00:00",

@@ -1,5 +1,6 @@
 import type { TimeSheetRecord } from "@/types/time-sheet-record";
-import { getClockedMinutes, type FlagKind, type SessionView } from "./session-view.ts";
+import { getClockedMinutes } from "../clocked-minutes.ts";
+import type { FlagKind, SessionView } from "./session-view.ts";
 
 // Open shifts never count toward minutes: their end isn't known yet. Removed sessions never
 // count at all: they stay listed, struck through, but are not hours worked on the crew.

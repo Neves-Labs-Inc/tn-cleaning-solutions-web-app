@@ -1,6 +1,6 @@
 import type { DurationResult } from '../../types/duration-result.ts'
+import { getClockedMinutes } from '../clocked-minutes.ts'
 
-const MS_PER_MINUTE = 60 * 1000
 const MINUTES_PER_HOUR = 60
 
 type SessionRecord = { clocked_in_at: string | null; clocked_out_at: string | null }
@@ -15,9 +15,7 @@ export function calculateDuration(
 ): SessionDuration {
   if (!clockedIn) return { hours: 0, minutes: 0, totalMinutes: 0, isComplete: false }
 
-  const endedAt = clockedOut ? new Date(clockedOut) : now
-  const elapsed = Math.floor((endedAt.getTime() - new Date(clockedIn).getTime()) / MS_PER_MINUTE)
-  const totalMinutes = Math.max(0, elapsed)
+  const totalMinutes = getClockedMinutes(clockedIn, clockedOut ?? now.toISOString())
 
   return {
     hours: Math.floor(totalMinutes / MINUTES_PER_HOUR),

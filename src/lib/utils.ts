@@ -2,29 +2,11 @@ import { clsx, type ClassValue } from "clsx"
 import { endOfMonth, format, startOfMonth } from 'date-fns'
 import { twMerge } from "tailwind-merge"
 import type { TimeSheetRecord } from "@/types/time-sheet-record"
-import type { DurationResult } from "@/types/duration-result"
 
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
-
-export function calculateDuration(clockedIn: string | null, clockedOut: string | null): DurationResult {
-  if (!clockedIn) {
-    return { hours: 0, minutes: 0, totalMinutes: 0 }
-  }
-
-  const startedAt = new Date(clockedIn)
-  const endedAt = clockedOut ? new Date(clockedOut) : new Date()
-  const totalMinutes = Math.max(0, Math.floor((endedAt.getTime() - startedAt.getTime()) / (1000 * 60)))
-
-  return {
-    hours: Math.floor(totalMinutes / 60),
-    minutes: totalMinutes % 60,
-    totalMinutes,
-  }
-}
-
 
 export function formatDuration(hours: number, minutes: number): string {
   if (hours === 0 && minutes === 0) {
