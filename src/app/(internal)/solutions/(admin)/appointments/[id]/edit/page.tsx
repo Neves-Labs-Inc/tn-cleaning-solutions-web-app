@@ -22,7 +22,7 @@ import { formatCents, UNPRICED_LABEL } from '@/lib/pricing/money'
 import { createClient } from '@/lib/supabase/server'
 import { canEdit, type AppointmentStatus } from '@/lib/appointments/lifecycle'
 import type { IntervalUnit } from '@/lib/appointments/recurrence'
-import { getClockedMinutes } from '@/lib/time-sheets/session-view'
+import { getClockedMinutes } from '@/lib/clocked-minutes'
 import { cn } from '@/lib/utils'
 
 type EditAppointmentPageProps = {

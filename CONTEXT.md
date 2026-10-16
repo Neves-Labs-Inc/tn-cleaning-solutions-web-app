@@ -21,7 +21,7 @@ The hourly amount a client is charged for a Job. Not related to what a Cleaner i
 _Avoid_: price, pay rate
 
 **Clocked time**:
-The time between a Cleaner's clock-in and clock-out on an appointment. An admin can correct it. Clocked time is what Pay rate is multiplied by.
+The whole minutes between a Cleaner's clock-in and clock-out on an appointment, as the clock times are displayed, with seconds dropped (9:00:40 to 9:30:10 is 30 minutes). An open shift is measured to the current minute. An admin can correct it. Clocked time is what Pay rate is multiplied by.
 
 **Time sheet**:
 One Cleaner's sessions for a date range, placed by each appointment's scheduled date, with total and average Clocked time. An admin's Time sheet defaults to a week running Monday to Sunday.

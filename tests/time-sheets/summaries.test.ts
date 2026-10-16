@@ -142,6 +142,19 @@ describe("summarizeCleanerMonth", () => {
     });
   });
 
+  it("totals and averages the minutes between the displayed clock times", () => {
+    const records = [
+      record("2026-10-14T13:00:40Z", "2026-10-14T16:00:10Z"), // 180
+      record("2026-10-15T13:00:50Z", "2026-10-15T13:01:10Z"), // 1
+    ];
+
+    assert.deepEqual(summarizeCleanerMonth(records), {
+      count: 2,
+      totalMinutes: 181,
+      averageMinutes: 90,
+    });
+  });
+
   it("has no average when nothing is closed", () => {
     const records = [record("2026-10-16T13:00:00Z", null)];
 

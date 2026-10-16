@@ -143,6 +143,32 @@ test('calculateDuration measures a closed shift and flags it complete', () => {
   assert.deepEqual(result, { hours: 0, minutes: 45, totalMinutes: 45, isComplete: true })
 })
 
+test('calculateDuration truncates now to the minute for an open shift', () => {
+  const now = new Date('2026-10-14T09:30:59Z')
+  const result = calculateDuration('2026-10-14T09:00:00Z', null, now)
+
+  assert.equal(result.totalMinutes, 30)
+})
+
+test('calculateDuration drops seconds from a closed shift', () => {
+  const result = calculateDuration('2026-10-14T09:00:40Z', '2026-10-14T12:30:10Z', NOW)
+
+  assert.deepEqual(result, { hours: 3, minutes: 30, totalMinutes: 210, isComplete: true })
+})
+
+test('summarizeSessions drops seconds from every shift', () => {
+  const now = new Date('2026-10-14T12:00:00Z')
+  const result = summarizeSessions(
+    [
+      { clocked_in_at: '2026-10-13T08:00:40Z', clocked_out_at: '2026-10-13T09:00:10Z' },
+      { clocked_in_at: '2026-10-14T10:00:50Z', clocked_out_at: null },
+    ],
+    now
+  )
+
+  assert.deepEqual(result, { count: 2, totalMinutes: 180, averageMinutes: 90 })
+})
+
 test('calculateDuration returns zeros without a clock-in and clamps negatives to 0', () => {
   assert.deepEqual(calculateDuration(null, null, NOW), {
     hours: 0,
