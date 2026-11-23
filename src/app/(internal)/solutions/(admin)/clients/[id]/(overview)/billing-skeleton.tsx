@@ -17,7 +17,11 @@ function SectionSkeleton({ rowCount, rowClassName }: { rowCount: number; rowClas
       <div className={CARD_CLASS_NAME}>
         <div className="divide-y divide-border">
           {Array.from({ length: rowCount }, (_, index) => (
-            <Skeleton key={index} className={`${rowClassName} w-full rounded-none`} />
+            // The trailing spacer is the row's 44px PDF cell.
+            <div key={index} className="flex items-center pr-1">
+              <Skeleton className={`${rowClassName} min-w-0 flex-1 rounded-none`} />
+              <span className="ml-2 size-11 shrink-0" />
+            </div>
           ))}
         </div>
       </div>

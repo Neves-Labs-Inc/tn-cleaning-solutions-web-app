@@ -13,7 +13,9 @@ import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
-import { clientBillingHref } from '@/lib/invoices/paths'
+import PdfDownloadLink from '@/components/invoices/pdf-download-link'
+import { hasInvoicePdf } from '@/lib/invoices/invoice-pdf-model'
+import { clientBillingHref, invoicePdfHref } from '@/lib/invoices/paths'
 import { actionLayout } from '@/lib/invoices/detail-actions'
 import { InvoiceLedger, type PaymentMethod } from '@/lib/invoices/ledger'
 import { getInvoiceDetail, listClaimableVisits, type ClaimableVisit } from '@/lib/invoices/queries'
@@ -133,18 +135,23 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
               </span>
             }
             action={
-              <InvoiceActions
-                invoiceId={invoice.id}
-                label={label}
-                layout={layout}
-                totalCents={totalCents}
-                lineCount={liveLineCount}
-                unpricedCount={unpricedCount}
-                dueDate={invoice.due_date ?? ''}
-                payment={payment}
-                methods={methods}
-                businessDate={businessDate}
-              />
+              <>
+                {hasInvoicePdf(invoice) ? (
+                  <PdfDownloadLink variant="header" href={invoicePdfHref(clientId, invoice.id)} label="Download PDF" />
+                ) : null}
+                <InvoiceActions
+                  invoiceId={invoice.id}
+                  label={label}
+                  layout={layout}
+                  totalCents={totalCents}
+                  lineCount={liveLineCount}
+                  unpricedCount={unpricedCount}
+                  dueDate={invoice.due_date ?? ''}
+                  payment={payment}
+                  methods={methods}
+                  businessDate={businessDate}
+                  />
+              </>
             }
           />
 

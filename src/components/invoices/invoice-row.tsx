@@ -2,11 +2,13 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 
 import { invoiceSubtitle, invoiceTitle, type ClientInvoiceRow } from '@/lib/invoices/client-invoices'
-import { invoiceHref } from '@/lib/invoices/paths'
+import { invoiceHref, invoicePdfHref } from '@/lib/invoices/paths'
+import { hasInvoicePdf } from '@/lib/invoices/invoice-pdf-model'
 import { formatCents } from '@/lib/pricing/money'
 import { cn } from '@/lib/utils'
 
 import InvoiceBadges from './invoice-badges'
+import PdfDownloadLink from './pdf-download-link'
 
 const STAGGER_STEP_MS = 40
 const MAX_STAGGERED_ROWS = 8
@@ -46,8 +48,16 @@ export default function InvoiceRow({ invoice, clientId, index, isRevealed = fals
         </div>
         <ChevronRight className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </Link>
-      {/* Ticket 09 puts the PDF download here. */}
-      <span className="ml-2 size-11 shrink-0" />
+      {/* A Mark paid invoice has no PDF while paid; the spacer keeps the amounts lined up. */}
+      <div className="ml-2 flex size-11 shrink-0 items-center justify-center">
+        {hasInvoicePdf(invoice) ? (
+          <PdfDownloadLink
+            variant="row"
+            href={invoicePdfHref(clientId, invoice.id)}
+            label={`Download PDF for ${invoice.status === 'draft' ? 'Draft' : (invoice.invoice_number ?? 'Draft')}`}
+          />
+        ) : null}
+      </div>
     </li>
   )
 }

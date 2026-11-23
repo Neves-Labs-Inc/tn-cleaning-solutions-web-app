@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { clientBillingHref, invoiceHref, RECEIVABLES_PATH } from '../../src/lib/invoices/paths.ts'
+import { clientBillingHref, invoiceHref, invoicePdfHref, RECEIVABLES_PATH } from '../../src/lib/invoices/paths.ts'
 
 test('invoiceHref nests the invoice under its client', () => {
   assert.equal(invoiceHref('c1', 'i1'), '/solutions/clients/c1/invoices/i1')
@@ -21,4 +21,8 @@ test('clientBillingHref leaves pick off when no ids are given', () => {
 
 test('Receivables lives at its own top-level path', () => {
   assert.equal(RECEIVABLES_PATH, '/solutions/receivables')
+})
+
+test('invoicePdfHref points at the invoice.pdf route under the invoice', () => {
+  assert.equal(invoicePdfHref('c1', 'i1'), '/solutions/clients/c1/invoices/i1/invoice.pdf')
 })

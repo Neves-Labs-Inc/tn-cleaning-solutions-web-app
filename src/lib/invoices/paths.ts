@@ -6,6 +6,10 @@ export function invoiceHref(clientId: string, invoiceId: string): string {
   return `${CLIENTS_PATH}/${clientId}/invoices/${invoiceId}`
 }
 
+export function invoicePdfHref(clientId: string, invoiceId: string): string {
+  return `${invoiceHref(clientId, invoiceId)}/invoice.pdf`
+}
+
 // Ids stay literal commas: uuids need no encoding, and the picker splits on ",".
 export function clientBillingHref(clientId: string, pickIds: string[] = []): string {
   const base = `${CLIENTS_PATH}/${clientId}?tab=billing`
