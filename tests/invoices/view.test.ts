@@ -22,7 +22,7 @@ import { invoiceStatusBadge, lineStateBadge } from '../../src/components/ui/stat
 
 const TODAY = '2026-10-07'
 
-const ALL: InvoiceFilter = { query: '', status: 'all', clientId: '', automaticOnly: false, showArchived: false }
+const ALL: InvoiceFilter = { query: '', status: 'all', clientId: '', showArchived: false }
 
 function row(overrides: Partial<InvoiceViewRow> & { id: string }): InvoiceViewRow {
   return {
@@ -91,16 +91,15 @@ test('filterInvoices hides archived rows unless asked', () => {
   assert.deepEqual(ids(filterInvoices(rows, { ...ALL, showArchived: true })), ['a', 'b'])
 })
 
-test('filterInvoices narrows by status, client and automatic', () => {
+test('filterInvoices narrows by status and client', () => {
   const rows = [
     row({ id: 'a' }),
     row({ id: 'b', status: 'paid', effective_status: 'paid' }),
-    row({ id: 'c', client_id: 'c2', is_automatic: true }),
+    row({ id: 'c', client_id: 'c2' }),
   ]
 
   assert.deepEqual(ids(filterInvoices(rows, { ...ALL, status: 'paid' })), ['b'])
   assert.deepEqual(ids(filterInvoices(rows, { ...ALL, clientId: 'c2' })), ['c'])
-  assert.deepEqual(ids(filterInvoices(rows, { ...ALL, automaticOnly: true })), ['c'])
 })
 
 test('filterInvoices query matches number or client name, case-insensitively', () => {

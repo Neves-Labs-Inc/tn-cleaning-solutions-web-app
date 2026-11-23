@@ -71,10 +71,6 @@ export default function InvoiceFilters({ filter, clients, onChange }: InvoiceFil
 
       <div className="flex flex-wrap gap-x-6 md:col-span-full xl:contents">
         <Label className={SWITCH_ROW}>
-          <Switch checked={filter.automaticOnly} onCheckedChange={(checked) => onChange({ automaticOnly: checked })} />
-          Automatic only
-        </Label>
-        <Label className={SWITCH_ROW}>
           <Switch checked={filter.showArchived} onCheckedChange={(checked) => onChange({ showArchived: checked })} />
           Show archived
         </Label>

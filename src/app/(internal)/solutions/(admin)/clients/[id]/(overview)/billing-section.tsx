@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { AlertCircle, ArrowRight, CircleCheck, Plus, ReceiptText } from 'lucide-react'
 
-import AutomaticInvoicingSwitch from '@/components/admin/automatic-invoicing-switch'
 import { OUTLINE_PRESS_CLASS_NAME, PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import TabToolbar from '@/components/admin/detail-page/tab-toolbar'
 import UnbilledVisitList from '@/components/invoices/unbilled-visit-list'
@@ -17,8 +16,8 @@ import { OwedInvoiceRow } from './owed-invoice-row'
 const CARD_CLASS_NAME = 'overflow-hidden rounded-lg bg-card shadow-sm ring-1 ring-foreground/10'
 
 type BillingSectionProps = {
-	client: { id: string; name: string; automatic_invoicing: boolean }
-	// Null when the billing queries failed: the switch still renders, the rest becomes an error.
+	client: { id: string }
+	// Null when the billing queries failed: the tab shows only the error.
 	receivables: Receivables | null
 	businessDate: string
 }
@@ -164,21 +163,11 @@ export function BillingSection({ client, receivables, businessDate }: BillingSec
 			/>
 
 			{receivables === null ? (
-				<>
-					<BillingError clientId={client.id} />
-					<AutomaticInvoicingSwitch clientId={client.id} clientName={client.name} isOn={client.automatic_invoicing} />
-				</>
+				<BillingError clientId={client.id} />
 			) : (
 				<>
-					<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+					<div className="grid grid-cols-2 gap-3">
 						<BalanceTiles receivables={receivables} />
-						<div className="col-span-2">
-							<AutomaticInvoicingSwitch
-								clientId={client.id}
-								clientName={client.name}
-								isOn={client.automatic_invoicing}
-							/>
-						</div>
 					</div>
 					<div className="grid gap-6 lg:grid-cols-2 lg:items-start">
 						<OwedInvoices receivables={receivables} businessDate={businessDate} />

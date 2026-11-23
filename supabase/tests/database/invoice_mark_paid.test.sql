@@ -11,7 +11,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(48);
+select plan(47);
 
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
@@ -20,10 +20,9 @@ insert into auth.users (id, email) values
 	('a6100000-0000-4000-8000-000000000001', 'pgtap.markpaid.admin@example.test'),
 	('a6100000-0000-4000-8000-000000000002', 'pgtap.markpaid.employee@example.test');
 
--- Automatic invoicing off, so completing a visit opens no Automatic draft of its own.
-insert into public.clients (id, name, automatic_invoicing) values
-	('c6100000-0000-4000-8000-000000000001', 'Smith', false),
-	('c6100000-0000-4000-8000-000000000002', 'Other', false);
+insert into public.clients (id, name) values
+	('c6100000-0000-4000-8000-000000000001', 'Smith'),
+	('c6100000-0000-4000-8000-000000000002', 'Other');
 
 insert into public.jobs (id, name, hourly_rate_cents) values
 	('b6100000-0000-4000-8000-000000000001', 'pgTAP Job', 4500);
@@ -44,11 +43,11 @@ update public.appointments set is_archived = true where id = 'd6100000-0000-4000
 
 delete from public.invoice_number_counters;
 
--- 16..01 draft holding only d02; 16..02 Automatic draft holding d03 and d04; 16..03 issued (d09);
+-- 16..01 draft holding only d02; 16..02 draft holding d03 and d04; 16..03 issued (d09);
 -- 16..04 paid (d10); 16..05 draft (d12) issued below to share the number count.
 insert into public.invoices (id, client_id, status, is_automatic, invoice_number, issued_date, paid_date, payment_method) values
 	('16000000-0000-4000-8000-000000000001', 'c6100000-0000-4000-8000-000000000001', 'draft', false, null, null, null, null),
-	('16000000-0000-4000-8000-000000000002', 'c6100000-0000-4000-8000-000000000001', 'draft', true, null, null, null, null),
+	('16000000-0000-4000-8000-000000000002', 'c6100000-0000-4000-8000-000000000001', 'draft', false, null, null, null, null),
 	('16000000-0000-4000-8000-000000000003', 'c6100000-0000-4000-8000-000000000001', 'issued', false, 'INV-900-SMI2026', '2026-10-01', null, null),
 	('16000000-0000-4000-8000-000000000004', 'c6100000-0000-4000-8000-000000000001', 'paid', false, 'INV-901-SMI2026', '2026-10-01', '2026-10-02', 'Cash'),
 	('16000000-0000-4000-8000-000000000005', 'c6100000-0000-4000-8000-000000000001', 'draft', false, null, null, null, null);
@@ -197,7 +196,7 @@ select is(public.invoice_issue('16000000-0000-4000-8000-000000000005',
 
 -- Mark paid ------------------------------------------------------------------------------------
 
--- d01 plain, d02 off its only-line draft, d03 off a two-line Automatic draft, d05 still scheduled.
+-- d01 plain, d02 off its only-line draft, d03 off a two-line draft, d05 still scheduled.
 create temporary table pgtap_mark_paid_result on commit drop as
 select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001',
 	'[{"appointment_id": "d6100000-0000-4000-8000-000000000001", "billed_amount_cents": 9000},
@@ -252,11 +251,7 @@ $$, $$ values ('d6100000-0000-4000-8000-000000000004'::uuid) $$, 'the other draf
 
 select results_eq($$
 	select status, is_automatic from public.invoices where id = '16000000-0000-4000-8000-000000000002'
-$$, $$ values ('draft'::text, true) $$, 'the rest of that draft is untouched, still an Automatic draft');
-
-select is((select bool_or(excluded_from_automatic) from public.appointments
-	where id in ('d6100000-0000-4000-8000-000000000002', 'd6100000-0000-4000-8000-000000000003')),
-	false, 'leaving a draft through Mark paid doesn''t make the appointment Excluded');
+$$, $$ values ('draft'::text, false) $$, 'the rest of that draft is untouched, still a draft');
 
 select results_eq($$
 	select name, is_hidden from public.payment_methods where name = 'Barter trade'
@@ -301,10 +296,7 @@ select is(public.pgtap_mark_paid_refusal(public.pgtap_mark_paid_call(1)),
 
 -- Not issued again later -----------------------------------------------------------------------
 
--- With Automatic invoicing on, a completion joins the Automatic draft unless it has a Live claim.
-update public.clients set automatic_invoicing = true where id = 'c6100000-0000-4000-8000-000000000001';
 update public.appointments set status = 'completed', manually_completed = true where id = 'd6100000-0000-4000-8000-000000000005';
-update public.clients set automatic_invoicing = false where id = 'c6100000-0000-4000-8000-000000000001';
 
 select is((select count(*)::int from public.invoice_appointments where appointment_id = 'd6100000-0000-4000-8000-000000000005'),
 	1, 'completing the Upcoming appointment later leaves it on the paid invoice only');

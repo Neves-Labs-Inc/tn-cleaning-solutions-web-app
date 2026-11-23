@@ -410,18 +410,6 @@ export async function setInternalNote(_previous: unknown, formData: FormData): P
   return toActionResult(result)
 }
 
-export async function setClientAutomaticInvoicing(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
-  const clientId = id(formData, 'client_id')
-  if (!clientId) return refuse('invalid_input')
-
-  const admin = await requireAdmin()
-  if ('refusal' in admin) return admin.refusal
-
-  const result = await admin.ledger.setAutomaticInvoicing(clientId, flag(formData, 'automatic_invoicing'))
-  revalidateInvoicing()
-  return toActionResult(result)
-}
-
 export async function renamePaymentMethod(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
   const methodId = id(formData, 'payment_method_id')
   const name = text(formData, 'name', MAX_SHORT_TEXT_LENGTH)

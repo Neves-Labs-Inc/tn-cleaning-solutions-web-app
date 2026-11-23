@@ -2,7 +2,7 @@
 --
 -- Pins what a permanent delete removes (crew rows, clocks, Clock corrections, acknowledgements,
 -- invoice lines), what it does to each invoice it touches, the paid-invoice skip, the Series
--- change per scope, that a deleted completed visit never joins an Automatic draft, and that
+-- change per scope, that deleting a completed visit never creates a draft, and that
 -- clock_corrections and odd_duration_acknowledgements stay append-only outside the function.
 --
 -- Fixtures are built here and rolled back; nothing depends on seed.sql or test-data.sql.
@@ -42,9 +42,8 @@ insert into auth.users (id, email) values
 insert into public.employees (id, user_id, full_name, is_active, is_archived, address, e_transfer_contact) values
 	('e9000000-0000-4000-8000-000000000001', 'a9000000-0000-4000-8000-000000000002', 'Delete Employee', true, false, '1 A St', 'a@pay.test');
 
--- Manual while the fixtures are built, so completing a visit joins no draft; Automatic before the calls.
-insert into public.clients (id, name, automatic_invoicing) values
-	('c9000000-0000-4000-8000-000000000001', 'pgTAP Delete Client', false);
+insert into public.clients (id, name) values
+	('c9000000-0000-4000-8000-000000000001', 'pgTAP Delete Client');
 
 insert into public.jobs (id, name, hourly_rate_cents) values
 	('b9000000-0000-4000-8000-000000000001', 'pgTAP Delete Job', 4500);
@@ -55,7 +54,7 @@ insert into public.recurrence_series (id, interval_unit, interval_count, start_d
 	('59000000-0000-4000-8000-000000000002', 'week', 1, '2026-11-01', null, 'c9000000-0000-4000-8000-000000000001', 'b9000000-0000-4000-8000-000000000001'),
 	('59000000-0000-4000-8000-000000000003', 'week', 1, '2026-12-01', null, 'c9000000-0000-4000-8000-000000000001', 'b9000000-0000-4000-8000-000000000001');
 
--- v1: completed, clocked, corrected and acknowledged, the only line on Automatic draft i1, in s1.
+-- v1: completed, clocked, corrected and acknowledged, the only line on draft i1, in s1.
 -- v2, v3: completed, both on issued i2. v4: completed, on issued i3 with v5's Cancelled line.
 -- v6: cancelled, its Cancelled line on paid i4, where v7 is live. v8, v9: s2. v10 (on paid i4),
 -- v11: s3. v12: completed and clocked, no line. v13: archived.
@@ -90,9 +89,9 @@ insert into public.clock_corrections (appointment_employee_id, corrected_by, cor
 insert into public.odd_duration_acknowledgements (appointment_employee_id, acknowledged_by, acknowledged_by_name, clock_in, clock_out, note) values
 	('f9000000-0000-4000-8000-000000000002', 'a9000000-0000-4000-8000-000000000001', 'Pat Admin', '2026-09-01T13:00:00Z', '2026-09-01T13:30:00Z', 'fixture');
 
--- i1: Automatic draft. i2, i3: issued. i4: paid.
+-- i1: draft. i2, i3: issued. i4: paid.
 insert into public.invoices (id, client_id, status, is_automatic, invoice_number, issued_date, paid_date, payment_method) values
-	('19000000-0000-4000-8000-000000000001', 'c9000000-0000-4000-8000-000000000001', 'draft', true, null, null, null, null),
+	('19000000-0000-4000-8000-000000000001', 'c9000000-0000-4000-8000-000000000001', 'draft', false, null, null, null, null),
 	('19000000-0000-4000-8000-000000000002', 'c9000000-0000-4000-8000-000000000001', 'issued', false, 'INV-961-PGT2026', '2026-10-01', null, null),
 	('19000000-0000-4000-8000-000000000003', 'c9000000-0000-4000-8000-000000000001', 'issued', false, 'INV-962-PGT2026', '2026-10-01', null, null),
 	('19000000-0000-4000-8000-000000000004', 'c9000000-0000-4000-8000-000000000001', 'paid', false, 'INV-963-PGT2026', '2026-10-01', '2026-10-02', 'Cash');
@@ -106,8 +105,6 @@ insert into public.invoice_appointments (invoice_id, appointment_id, billed_amou
 	('19000000-0000-4000-8000-000000000004', 'd9000000-0000-4000-8000-000000000006', 0, '2026-10-03T12:00:00Z'),
 	('19000000-0000-4000-8000-000000000004', 'd9000000-0000-4000-8000-000000000007', 6000, null),
 	('19000000-0000-4000-8000-000000000004', 'd9000000-0000-4000-8000-000000000010', 4000, null);
-
-update public.clients set automatic_invoicing = true where id = 'c9000000-0000-4000-8000-000000000001';
 
 
 -- Refusals -------------------------------------------------------------------------------------
@@ -218,9 +215,9 @@ $$), 'P0001', 'an update is refused even with the flag on');
 -- Invoices -------------------------------------------------------------------------------------
 
 select is_empty($$ select 1 from public.invoices where id = '19000000-0000-4000-8000-000000000001' $$,
-	'an Automatic draft left with no live line is deleted');
-select is_empty($$ select 1 from public.invoices where client_id = 'c9000000-0000-4000-8000-000000000001' and is_automatic and status = 'draft' $$,
-	'deleting completed visits on an Automatic client creates or joins no Automatic draft');
+	'a draft left with no live line is deleted');
+select is_empty($$ select 1 from public.invoices where client_id = 'c9000000-0000-4000-8000-000000000001' and status = 'draft' $$,
+	'deleting completed visits creates no draft');
 
 select is((select result from results where label = 'issued'),
 	'{"deleted": ["d9000000-0000-4000-8000-000000000002", "d9000000-0000-4000-8000-000000000004"], "skipped": [{"id": "d9000000-0000-4000-8000-000000000006", "reason": "paid_invoice"}], "invoice_ids": ["19000000-0000-4000-8000-000000000002", "19000000-0000-4000-8000-000000000003"]}'::jsonb,

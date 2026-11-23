@@ -35,7 +35,7 @@ export default async function ClientDetailPage({ params, searchParams }: ClientD
 	] = await Promise.all([
 		supabase
 			.from('clients')
-			.select('id, name, email, phone, notes, is_active, is_archived, automatic_invoicing')
+			.select('id, name, email, phone, notes, is_active, is_archived')
 			.eq('id', id)
 			.maybeSingle(),
 		supabase

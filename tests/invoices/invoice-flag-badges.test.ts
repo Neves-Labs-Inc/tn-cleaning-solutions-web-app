@@ -18,6 +18,17 @@ test('flags follow the status in a fixed order', () => {
   )
 })
 
+test('an old Automatic invoice keeps its Automatic badge', () => {
+  for (const status of ['issued', 'paid', 'void'] as const) {
+    const badges = invoiceFlagBadges({ ...BASE, effective_status: status, is_automatic: true })
+
+    assert.deepEqual(
+      badges.map((badge) => badge.label),
+      [badges[0].label, 'Automatic'],
+    )
+  }
+})
+
 test('Automatic and Archived are neutral and Unpriced is a warning', () => {
   const badges = invoiceFlagBadges({ ...BASE, is_automatic: true, is_archived: true, has_unpriced: true })
 

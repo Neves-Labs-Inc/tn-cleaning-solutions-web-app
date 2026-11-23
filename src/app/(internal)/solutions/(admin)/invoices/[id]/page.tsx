@@ -204,7 +204,6 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
                 lines={lines}
                 totalCents={totalCents}
                 isEditable={isEditable}
-                isAutomatic={invoice.is_automatic}
                 unpricedCount={unpricedCount}
                 paidDate={invoice.paid_date}
                 claimable={claimable}

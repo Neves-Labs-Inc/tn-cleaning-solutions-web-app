@@ -1,4 +1,6 @@
--- The appointments_invoicing trigger (20261009140000): billing follows appointment status.
+-- The appointments_invoicing trigger (20261009140000, join branch removed by 20261017120000): a
+-- cancel or a client move follows the visit onto its invoice; a completion or a reopen never
+-- creates, joins or leaves an invoice.
 --
 -- Drives every writer the trigger must cover: employee_clock as an authenticated Cleaner, and
 -- direct UPDATEs as postgres for Mark complete / Undo, Cancel, Restore and a client move. Asserts
@@ -10,7 +12,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(46);
+select plan(30);
 
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
@@ -22,15 +24,13 @@ insert into auth.users (id, email) values
 insert into public.employees (id, user_id, full_name, is_active, is_archived, address, e_transfer_contact) values
 	('e6000000-0000-4000-8000-00000000000a', 'a6000000-0000-4000-8000-000000000002', 'Trigger Cleaner', true, false, '1 A St', 'a@pay.test');
 
--- c1: Automatic invoicing on. c2: off. c3: the target of a client move. c4, c5, c6: on, each
--- used by one scenario so its Automatic draft can be watched on its own.
-insert into public.clients (id, name, automatic_invoicing) values
-	('c6000000-0000-4000-8000-000000000001', 'pgTAP Trigger One', true),
-	('c6000000-0000-4000-8000-000000000002', 'pgTAP Trigger Off', false),
-	('c6000000-0000-4000-8000-000000000003', 'pgTAP Trigger Move Target', true),
-	('c6000000-0000-4000-8000-000000000004', 'pgTAP Trigger Reopen', true),
-	('c6000000-0000-4000-8000-000000000005', 'pgTAP Trigger Cancel Draft', true),
-	('c6000000-0000-4000-8000-000000000006', 'pgTAP Trigger Race', true);
+-- c1: the main client. c2: a second client. c3: the target of a client move. c4, c5: one scenario each.
+insert into public.clients (id, name) values
+	('c6000000-0000-4000-8000-000000000001', 'pgTAP Trigger One'),
+	('c6000000-0000-4000-8000-000000000002', 'pgTAP Trigger Two'),
+	('c6000000-0000-4000-8000-000000000003', 'pgTAP Trigger Move Target'),
+	('c6000000-0000-4000-8000-000000000004', 'pgTAP Trigger Reopen'),
+	('c6000000-0000-4000-8000-000000000005', 'pgTAP Trigger Cancel Draft');
 
 insert into public.jobs (id, name, hourly_rate_cents) values
 	('b6000000-0000-4000-8000-000000000001', 'pgTAP Trigger Job', 4500);
@@ -74,14 +74,6 @@ begin
 end;
 $$;
 
--- The client's open Automatic draft, or null.
-create function public.pgtap_trigger_automatic_draft(client uuid) returns uuid
-	language sql
-	as $$
-	select id from public.invoices
-	where client_id = client and is_automatic and status = 'draft' and not is_archived;
-$$;
-
 -- An invoice's lines as sorted visit numbers, e.g. '{1,2}'.
 create function public.pgtap_trigger_lines(invoice uuid) returns text
 	language sql
@@ -107,7 +99,7 @@ end;
 $$;
 
 
--- Completion through employee_clock ------------------------------------------------------------
+-- Completion creates no invoice ----------------------------------------------------------------
 
 select public.pgtap_trigger_visit(n, 'c6000000-0000-4000-8000-000000000001') from generate_series(1, 3) n;
 insert into public.appointment_employees (id, appointment_id, employee_id, is_archived)
@@ -120,97 +112,46 @@ select is((select status from public.appointments where id = public.pgtap_trigge
 	'visit 1 is completed once its crew clocked out');
 select isnt((select completed_at from public.appointments where id = public.pgtap_trigger_visit_id(1)), null,
 	'completing stamps completed_at');
-select is(public.pgtap_trigger_lines(public.pgtap_trigger_automatic_draft('c6000000-0000-4000-8000-000000000001')), '{1}',
-	'the completed visit lands on its client''s new Automatic draft');
-select is(
-	(select row(due_date, notes, invoice_number, issued_date)::text from public.invoices
-	 where id = public.pgtap_trigger_automatic_draft('c6000000-0000-4000-8000-000000000001')),
-	row(null::date, null::text, null::text, null::date)::text,
-	'the Automatic draft has no due date');
 select is_empty($$
-	select 1 from public.invoice_appointments
-	where appointment_id = public.pgtap_trigger_visit_id(1) and billed_amount_cents is not null
-$$, 'the Automatic draft''s line stores no price');
-
-select is(public.pgtap_trigger_clock_in_and_out(2), 'clocked/clocked', 'the Cleaner clocks in and out of visit 2');
-
-select is(public.pgtap_trigger_lines(public.pgtap_trigger_automatic_draft('c6000000-0000-4000-8000-000000000001')), '{1,2}',
-	'a second completion joins the same Automatic draft');
-select is((select count(*)::integer from public.invoices where client_id = 'c6000000-0000-4000-8000-000000000001'), 1,
-	'the client still has one invoice');
-
-update public.invoices set status = 'issued', invoice_number = 'INV-801-PGT2026', issued_date = '2026-10-02'
-where id = public.pgtap_trigger_automatic_draft('c6000000-0000-4000-8000-000000000001');
-
-select is(public.pgtap_trigger_clock_in_and_out(3), 'clocked/clocked', 'the Cleaner clocks in and out of visit 3');
-
-select is(public.pgtap_trigger_lines(public.pgtap_trigger_automatic_draft('c6000000-0000-4000-8000-000000000001')), '{3}',
-	'after the Automatic draft is issued, the next completion starts a new one');
-select is(public.pgtap_trigger_lines((select id from public.invoices where invoice_number = 'INV-801-PGT2026')), '{1,2}',
-	'the issued invoice keeps its lines');
-
-
--- Completions that create no line --------------------------------------------------------------
-
-select public.pgtap_trigger_visit(4, 'c6000000-0000-4000-8000-000000000002');
-select public.pgtap_trigger_visit(5, 'c6000000-0000-4000-8000-000000000001');
-select public.pgtap_trigger_visit(6, 'c6000000-0000-4000-8000-000000000001');
-update public.appointments set excluded_from_automatic = true where id = public.pgtap_trigger_visit_id(5);
-insert into public.invoices (id, client_id) values ('16000000-0000-4000-8000-000000000006', 'c6000000-0000-4000-8000-000000000001');
-insert into public.invoice_appointments (invoice_id, appointment_id) values
-	('16000000-0000-4000-8000-000000000006', public.pgtap_trigger_visit_id(6));
-
-update public.appointments set status = 'completed' where id in (
-	public.pgtap_trigger_visit_id(4), public.pgtap_trigger_visit_id(5), public.pgtap_trigger_visit_id(6));
-
+	select 1 from public.invoices where client_id = 'c6000000-0000-4000-8000-000000000001'
+$$, 'a completion creates no draft');
 select is_empty($$
-	select 1 from public.invoices where client_id = 'c6000000-0000-4000-8000-000000000002'
-$$, 'a completion for a client with Automatic invoicing off creates no draft');
-select is(public.pgtap_trigger_lines(public.pgtap_trigger_automatic_draft('c6000000-0000-4000-8000-000000000001')), '{3}',
-	'an Excluded visit and a visit on a manual draft don''t join the Automatic draft');
-select is(public.pgtap_trigger_lines('16000000-0000-4000-8000-000000000006'), '{6}',
-	'the manual draft keeps its line');
-select is((select count(*)::integer from public.appointments
-	where id in (public.pgtap_trigger_visit_id(4), public.pgtap_trigger_visit_id(5), public.pgtap_trigger_visit_id(6))
-		and completed_at is not null), 3,
-	'completed_at is stamped even when no line is added');
+	select 1 from public.invoice_appointments where appointment_id = public.pgtap_trigger_visit_id(1)
+$$, 'a completion adds no line');
 
-
--- Mark complete and Undo complete --------------------------------------------------------------
-
-select public.pgtap_trigger_visit(7, 'c6000000-0000-4000-8000-000000000004');
-select public.pgtap_trigger_visit(8, 'c6000000-0000-4000-8000-000000000004');
-insert into public.invoices (id, client_id) values ('16000000-0000-4000-8000-000000000008', 'c6000000-0000-4000-8000-000000000004');
+-- Mark complete and Undo complete: visit 4 has no invoice, visit 5 sits on a manual draft.
+select public.pgtap_trigger_visit(4, 'c6000000-0000-4000-8000-000000000004');
+select public.pgtap_trigger_visit(5, 'c6000000-0000-4000-8000-000000000004');
+insert into public.invoices (id, client_id) values ('16000000-0000-4000-8000-000000000005', 'c6000000-0000-4000-8000-000000000004');
 insert into public.invoice_appointments (invoice_id, appointment_id) values
-	('16000000-0000-4000-8000-000000000008', public.pgtap_trigger_visit_id(8));
+	('16000000-0000-4000-8000-000000000005', public.pgtap_trigger_visit_id(5));
 
 update public.appointments set manually_completed = true
-where id in (public.pgtap_trigger_visit_id(7), public.pgtap_trigger_visit_id(8));
+where id in (public.pgtap_trigger_visit_id(4), public.pgtap_trigger_visit_id(5));
 
-select is(public.pgtap_trigger_lines(public.pgtap_trigger_automatic_draft('c6000000-0000-4000-8000-000000000004')), '{7}',
-	'Mark complete joins the Automatic draft');
-select isnt((select completed_at from public.appointments where id = public.pgtap_trigger_visit_id(7)), null,
+select isnt((select completed_at from public.appointments where id = public.pgtap_trigger_visit_id(4)), null,
 	'Mark complete stamps completed_at');
+select is((select count(*)::integer from public.invoices where client_id = 'c6000000-0000-4000-8000-000000000004'), 1,
+	'Mark complete creates no draft beside the manual one');
+select is(public.pgtap_trigger_lines('16000000-0000-4000-8000-000000000005'), '{5}',
+	'Mark complete leaves the manual draft''s line alone');
 
 update public.appointments set manually_completed = false
-where id in (public.pgtap_trigger_visit_id(7), public.pgtap_trigger_visit_id(8));
+where id in (public.pgtap_trigger_visit_id(4), public.pgtap_trigger_visit_id(5));
 
-select is((select status from public.appointments where id = public.pgtap_trigger_visit_id(7)), 'scheduled',
+select is((select status from public.appointments where id = public.pgtap_trigger_visit_id(4)), 'scheduled',
 	'Undo complete reopens the visit');
-select is_empty($$
-	select 1 from public.invoices where client_id = 'c6000000-0000-4000-8000-000000000004' and is_automatic
-$$, 'Undo complete removes the line and deletes the emptied Automatic draft');
-select is(public.pgtap_trigger_lines('16000000-0000-4000-8000-000000000008'), '{8}',
+select is(public.pgtap_trigger_lines('16000000-0000-4000-8000-000000000005'), '{5}',
 	'a manual draft keeps the reopened visit as an Upcoming line');
-select is((select excluded_from_automatic from public.appointments where id = public.pgtap_trigger_visit_id(7)), false,
-	'reopening doesn''t mark the visit Excluded');
 
 
 -- Cancel ---------------------------------------------------------------------------------------
 
--- Visit 9: alone on client five's Automatic draft.
-select public.pgtap_trigger_visit(9, 'c6000000-0000-4000-8000-000000000005');
-update public.appointments set status = 'completed' where id = public.pgtap_trigger_visit_id(9);
+-- Visit 9: alone on client five's draft.
+select public.pgtap_trigger_visit(9, 'c6000000-0000-4000-8000-000000000005', 'completed');
+insert into public.invoices (id, client_id) values ('16000000-0000-4000-8000-000000000009', 'c6000000-0000-4000-8000-000000000005');
+insert into public.invoice_appointments (invoice_id, appointment_id) values
+	('16000000-0000-4000-8000-000000000009', public.pgtap_trigger_visit_id(9));
 update public.appointments set status = 'cancelled' where id = public.pgtap_trigger_visit_id(9);
 
 select is_empty($$
@@ -219,8 +160,6 @@ $$, 'cancelling a visit on a draft deletes its line');
 select is_empty($$
 	select 1 from public.invoices where client_id = 'c6000000-0000-4000-8000-000000000005'
 $$, 'the emptied draft is deleted');
-select is((select excluded_from_automatic from public.appointments where id = public.pgtap_trigger_visit_id(9)), false,
-	'cancelling doesn''t mark the visit Excluded');
 
 -- Visits 10 and 11 on issued invoice i10; visit 12 on paid invoice i12.
 select public.pgtap_trigger_visit(n, 'c6000000-0000-4000-8000-000000000001', 'completed') from generate_series(10, 12) n;
@@ -287,17 +226,14 @@ insert into public.invoice_appointments (invoice_id, appointment_id, billed_amou
 	('16000000-0000-4000-8000-000000000013', public.pgtap_trigger_visit_id(13), 9000),
 	('16000000-0000-4000-8000-000000000013', public.pgtap_trigger_visit_id(14), 9000);
 
--- Marking it complete above found a Live claim, so it added nothing.
-select is(public.pgtap_trigger_lines(public.pgtap_trigger_automatic_draft('c6000000-0000-4000-8000-000000000001')), '{3}',
-	'a completion on an issued invoice adds no line');
-
 update public.appointments set status = 'cancelled' where id = public.pgtap_trigger_visit_id(13);
 update public.appointments set status = 'scheduled' where id = public.pgtap_trigger_visit_id(13);
 
 select is((select status from public.appointments where id = public.pgtap_trigger_visit_id(13)), 'completed',
 	'Restore derives completed for the manually completed visit');
-select is(public.pgtap_trigger_lines(public.pgtap_trigger_automatic_draft('c6000000-0000-4000-8000-000000000001')), '{3,13}',
-	'the restored completed visit joins the Automatic draft');
+select is((select count(*)::integer from public.invoices
+	where client_id = 'c6000000-0000-4000-8000-000000000001' and status = 'draft' and not is_archived), 1,
+	'restoring a completed visit creates no draft: only the Rebill draft made by hand is open');
 select is(
 	(select row(cancelled_at is not null, is_archived)::text from public.invoice_appointments
 	 where invoice_id = '16000000-0000-4000-8000-000000000013' and appointment_id = public.pgtap_trigger_visit_id(13)),
@@ -333,20 +269,6 @@ where id = public.pgtap_trigger_visit_id(14);
 
 select is((select cancelled_at from public.invoice_appointments where appointment_id = public.pgtap_trigger_visit_id(14)), null,
 	'an update that changes neither status nor client leaves billing alone');
-
-
--- Racing first completions ---------------------------------------------------------------------
-
--- One statement completing two visits of a client with no draft: the second row's trigger takes
--- the ON CONFLICT path against the draft the first one just created.
-select public.pgtap_trigger_visit(n, 'c6000000-0000-4000-8000-000000000006') from generate_series(16, 17) n;
-update public.appointments set status = 'completed'
-where id in (public.pgtap_trigger_visit_id(16), public.pgtap_trigger_visit_id(17));
-
-select is((select count(*)::integer from public.invoices where client_id = 'c6000000-0000-4000-8000-000000000006'), 1,
-	'two first completions for one client produce one Automatic draft');
-select is(public.pgtap_trigger_lines(public.pgtap_trigger_automatic_draft('c6000000-0000-4000-8000-000000000006')), '{16,17}',
-	'both visits are on it');
 
 
 select * from finish();

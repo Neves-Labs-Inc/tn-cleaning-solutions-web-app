@@ -30,7 +30,6 @@ type InvoiceVisitsCardProps = {
   totalCents: number
   // An open draft: lines can be removed and added, Unpriced lines open the total editor.
   isEditable: boolean
-  isAutomatic: boolean
   unpricedCount: number
   paidDate: string | null
   claimable: ClaimableVisit[]
@@ -171,7 +170,6 @@ export default function InvoiceVisitsCard({
   lines,
   totalCents,
   isEditable,
-  isAutomatic,
   unpricedCount,
   paidDate,
   claimable,
@@ -250,13 +248,6 @@ export default function InvoiceVisitsCard({
         <p className="text-sm text-muted-foreground tabular-nums">{lines.length}</p>
       </div>
 
-      {isEditable && isAutomatic ? (
-        <p className="text-xs text-muted-foreground">
-          Appointments you remove won&apos;t rejoin an Automatic draft. You can add them back here or bill them on a manual
-          invoice.
-        </p>
-      ) : null}
-
       {isEditable && unpricedCount > 0 ? (
         <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -310,7 +301,7 @@ export default function InvoiceVisitsCard({
           setLastLine(null)
         }}
         title="Delete this draft?"
-        description={`This is its only appointment. Removing it deletes the draft.${isAutomatic ? " The appointment won't rejoin an Automatic draft." : ''}`}
+        description="This is its only appointment. Removing it deletes the draft."
         confirmLabel="Delete draft"
         pendingLabel="Deleting…"
         keepLabel="Keep draft"

@@ -11,20 +11,19 @@ import {
   type InvoiceViewRow,
 } from '../../src/lib/invoices/view.ts'
 
-const DEFAULT: InvoiceFilter = { query: '', status: 'all', clientId: '', automaticOnly: false, showArchived: false }
+const DEFAULT: InvoiceFilter = { query: '', status: 'all', clientId: '', showArchived: false }
 
 test('an empty query string parses to the default filter', () => {
   assert.deepEqual(parseInvoiceFilter({}), DEFAULT)
 })
 
 test('every param is read into the filter', () => {
-  const filter = parseInvoiceFilter({ q: ' lee ', status: 'overdue', client: 'c9', automatic: '1', archived: '1' })
+  const filter = parseInvoiceFilter({ q: ' lee ', status: 'overdue', client: 'c9', archived: '1' })
 
   assert.deepEqual(filter, {
     query: 'lee',
     status: 'overdue',
     clientId: 'c9',
-    automaticOnly: true,
     showArchived: true,
   })
 })
@@ -39,10 +38,14 @@ test('an unknown or repeated status falls back to all', () => {
 })
 
 test('toggles only turn on for exactly 1', () => {
-  const filter = parseInvoiceFilter({ automatic: 'true', archived: '0' })
+  const filter = parseInvoiceFilter({ archived: 'true' })
 
-  assert.equal(filter.automaticOnly, false)
   assert.equal(filter.showArchived, false)
+  assert.equal(parseInvoiceFilter({ archived: '0' }).showArchived, false)
+})
+
+test('a leftover ?automatic=1 from an old link is ignored', () => {
+  assert.deepEqual(parseInvoiceFilter({ automatic: '1' }), DEFAULT)
 })
 
 test('the default filter serializes to no params', () => {
@@ -50,16 +53,16 @@ test('the default filter serializes to no params', () => {
 })
 
 test('a filter round-trips through the URL', () => {
-  const filter: InvoiceFilter = { query: 'a&b', status: 'paid', clientId: 'c1', automaticOnly: true, showArchived: true }
+  const filter: InvoiceFilter = { query: 'a&b', status: 'paid', clientId: 'c1', showArchived: true }
   const params = invoiceFilterToSearchParams(filter)
 
   assert.deepEqual(parseInvoiceFilter(Object.fromEntries(params)), filter)
 })
 
 test('only non-default values reach the URL', () => {
-  const params = invoiceFilterToSearchParams({ ...DEFAULT, status: 'void', automaticOnly: true })
+  const params = invoiceFilterToSearchParams({ ...DEFAULT, status: 'void' })
 
-  assert.equal(params.toString(), 'status=void&automatic=1')
+  assert.equal(params.toString(), 'status=void')
 })
 
 test('a filter is active when anything differs from the default', () => {

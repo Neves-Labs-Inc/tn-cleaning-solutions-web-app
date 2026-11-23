@@ -24,7 +24,6 @@ export type InvoiceFilter = {
   query: string
   status: 'all' | InvoiceEffectiveStatus
   clientId: string
-  automaticOnly: boolean
   showArchived: boolean
 }
 
@@ -127,7 +126,6 @@ export function filterInvoices(rows: InvoiceViewRow[], filter: InvoiceFilter): I
     if (row.is_archived && !filter.showArchived) return false
     if (filter.status !== 'all' && row.effective_status !== filter.status) return false
     if (filter.clientId && row.client_id !== filter.clientId) return false
-    if (filter.automaticOnly && !row.is_automatic) return false
     if (!query) return true
 
     return `${row.invoice_number ?? ''} ${relationName(row.clients)}`.toLowerCase().includes(query)
@@ -239,7 +237,6 @@ export function parseInvoiceFilter(params: Record<string, SearchParamValue>): In
     query: singleParam(params.q).trim(),
     status: isFilterStatus(status) ? status : 'all',
     clientId: singleParam(params.client),
-    automaticOnly: singleParam(params.automatic) === '1',
     showArchived: singleParam(params.archived) === '1',
   }
 }
@@ -250,7 +247,6 @@ export function invoiceFilterToSearchParams(filter: InvoiceFilter): URLSearchPar
   if (filter.query) params.set('q', filter.query)
   if (filter.status !== 'all') params.set('status', filter.status)
   if (filter.clientId) params.set('client', filter.clientId)
-  if (filter.automaticOnly) params.set('automatic', '1')
   if (filter.showArchived) params.set('archived', '1')
   return params
 }

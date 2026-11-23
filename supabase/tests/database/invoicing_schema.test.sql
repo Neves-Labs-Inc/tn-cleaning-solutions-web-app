@@ -1,6 +1,6 @@
 -- The invoicing schema (20261009130000): the rules the tables, view, helpers and grants enforce.
 --
--- Covers the Automatic draft index, the Live claim index, the invoice CHECKs, the derived total
+-- Covers the no-Automatic-draft check, the Live claim index, the invoice CHECKs, the derived total
 -- on invoices_with_status, invoice_error's contract, the anon grants and payment_methods access.
 -- The overdue rule lives in invoices_with_status_business_date.test.sql.
 --
@@ -10,7 +10,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(62);
+select plan(59);
 
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
@@ -55,8 +55,7 @@ $$;
 
 -- Shape ----------------------------------------------------------------------------------------
 
-select col_default_is('public', 'appointments', 'excluded_from_automatic', 'false',
-	'appointments.excluded_from_automatic defaults to off');
+select hasnt_column('public', 'appointments', 'excluded_from_automatic', 'appointments.excluded_from_automatic is gone');
 select col_is_null('public', 'appointments', 'completed_at', 'appointments.completed_at is nullable');
 select hasnt_column('public', 'appointments', 'billed_price_cents', 'appointments.billed_price_cents is gone');
 select hasnt_column('public', 'invoices', 'total_cents', 'invoices.total_cents is gone (derived in the view)');
@@ -64,38 +63,22 @@ select col_is_null('public', 'invoice_appointments', 'billed_amount_cents',
 	'invoice_appointments.billed_amount_cents is nullable (drafts store no price)');
 
 
--- One Automatic draft per client ---------------------------------------------------------------
+-- No draft is Automatic -------------------------------------------------------------------------
 
 select lives_ok($$
-	insert into public.invoices (id, client_id, is_automatic) values
-		('10000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', true)
-$$, 'a client gets an Automatic draft');
+	insert into public.invoices (client_id, is_automatic) values
+		('c0000000-0000-4000-8000-000000000001', false),
+		('c0000000-0000-4000-8000-000000000001', false)
+$$, 'a client may have several manual drafts');
 
 select throws_ok($$
 	insert into public.invoices (client_id, is_automatic) values ('c0000000-0000-4000-8000-000000000001', true)
-$$, '23505', null, 'a second Automatic draft for the same client is refused');
+$$, '23514', null, 'an Automatic draft is refused');
 
 select lives_ok($$
-	insert into public.invoices (client_id, is_automatic) values ('c0000000-0000-4000-8000-000000000001', false)
-$$, 'a manual draft beside the Automatic draft is allowed');
-
-select lives_ok($$
-	insert into public.invoices (client_id, is_automatic) values ('c0000000-0000-4000-8000-000000000002', true)
-$$, 'another client gets its own Automatic draft');
-
-update public.invoices set status = 'issued', invoice_number = 'INV-001-PGT2026', issued_date = '2026-10-01'
-where id = '10000000-0000-4000-8000-000000000001';
-
-select lives_ok($$
-	insert into public.invoices (id, client_id, is_automatic) values
-		('10000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001', true)
-$$, 'once the Automatic draft is issued, the next one may start');
-
-update public.invoices set is_archived = true where id = '10000000-0000-4000-8000-000000000002';
-
-select lives_ok($$
-	insert into public.invoices (client_id, is_automatic) values ('c0000000-0000-4000-8000-000000000001', true)
-$$, 'once the Automatic draft is archived, the next one may start');
+	insert into public.invoices (client_id, status, is_automatic, invoice_number, issued_date) values
+		('c0000000-0000-4000-8000-000000000001', 'issued', true, 'INV-001-PGT2026', '2026-10-01')
+$$, 'an issued invoice may keep the Automatic flag as history');
 
 
 -- One Live claim per appointment ---------------------------------------------------------------

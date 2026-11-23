@@ -97,7 +97,6 @@ export type Database = {
           address: string
           notes: string
           is_active: boolean
-          automatic_invoicing: boolean
           created_at: string
           updated_at: string
           is_archived: boolean
@@ -110,7 +109,6 @@ export type Database = {
           address: string
           notes: string
           is_active: boolean
-          automatic_invoicing?: boolean
           created_at?: string
           updated_at?: string
           is_archived?: boolean
@@ -123,7 +121,6 @@ export type Database = {
           address?: string
           notes?: string
           is_active?: boolean
-          automatic_invoicing?: boolean
           created_at?: string
           updated_at?: string
           is_archived?: boolean
@@ -345,7 +342,6 @@ export type Database = {
           status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
           manually_completed: boolean
           completed_at: string | null
-          excluded_from_automatic: boolean
           notes: string
           created_at: string
           updated_at: string
@@ -364,7 +360,6 @@ export type Database = {
           status?: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
           manually_completed?: boolean
           completed_at?: string | null
-          excluded_from_automatic?: boolean
           notes: string
           created_at?: string
           updated_at?: string
@@ -383,7 +378,6 @@ export type Database = {
           status?: 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
           manually_completed?: boolean
           completed_at?: string | null
-          excluded_from_automatic?: boolean
           notes?: string
           created_at?: string
           updated_at?: string

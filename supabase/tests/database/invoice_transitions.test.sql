@@ -10,7 +10,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(118);
+select plan(113);
 
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
@@ -19,14 +19,12 @@ insert into auth.users (id, email) values
 	('a0000000-0000-4000-8000-000000000001', 'pgtap.admin@example.test'),
 	('a0000000-0000-4000-8000-000000000002', 'pgtap.employee@example.test');
 
--- Automatic invoicing off: this file builds its Automatic drafts by hand, so completing a visit
--- must not let the appointments_invoicing trigger (20261009140000) open one of its own.
-insert into public.clients (id, name, automatic_invoicing) values
-	('c0000000-0000-4000-8000-000000000001', 'Smith', false),
-	('c0000000-0000-4000-8000-000000000002', 'Al', false),
-	('c0000000-0000-4000-8000-000000000003', 'Élan 3 Co', false),
-	('c0000000-0000-4000-8000-000000000004', 'A.B', false),
-	('c0000000-0000-4000-8000-000000000005', 'Auto Client', false);
+insert into public.clients (id, name) values
+	('c0000000-0000-4000-8000-000000000001', 'Smith'),
+	('c0000000-0000-4000-8000-000000000002', 'Al'),
+	('c0000000-0000-4000-8000-000000000003', 'Élan 3 Co'),
+	('c0000000-0000-4000-8000-000000000004', 'A.B'),
+	('c0000000-0000-4000-8000-000000000005', 'Auto Client');
 
 insert into public.jobs (id, name, hourly_rate_cents) values
 	('b0000000-0000-4000-8000-000000000001', 'pgTAP Job', 4500);
@@ -44,7 +42,7 @@ select ('d0000000-0000-4000-8000-0000000000' || lpad(n::text, 2, '0'))::uuid,
 	'b0000000-0000-4000-8000-000000000001', '2026-10-01', '09:00', '11:00'
 from generate_series(1, 40) n;
 
--- Auto Client's visits are completed (Manual completion), as an Automatic draft's always are.
+-- Auto Client's visits are completed (Manual completion): a draft can hold completed visits too.
 update public.appointments set manually_completed = true, status = 'completed'
 where client_id = 'c0000000-0000-4000-8000-000000000005';
 
@@ -415,11 +413,11 @@ select is((select paid_date from public.invoices where id = '10000000-0000-4000-
 
 -- Archive --------------------------------------------------------------------------------------
 
--- 10..10 is Auto Client's Automatic draft (d31, d32). 10..09 is a manual draft (d06), 10..02 paid,
+-- 10..10 is Auto Client's two-line draft (d31, d32). 10..09 is a manual draft (d06), 10..02 paid,
 -- 10..05 void, 10..01 issued.
 reset role;
-insert into public.invoices (id, client_id, is_automatic) values
-	('10000000-0000-4000-8000-000000000010', 'c0000000-0000-4000-8000-000000000005', true);
+insert into public.invoices (id, client_id) values
+	('10000000-0000-4000-8000-000000000010', 'c0000000-0000-4000-8000-000000000005');
 insert into public.invoice_appointments (invoice_id, appointment_id) values
 	('10000000-0000-4000-8000-000000000010', 'd0000000-0000-4000-8000-000000000031'),
 	('10000000-0000-4000-8000-000000000010', 'd0000000-0000-4000-8000-000000000032');
@@ -435,15 +433,11 @@ select is((select is_archived from public.invoices where id = '10000000-0000-400
 	true, 'archiving flags the invoice');
 select is((select is_archived from public.invoice_appointments where invoice_id = '10000000-0000-4000-8000-000000000009'),
 	true, 'archiving a draft releases its lines');
-select is((select excluded_from_automatic from public.appointments where id = 'd0000000-0000-4000-8000-000000000006'),
-	false, 'archiving a manual draft doesn''t mark its visits Excluded');
 
-select lives_ok($$ select public.invoice_archive('10000000-0000-4000-8000-000000000010') $$, 'an Automatic draft can be archived');
+select lives_ok($$ select public.invoice_archive('10000000-0000-4000-8000-000000000010') $$, 'a draft of completed visits can be archived');
 select results_eq($$
-	select ia.is_archived, a.excluded_from_automatic
-	from public.invoice_appointments ia join public.appointments a on a.id = ia.appointment_id
-	where ia.invoice_id = '10000000-0000-4000-8000-000000000010' order by a.id
-$$, $$ values (true, true), (true, true) $$, 'archiving an Automatic draft releases its lines and marks its visits Excluded');
+	select ia.is_archived from public.invoice_appointments ia where ia.invoice_id = '10000000-0000-4000-8000-000000000010'
+$$, $$ values (true), (true) $$, 'archiving it releases its lines');
 
 select lives_ok($$ select public.invoice_archive('10000000-0000-4000-8000-000000000002') $$, 'a paid invoice can be archived');
 select results_eq($$
@@ -523,49 +517,26 @@ select results_eq($$
 $$, $$ values ('draft'::text, false, false) $$, 'unarchiving a draft re-claims its lines');
 
 select lives_ok($$ select public.invoice_unarchive('10000000-0000-4000-8000-000000000010') $$,
-	'an Automatic draft can be unarchived');
+	'a draft of completed visits can be unarchived');
 select results_eq($$
-	select i.is_automatic, ia.is_archived, a.excluded_from_automatic
+	select i.is_automatic, ia.is_archived
 	from public.invoices i
 	join public.invoice_appointments ia on ia.invoice_id = i.id
-	join public.appointments a on a.id = ia.appointment_id
-	where i.id = '10000000-0000-4000-8000-000000000010' order by a.id
-$$, $$ values (true, false, false), (true, false, false) $$,
-	'with no other Automatic draft it comes back Automatic, its lines re-claimed and its visits no longer Excluded');
+	where i.id = '10000000-0000-4000-8000-000000000010' order by ia.appointment_id
+$$, $$ values (false, false), (false, false) $$,
+	'it comes back an ordinary draft with its lines re-claimed');
 
--- Archive it again, and let the client open a new Automatic draft (d33) meanwhile.
-select lives_ok($$ select public.invoice_archive('10000000-0000-4000-8000-000000000010') $$, 'the Automatic draft is archived again');
-reset role;
-insert into public.invoices (id, client_id, is_automatic) values
-	('10000000-0000-4000-8000-000000000012', 'c0000000-0000-4000-8000-000000000005', true);
-insert into public.invoice_appointments (invoice_id, appointment_id) values
-	('10000000-0000-4000-8000-000000000012', 'd0000000-0000-4000-8000-000000000033');
-set local role authenticated;
-
-select lives_ok($$ select public.invoice_unarchive('10000000-0000-4000-8000-000000000010') $$,
-	'an Automatic draft can be unarchived while the client has another one');
-select results_eq($$
-	select i.is_automatic, ia.is_archived, a.excluded_from_automatic
-	from public.invoices i
-	join public.invoice_appointments ia on ia.invoice_id = i.id
-	join public.appointments a on a.id = ia.appointment_id
-	where i.id = '10000000-0000-4000-8000-000000000010' order by a.id
-$$, $$ values (false, false, true), (false, false, true) $$,
-	'it comes back as an ordinary draft, lines re-claimed, visits still Excluded');
-select is((select is_automatic from public.invoices where id = '10000000-0000-4000-8000-000000000012'),
-	true, 'the client''s other Automatic draft stays Automatic');
-
--- 10..15 is an Automatic draft for Smith (d12, d13 completed); d13 is reopened while it is archived.
+-- 10..15 is a draft for Smith (d12, d13 completed); d13 is reopened while it is archived.
 reset role;
 update public.appointments set manually_completed = true, status = 'completed'
 where id in ('d0000000-0000-4000-8000-000000000012', 'd0000000-0000-4000-8000-000000000013');
-insert into public.invoices (id, client_id, is_automatic) values
-	('10000000-0000-4000-8000-000000000015', 'c0000000-0000-4000-8000-000000000001', true);
+insert into public.invoices (id, client_id) values
+	('10000000-0000-4000-8000-000000000015', 'c0000000-0000-4000-8000-000000000001');
 insert into public.invoice_appointments (invoice_id, appointment_id) values
 	('10000000-0000-4000-8000-000000000015', 'd0000000-0000-4000-8000-000000000012'),
 	('10000000-0000-4000-8000-000000000015', 'd0000000-0000-4000-8000-000000000013');
 set local role authenticated;
-select lives_ok($$ select public.invoice_archive('10000000-0000-4000-8000-000000000015') $$, 'an Automatic draft is archived');
+select lives_ok($$ select public.invoice_archive('10000000-0000-4000-8000-000000000015') $$, 'a draft of completed visits is archived');
 reset role;
 update public.appointments set manually_completed = false where id = 'd0000000-0000-4000-8000-000000000013';
 set local role authenticated;
@@ -573,15 +544,12 @@ set local role authenticated;
 select is((select status from public.appointments where id = 'd0000000-0000-4000-8000-000000000013'),
 	'scheduled', 'undo complete reopens the visit');
 select lives_ok($$ select public.invoice_unarchive('10000000-0000-4000-8000-000000000015') $$,
-	'an Automatic draft holding a reopened visit can be unarchived');
+	'a draft holding a reopened visit can be unarchived');
 select results_eq($$
-	select i.is_automatic, ia.is_archived, a.excluded_from_automatic
-	from public.invoices i
-	join public.invoice_appointments ia on ia.invoice_id = i.id
-	join public.appointments a on a.id = ia.appointment_id
-	where i.id = '10000000-0000-4000-8000-000000000015' order by a.id
-$$, $$ values (false, false, true), (false, false, true) $$,
-	'it comes back as an ordinary draft holding its lines, visits still Excluded');
+	select ia.is_archived from public.invoice_appointments ia
+	where ia.invoice_id = '10000000-0000-4000-8000-000000000015' order by ia.appointment_id
+$$, $$ values (false), (false) $$,
+	'it comes back holding its lines, the reopened visit kept as an Upcoming line');
 
 
 -- 10..13 (d10) and 10..14 (d11) are Smith drafts archived, then d10 is cancelled and d11 moves

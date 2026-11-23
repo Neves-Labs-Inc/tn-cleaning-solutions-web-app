@@ -17,9 +17,8 @@ select plan(9);
 insert into auth.users (id, email) values
 	('a0000000-0000-4000-8000-000000000001', 'pgtap.admin@example.test');
 
--- Automatic invoicing off, so the appointments_invoicing trigger opens no draft of its own.
-insert into public.clients (id, name, automatic_invoicing) values
-	('c0000000-0000-4000-8000-000000000001', 'pgTAP Client', false);
+insert into public.clients (id, name) values
+	('c0000000-0000-4000-8000-000000000001', 'pgTAP Client');
 
 insert into public.jobs (id, name, hourly_rate_cents) values
 	('b0000000-0000-4000-8000-000000000001', 'pgTAP Job', 4500);

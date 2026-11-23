@@ -14,8 +14,7 @@ export type LedgerResult<T> = { ok: true; data: T } | ({ ok: false } & LedgerErr
 
 export type DraftInput = { dueDate: string | null; notes: string | null }
 export type CreateDraftInput = DraftInput & { clientId: string; appointmentIds: string[]; internalNote: string | null }
-// The difference the admin made against what the page loaded, so a visit that joined an Automatic
-// draft meanwhile isn't dropped.
+// The difference the admin made against what the page loaded, so a line added meanwhile isn't dropped.
 // details null leaves the stored due date and notes alone; only the details form's Save sends them.
 export type UpdateDraftInput = { addAppointmentIds: string[]; removeAppointmentIds: string[]; details: DraftInput | null }
 export type PaymentInput = { paidDate: string | null; method: string; reference: string | null }
@@ -261,15 +260,6 @@ export class InvoiceLedger {
       p_internal_note: internalNote,
     })
     return this.settle('setInternalNote', { invoiceId }, error, null)
-  }
-
-  async setAutomaticInvoicing(clientId: string, isOn: boolean): Promise<LedgerResult<null>> {
-    const { data, error } = await this.db
-      .from('clients')
-      .update({ automatic_invoicing: isOn })
-      .eq('id', clientId)
-      .select('id')
-    return this.settleRowWrite('setAutomaticInvoicing', { clientId }, error, data)
   }
 
   async listPaymentMethods(): Promise<LedgerResult<PaymentMethod[]>> {
