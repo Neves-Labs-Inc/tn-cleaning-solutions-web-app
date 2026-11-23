@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useId, useImperativeHandle, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -31,14 +30,11 @@ type PaymentMethodFieldProps = {
   // A new payment starts on the first visible method, or on "Choose a method" when false.
   shouldPreselectFirst: boolean;
   error: string | null;
-  // Leaving for the methods page drops the sheet, so a sheet that must not lose its input hides it.
-  showManageLink: boolean;
   ref?: React.Ref<PaymentMethodFieldHandle>;
 };
 
 // The "Other…" option's value. A stored method with this exact name would be shadowed; none is expected.
 const OTHER = "__other__";
-const MANAGE_METHODS_PATH = "/solutions/invoices/payment-methods";
 
 // The picker lists the visible methods in sort_order. When editing, a stored method that is now
 // hidden or renamed leads the list, so saving the edit doesn't change it.
@@ -69,7 +65,6 @@ export default function PaymentMethodField({
   storedMethod,
   shouldPreselectFirst,
   error,
-  showManageLink,
   ref,
 }: PaymentMethodFieldProps): React.ReactNode {
   const ids = { select: useId(), other: useId(), error: useId() };
@@ -137,14 +132,6 @@ export default function PaymentMethodField({
         </NativeSelect>
         {selectError ? (
           <FieldError id={ids.error}>{selectError}</FieldError>
-        ) : null}
-        {showManageLink ? (
-          <Link
-            href={MANAGE_METHODS_PATH}
-            className="inline-flex min-h-11 w-fit! cursor-pointer self-start items-center rounded-sm text-sm font-medium text-primary underline-offset-4 outline-none transition-opacity duration-fast focus-visible:ring-2 focus-visible:ring-ring/50 active:opacity-70 md:min-h-0 md:hover:underline"
-          >
-            Manage methods
-          </Link>
         ) : null}
       </Field>
 

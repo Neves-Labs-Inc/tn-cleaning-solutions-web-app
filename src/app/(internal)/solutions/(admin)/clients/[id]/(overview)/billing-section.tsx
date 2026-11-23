@@ -1,13 +1,14 @@
 import Link from 'next/link'
-import { AlertCircle, ArrowRight, CircleCheck, Plus, ReceiptText } from 'lucide-react'
+import { AlertCircle, ArrowRight, CircleCheck, ReceiptText } from 'lucide-react'
 
-import { OUTLINE_PRESS_CLASS_NAME, PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
+import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import TabToolbar from '@/components/admin/detail-page/tab-toolbar'
 import UnbilledVisitList from '@/components/invoices/unbilled-visit-list'
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import StatTile from '@/components/ui/stat-tile'
+import { clientBillingHref, RECEIVABLES_PATH } from '@/lib/invoices/paths'
 import type { Receivables } from '@/lib/invoices/queries'
 import { owedInvoices, unbilledSummary } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
@@ -36,7 +37,7 @@ function BillingError({ clientId }: { clientId: string }) {
 				<Button
 					variant="outline"
 					className="text-foreground"
-					render={<Link href={`/solutions/clients/${clientId}?tab=billing`} />}
+					render={<Link href={clientBillingHref(clientId)} />}
 					nativeButton={false}
 				>
 					Try again
@@ -142,17 +143,9 @@ export function BillingSection({ client, receivables, businessDate }: BillingSec
 				action={
 					<>
 						<Button
-							className={`sm:order-last ${PRESS_CLASS_NAME}`}
-							render={<Link href={`/solutions/invoices/new?client=${client.id}`} />}
-							nativeButton={false}
-						>
-							<Plus aria-hidden="true" data-icon="inline-start" />
-							New invoice
-						</Button>
-						<Button
 							variant="outline"
 							className={OUTLINE_PRESS_CLASS_NAME}
-							render={<Link href="/solutions/invoices/receivables" />}
+							render={<Link href={RECEIVABLES_PATH} />}
 							nativeButton={false}
 						>
 							Receivables

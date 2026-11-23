@@ -6,7 +6,7 @@ import { AlertCircle } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 
-export default function InvoicesError({
+export default function ReceivablesError({
   error,
   unstable_retry,
 }: {
@@ -14,17 +14,17 @@ export default function InvoicesError({
   unstable_retry: () => void
 }) {
   useEffect(() => {
-    console.error('Invoices failed to render:', error)
+    console.error('Receivables failed to render:', error)
   }, [error])
 
   return (
     <div className="space-y-4">
       <Alert variant="destructive">
         <AlertCircle aria-hidden="true" />
-        <AlertTitle>Couldn&apos;t load invoices</AlertTitle>
-        <AlertDescription>Something went wrong loading the ledger. Try again in a moment.</AlertDescription>
+        <AlertTitle>Couldn&apos;t load receivables</AlertTitle>
+        <AlertDescription>The totals and lists didn&apos;t load. Try again in a moment.</AlertDescription>
       </Alert>
-      <Button variant="outline" onClick={() => unstable_retry()}>
+      <Button variant="outline" className="active:scale-[0.98]" onClick={() => unstable_retry()}>
         Try again
       </Button>
     </div>

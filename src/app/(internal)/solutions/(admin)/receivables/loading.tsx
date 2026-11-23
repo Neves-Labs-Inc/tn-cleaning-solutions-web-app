@@ -4,6 +4,7 @@ import { StatTileSkeleton } from '@/components/ui/stat-tile'
 const TILE_COUNT = 4
 const CLIENT_ROW_COUNT = 4
 const OVERDUE_ROW_COUNT = 2
+const DRAFT_ROW_COUNT = 3
 
 function SectionTitle() {
   return (
@@ -14,12 +15,11 @@ function SectionTitle() {
   )
 }
 
-// Mirrors the loaded page (header, four tiles, three sections) so nothing jumps when data arrives.
+// Mirrors the loaded page (header, four tiles, four sections) so nothing jumps when data arrives.
 export default function ReceivablesLoading() {
   return (
     <div className="space-y-6 lg:space-y-8" aria-busy="true">
       <div className="space-y-2">
-        <Skeleton className="-ml-3 h-(--control-height) w-28" />
         <Skeleton className="h-8 w-44" />
         <Skeleton className="h-5 w-72 max-w-full" />
       </div>
@@ -28,6 +28,15 @@ export default function ReceivablesLoading() {
         {Array.from({ length: TILE_COUNT }, (_, index) => (
           <StatTileSkeleton key={index} icon caption fitValue />
         ))}
+      </div>
+
+      <div className="space-y-3">
+        <SectionTitle />
+        <div className="overflow-hidden rounded-lg bg-card ring-1 ring-foreground/10">
+          {Array.from({ length: DRAFT_ROW_COUNT }, (_, index) => (
+            <Skeleton key={index} className="h-16 rounded-none border-t border-background first:border-t-0" />
+          ))}
+        </div>
       </div>
 
       <div className="space-y-3">

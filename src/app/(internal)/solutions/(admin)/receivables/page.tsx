@@ -1,19 +1,13 @@
-import Link from 'next/link'
-import { ArrowLeft, CalendarOff, FileText, TriangleAlert, Wallet } from 'lucide-react'
+import { CalendarOff, FileText, TriangleAlert, Wallet } from 'lucide-react'
 
-import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
-import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/ui/page-header'
 import StatTile from '@/components/ui/stat-tile'
 import { countUnbilledVisits, getReceivables } from '@/lib/invoices/queries'
-import { clientBalances, groupUnbilled, overdueInvoices } from '@/lib/invoices/view'
+import { clientBalances, draftRows, groupUnbilled, overdueInvoices } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
 import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createClient } from '@/lib/supabase/server'
-import { cn } from '@/lib/utils'
-import { ByClientSection, OverdueSection, UnbilledSection } from './sections'
-
-const INVOICES_PATH = '/solutions/invoices'
+import { ByClientSection, DraftsSection, OverdueSection, UnbilledSection } from './sections'
 
 function pluralize(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`
@@ -33,21 +27,11 @@ export default async function ReceivablesPage() {
   )
   const groups = groupUnbilled(receivables.unbilled)
   const { draftCount } = totals
+  const drafts = draftRows(receivables.drafts, businessDate)
 
   return (
     <div className="animate-in space-y-6 duration-slow fade-in-0 lg:space-y-8">
-      <div className="space-y-2">
-        <Button
-          variant="ghost"
-          className={cn(OUTLINE_PRESS_CLASS_NAME, '-ml-3')}
-          nativeButton={false}
-          render={<Link href={INVOICES_PATH} />}
-        >
-          <ArrowLeft aria-hidden="true" />
-          Invoices
-        </Button>
-        <PageHeader title="Receivables" description="Who owes what, and what hasn't been billed yet." />
-      </div>
+      <PageHeader title="Receivables" description="Who owes what, and what hasn't been billed yet." />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
@@ -79,11 +63,12 @@ export default async function ReceivablesPage() {
           value={formatCents(receivables.drafted_cents)}
           caption={draftCount > 0 ? `${pluralize(draftCount, 'draft')}, not owed yet` : 'No open drafts'}
           icon={<FileText className="size-5" aria-hidden="true" />}
-          href={`${INVOICES_PATH}?status=draft`}
+          href="#drafts"
           fitValue
         />
       </div>
 
+      <DraftsSection drafts={drafts} />
       <ByClientSection balances={balances} />
       <OverdueSection invoices={overdue} businessDate={businessDate} />
       <UnbilledSection groups={groups} shownCount={receivables.unbilled.length} totalCount={unbilledCount} />

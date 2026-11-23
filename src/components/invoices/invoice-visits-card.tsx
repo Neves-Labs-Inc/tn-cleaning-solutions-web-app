@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card'
 import ConfirmDialog from '@/components/ui/confirm-dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { claimableStates, lineMismatchLiveLabel } from '@/lib/invoices/lines'
+import { clientBillingHref } from '@/lib/invoices/paths'
 import type { ClaimableVisit, InvoiceDetailLine } from '@/lib/invoices/queries'
 import { formatDateOnly, type InvoiceStatus, type LineState } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
@@ -24,6 +25,7 @@ import { formatVisitDate, VisitLineSummary } from './visit-line-summary'
 
 type InvoiceVisitsCardProps = {
   invoiceId: string
+  clientId: string
   status: InvoiceStatus
   clientName: string
   lines: InvoiceDetailLine[]
@@ -36,7 +38,6 @@ type InvoiceVisitsCardProps = {
   businessDate: string
 }
 
-const INVOICES_PATH = '/solutions/invoices'
 const REMOVE_ERROR_TITLE = "Couldn't remove that appointment"
 
 // A draft shows every pill that applies (Unpriced and Upcoming together); an issued line shows its state.
@@ -165,6 +166,7 @@ function TotalRow({ status, totalCents, paidDate }: { status: InvoiceStatus; tot
 
 export default function InvoiceVisitsCard({
   invoiceId,
+  clientId,
   status,
   clientName,
   lines,
@@ -189,7 +191,7 @@ export default function InvoiceVisitsCard({
 
   function leaveIfDeleted(isDeleted: boolean) {
     if (isDeleted) {
-      router.replace(INVOICES_PATH)
+      router.replace(clientBillingHref(clientId))
     }
   }
 

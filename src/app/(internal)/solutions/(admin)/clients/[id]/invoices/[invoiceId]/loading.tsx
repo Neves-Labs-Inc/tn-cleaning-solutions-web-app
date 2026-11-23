@@ -7,7 +7,7 @@ export default function InvoiceDetailLoading() {
   return (
     <div className="space-y-6 pb-[calc(8rem+var(--safe-bottom))] md:pb-0" aria-busy="true">
       <div className="space-y-3">
-        <Skeleton className="h-10 w-28" />
+        <Skeleton className="h-11 w-40 max-w-full" />
         <Skeleton className="h-8 w-52" />
         <Skeleton className="h-5 w-40" />
         <Skeleton className="h-6 w-40" />

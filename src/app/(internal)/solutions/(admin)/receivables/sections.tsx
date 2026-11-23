@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { CalendarCheck, CircleCheck, Clock, Mail, Phone, Wallet } from 'lucide-react'
+import { CalendarCheck, ChevronRight, CircleCheck, Clock, FileText, Mail, Phone, Wallet } from 'lucide-react'
 
 import UnbilledVisitList from '@/components/invoices/unbilled-visit-list'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import StatusBadge from '@/components/ui/status-badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { clientBillingHref, invoiceHref } from '@/lib/invoices/paths'
 import type { InvoiceListRow, UnbilledVisitRow } from '@/lib/invoices/queries'
 import {
   contactLinks,
@@ -15,12 +16,13 @@ import {
   invoiceLabel,
   unbilledSummary,
   type ClientBalance,
+  type DraftRow,
   type UnbilledGroup,
 } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
 
-const CLIENTS_PATH = '/solutions/clients'
-const INVOICES_PATH = '/solutions/invoices'
+const MAX_STAGGERED_ROWS = 8
+const STAGGER_MS = 40
 const FOCUS_RING = 'outline-none focus-visible:ring-2 focus-visible:ring-ring/50'
 
 function pluralize(count: number, noun: string): string {
@@ -68,6 +70,62 @@ function EmptyBlock({ icon, title, description }: EmptyBlockProps) {
   )
 }
 
+function DraftRowLink({ draft, index }: { draft: DraftRow; index: number }) {
+  const delay = Math.min(index, MAX_STAGGERED_ROWS - 1) * STAGGER_MS
+
+  return (
+    <li
+      className="animate-in fade-in-0 slide-in-from-bottom-1 duration-base ease-out-quart"
+      style={{ animationDelay: `${delay}ms` }}
+    >
+      <Link
+        href={invoiceHref(draft.clientId, draft.id)}
+        className={`flex min-h-16 cursor-pointer items-center gap-3 px-4 py-3 transition-[background-color,box-shadow] duration-fast ease-out-quart active:bg-muted md:hover:ring-1 md:hover:ring-inset md:hover:ring-foreground/20 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 outline-none lg:grid lg:grid-cols-[minmax(0,1fr)_8rem_10rem_auto] lg:items-center lg:gap-4`}
+      >
+        <div className="min-w-0 flex-1 lg:contents">
+          <p className="text-sm font-semibold break-words">{draft.clientName}</p>
+          <p className="text-sm text-muted-foreground">
+            {pluralize(draft.appointmentCount, 'appointment')}
+            {draft.unpricedCount > 0 ? ` · ${draft.unpricedCount} unpriced` : ''}
+            <span className="lg:hidden"> · {draft.ageLabel}</span>
+          </p>
+          <p className="hidden text-sm text-muted-foreground lg:block">{draft.ageLabel}</p>
+        </div>
+        <div className="flex shrink-0 items-center justify-end gap-2">
+          <p className="text-base font-semibold tabular-nums">{formatCents(draft.totalCents)}</p>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </div>
+      </Link>
+    </li>
+  )
+}
+
+export function DraftsSection({ drafts }: { drafts: DraftRow[] }) {
+  return (
+    <Section
+      id="drafts"
+      title={`Drafts · ${drafts.length}`}
+      description="Open drafts, oldest first. Not owed until they're issued."
+    >
+      {drafts.length === 0 ? (
+        <EmptyBlock
+          icon={<FileText aria-hidden="true" />}
+          title="No open drafts"
+          description="Drafts you start for a client show up here until they're issued."
+        />
+      ) : (
+        <Card className="gap-0 py-0">
+          <ul className="divide-y divide-border">
+            {drafts.map((draft, index) => (
+              <DraftRowLink key={draft.id} draft={draft} index={index} />
+            ))}
+          </ul>
+        </Card>
+      )}
+    </Section>
+  )
+}
+
 export function ByClientSection({ balances }: { balances: ClientBalance[] }) {
   return (
     <Section id="by-client" title="By client" description="Unpaid invoices per client, overdue first.">
@@ -84,7 +142,7 @@ export function ByClientSection({ balances }: { balances: ClientBalance[] }) {
               {balances.map((balance) => (
                 <li key={balance.clientId}>
                   <Link
-                    href={`${CLIENTS_PATH}/${balance.clientId}`}
+                    href={clientBillingHref(balance.clientId)}
                     className={`flex min-h-16 cursor-pointer items-center gap-3 px-4 py-3 transition-colors duration-fast active:bg-muted focus-visible:ring-inset ${FOCUS_RING}`}
                   >
                     <div className="min-w-0 flex-1">
@@ -117,7 +175,7 @@ export function ByClientSection({ balances }: { balances: ClientBalance[] }) {
                   <TableRow key={balance.clientId}>
                     <TableCell className="whitespace-normal">
                       <Link
-                        href={`${CLIENTS_PATH}/${balance.clientId}`}
+                        href={clientBillingHref(balance.clientId)}
                         className={`cursor-pointer rounded-sm text-sm font-medium underline-offset-4 transition-colors duration-fast hover:underline ${FOCUS_RING}`}
                       >
                         {balance.name}
@@ -206,8 +264,8 @@ export function OverdueSection({ invoices, businessDate }: OverdueSectionProps) 
                   <div className="min-w-0">
                     <p className="text-sm font-semibold break-words">{invoice.clients?.name ?? 'Unknown client'}</p>
                     <Link
-                      href={`${INVOICES_PATH}/${invoice.id}`}
-                      className={`cursor-pointer rounded-sm text-sm text-muted-foreground underline-offset-4 transition-colors duration-fast hover:underline ${FOCUS_RING}`}
+                      href={invoiceHref(invoice.client_id, invoice.id)}
+                      className={`inline-flex min-h-11 cursor-pointer items-center rounded-sm text-sm text-muted-foreground underline-offset-4 transition-colors duration-fast active:text-foreground/80 md:min-h-0 md:hover:underline ${FOCUS_RING}`}
                     >
                       {invoiceLabel(invoice)}
                     </Link>
@@ -247,7 +305,7 @@ export function UnbilledSection({ groups, shownCount, totalCount }: UnbilledSect
     <Section
       id="unbilled"
       title="Unbilled appointments"
-      description="Completed appointments on no invoice. Bill opens a new invoice for that client."
+      description="Completed appointments on no invoice. Bill client opens their Billing tab with these picked."
     >
       {isTruncated ? (
         <p className="text-sm text-muted-foreground">
@@ -269,7 +327,7 @@ export function UnbilledSection({ groups, shownCount, totalCount }: UnbilledSect
                 <div className="flex items-start justify-between gap-3 border-b px-4 py-3">
                   <div className="min-w-0">
                     <Link
-                      href={`${CLIENTS_PATH}/${group.clientId}`}
+                      href={clientBillingHref(group.clientId)}
                       className={`cursor-pointer rounded-sm text-sm font-semibold break-words underline-offset-4 hover:underline ${FOCUS_RING}`}
                     >
                       {group.clientName}
@@ -281,13 +339,19 @@ export function UnbilledSection({ groups, shownCount, totalCount }: UnbilledSect
                   </div>
                   <Button
                     variant="outline"
-                    className="shrink-0 cursor-pointer active:scale-[0.98] active:bg-muted"
+                    className="min-h-11 shrink-0 cursor-pointer active:scale-[0.98] active:bg-muted"
                     nativeButton={false}
                     render={
-                      <Link href={`${INVOICES_PATH}/new?client=${group.clientId}`} aria-label={`Bill ${group.clientName}`} />
+                      <Link
+                        href={clientBillingHref(
+                          group.clientId,
+                          group.visits.map((visit) => visit.id),
+                        )}
+                        aria-label={`Bill ${group.clientName}`}
+                      />
                     }
                   >
-                    Bill
+                    Bill client
                   </Button>
                 </div>
                 <UnbilledVisitList visits={group.visits} />

@@ -153,7 +153,6 @@ export default function PaymentForm({
         storedMethod={initial ? initial.method : null}
         shouldPreselectFirst
         error={methodError}
-        showManageLink
       />
 
       <Field>

@@ -32,6 +32,7 @@ import type { ClientJobRule } from '@/lib/pricing/resolve'
 import { browserListStorage, listReturnHref } from '@/lib/appointments/list-return'
 import { planCrewChange } from '@/lib/appointments/crew'
 import { cn } from '@/lib/utils'
+import { invoiceHref } from '@/lib/invoices/paths'
 import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 import type { IntervalUnit } from '@/lib/appointments/recurrence'
 
@@ -39,7 +40,7 @@ import type { IntervalUnit } from '@/lib/appointments/recurrence'
 export type CrewClock = { employeeId: string; closedMinutes: number; hasClockIn: boolean }
 
 // A Live claim on an issued or paid invoice: its price is frozen, so the form warns the edit won't reach it.
-export type InvoiceClaim = { id: string; number: string; status: 'issued' | 'paid' }
+export type InvoiceClaim = { id: string; clientId: string; number: string; status: 'issued' | 'paid' }
 
 type AppointmentFormProps = {
   clients: Array<{
@@ -212,7 +213,7 @@ function InvoiceClaimBanner({ claim }: { claim: InvoiceClaim }) {
       <AlertDescription className="break-words text-status-warning-foreground">
         On invoice{' '}
         <Link
-          href={`/solutions/invoices/${claim.id}`}
+          href={invoiceHref(claim.clientId, claim.id)}
           className="cursor-pointer rounded-sm font-medium whitespace-nowrap underline underline-offset-4 outline-none transition-[color,opacity] duration-fast focus-visible:ring-2 focus-visible:ring-ring/50 active:opacity-70 md:hover:text-foreground"
         >
           {claim.number}

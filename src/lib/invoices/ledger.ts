@@ -5,7 +5,6 @@ import { inBatches, readAllPages } from './batch.ts'
 import { loadDraftLines, type DraftLine } from './draft-lines.ts'
 import { messageFor, toLedgerError, type LedgerError, type LedgerErrorCode, type PostgrestLikeError } from './errors.ts'
 import { hasUnpricedLine } from './lines.ts'
-import { normalizePaymentMethodName } from './view.ts'
 
 // Server-only: it takes the user-session client, so every write runs as the signed-in admin and the
 // SQL functions check the role themselves (ADR 0001). It never sees a service-role client.
@@ -24,10 +23,6 @@ export type MarkPaidInput = PaymentInput & {
   internalNote: string | null
 }
 export type PaymentMethod = { id: string; name: string; is_hidden: boolean; sort_order: number }
-export type BulkIssueOutcome = {
-  issued: string[]
-  skipped: Array<{ id: string; code: LedgerErrorCode; message: string }>
-}
 
 type Logger = { warn: (...args: unknown[]) => void; error: (...args: unknown[]) => void }
 type MarkPaidResult = { invoice_id: string; invoice_number: string }
@@ -38,7 +33,6 @@ type BilledLine = {
   billed_minutes: number | null
 }
 
-const UNIQUE_VIOLATION = '23505'
 
 function refusal(code: Exclude<LedgerErrorCode, 'unknown'>): LedgerError {
   return { code, message: messageFor(code) }
@@ -151,22 +145,6 @@ export class InvoiceLedger {
     return this.issueOnce(invoiceId, dueDate)
   }
 
-  // Unpriced drafts are skipped like any refusal; the batch never stops on one draft.
-  async bulkIssue(invoiceIds: string[], dueDate: string | null): Promise<LedgerResult<BulkIssueOutcome>> {
-    const outcome: BulkIssueOutcome = { issued: [], skipped: [] }
-
-    for (const id of new Set(invoiceIds)) {
-      const result = await this.issue(id, dueDate)
-      if (result.ok) {
-        outcome.issued.push(id)
-      } else {
-        outcome.skipped.push({ id, code: result.code, message: result.message })
-      }
-    }
-
-    return { ok: true, data: outcome }
-  }
-
   // Every appointment the invoices hold, cancelled and archived lines too: the ids whose Payment
   // state, claim and price a change to those invoices can move. Read before the change, since a
   // line may leave the invoice with it.
@@ -268,33 +246,6 @@ export class InvoiceLedger {
       .select('id, name, is_hidden, sort_order')
       .order('sort_order', { ascending: true })
     return this.settle('listPaymentMethods', {}, error, data ?? [])
-  }
-
-  // Saved the way invoice_record_payment saves a typed method: trimmed, whitespace runs collapsed.
-  async renamePaymentMethod(methodId: string, name: string): Promise<LedgerResult<null>> {
-    const normalized = normalizePaymentMethodName(name)
-    if (!normalized) return this.fail('renamePaymentMethod', { methodId }, refusal('method_name_required'))
-
-    const { data, error } = await this.db
-      .from('payment_methods')
-      .update({ name: normalized })
-      .eq('id', methodId)
-      .select('id')
-
-    // payment_methods_name_lower_key makes names unique ignoring case.
-    if (error?.code === UNIQUE_VIOLATION) {
-      return this.fail('renamePaymentMethod', { methodId, name: normalized }, refusal('method_name_taken'))
-    }
-    return this.settleRowWrite('renamePaymentMethod', { methodId }, error, data)
-  }
-
-  async setPaymentMethodHidden(methodId: string, isHidden: boolean): Promise<LedgerResult<null>> {
-    const { data, error } = await this.db
-      .from('payment_methods')
-      .update({ is_hidden: isHidden })
-      .eq('id', methodId)
-      .select('id')
-    return this.settleRowWrite('setPaymentMethodHidden', { methodId }, error, data)
   }
 
   private async issueOnce(invoiceId: string, dueDate: string | null): Promise<LedgerResult<{ invoiceNumber: string }>> {

@@ -6,6 +6,7 @@ import { AlertCircle } from 'lucide-react'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { RECEIVABLES_PATH } from '@/lib/invoices/paths'
 
 export default function InvoiceDetailError({
   error,
@@ -33,9 +34,9 @@ export default function InvoiceDetailError({
           variant="outline"
           className="active:scale-[0.98]"
           nativeButton={false}
-          render={<Link href="/solutions/invoices" />}
+          render={<Link href={RECEIVABLES_PATH} />}
         >
-          Back to invoices
+          Back to receivables
         </Button>
       </div>
     </div>

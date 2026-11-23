@@ -62,7 +62,6 @@ export default function PaymentFields({
         storedMethod={null}
         shouldPreselectFirst={false}
         error={errors.method}
-        showManageLink={false}
       />
 
       <Field>

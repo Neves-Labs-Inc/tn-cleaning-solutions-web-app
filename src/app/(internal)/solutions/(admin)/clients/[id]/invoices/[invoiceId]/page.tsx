@@ -13,6 +13,7 @@ import { OUTLINE_PRESS_CLASS_NAME } from '@/components/admin/detail-page/press'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import PageHeader from '@/components/ui/page-header'
+import { clientBillingHref } from '@/lib/invoices/paths'
 import { actionLayout } from '@/lib/invoices/detail-actions'
 import { InvoiceLedger, type PaymentMethod } from '@/lib/invoices/ledger'
 import { getInvoiceDetail, listClaimableVisits, type ClaimableVisit } from '@/lib/invoices/queries'
@@ -24,10 +25,9 @@ import { createClient } from '@/lib/supabase/server'
 import { cn } from '@/lib/utils'
 
 type InvoiceDetailPageProps = {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string; invoiceId: string }>
 }
 
-const INVOICES_PATH = '/solutions/invoices'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const CARD_CLASS = 'gap-4 p-4 text-sm sm:p-5'
 const CARD_TITLE_CLASS = 'text-lg font-semibold tracking-tight'
@@ -56,12 +56,13 @@ async function loadPaymentMethods(ledger: InvoiceLedger): Promise<PaymentMethod[
 }
 
 export default async function InvoiceDetailPage({ params }: InvoiceDetailPageProps) {
-  const { id } = await params
-  if (!UUID.test(id)) notFound()
+  const { id: clientId, invoiceId } = await params
+  if (!UUID.test(clientId) || !UUID.test(invoiceId)) notFound()
 
   const db = await createClient()
-  const detail = await getInvoiceDetail(db, id)
-  if (!detail) notFound()
+  const detail = await getInvoiceDetail(db, invoiceId)
+  // An invoice under another client's URL is a 404, never a quiet redirect.
+  if (!detail || detail.invoice.client_id !== clientId) notFound()
 
   const { invoice, lines, total_cents: totalCents } = detail
   const businessDate = getBusinessDate(new Date())
@@ -113,12 +114,12 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
           <Button
             variant="ghost"
             size="sm"
-            className={cn(OUTLINE_PRESS_CLASS_NAME, '-ml-3 min-h-11 md:min-h-0')}
+            className={cn(OUTLINE_PRESS_CLASS_NAME, 'h-auto min-h-11 max-w-full -ml-3 justify-start whitespace-normal py-2 text-left')}
             nativeButton={false}
-            render={<Link href={INVOICES_PATH} />}
+            render={<Link href={clientBillingHref(clientId)} />}
           >
-            <ArrowLeft aria-hidden="true" />
-            Invoices
+            <ArrowLeft className="shrink-0" aria-hidden="true" />
+            <span className="min-w-0 break-words">{clientName}</span>
           </Button>
 
           {/* Actions sit beside the title only from xl: at md and lg four of them would squeeze it. */}
@@ -149,7 +150,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
 
           {invoice.client ? (
             <Link
-              href={`/solutions/clients/${invoice.client.id}`}
+              href={`/solutions/clients/${clientId}`}
               className="flex min-h-11 w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-sm text-sm font-medium text-muted-foreground outline-none transition-colors duration-fast focus-visible:ring-2 focus-visible:ring-ring/50 active:text-foreground/80 md:min-h-0 md:hover:underline"
             >
               <span className="block min-w-0 truncate">{clientName}</span>
@@ -199,6 +200,7 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
             <div className="order-1 min-w-0 lg:order-none">
               <InvoiceVisitsCard
                 invoiceId={invoice.id}
+                clientId={clientId}
                 status={invoice.status}
                 clientName={clientName}
                 lines={lines}

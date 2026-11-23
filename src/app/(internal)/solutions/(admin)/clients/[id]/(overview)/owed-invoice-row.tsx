@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 
 import StatusBadge, { invoiceStatusBadge } from '@/components/ui/status-badge'
+import { invoiceHref } from '@/lib/invoices/paths'
 import { dueLabel, invoiceLabel, type InvoiceViewRow } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
 
@@ -22,7 +23,7 @@ export function OwedInvoiceRow({ invoice, businessDate, index }: OwedInvoiceRowP
 	return (
 		<li>
 			<Link
-				href={`/solutions/invoices/${invoice.id}`}
+				href={invoiceHref(invoice.client_id, invoice.id)}
 				className="flex min-h-16 cursor-pointer items-center gap-3 px-4 py-3 transition-[background-color] animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-backwards duration-fast ease-out-quart focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 active:bg-muted md:hover:bg-muted"
 				style={{
 					animationDelay: `${Math.min(index, MAX_STAGGERED_ROWS) * STAGGER_STEP_MS}ms`,

@@ -5,8 +5,8 @@ import {
   clientBalances,
   contactLinks,
   daysOverdue,
+  draftRows,
   dueLabel,
-  filterInvoices,
   findDuplicateMethod,
   groupUnbilled,
   invoiceLabel,
@@ -14,15 +14,13 @@ import {
   overdueInvoices,
   owedInvoices,
   unbilledSummary,
-  type InvoiceFilter,
+  type OpenDraft,
   type InvoiceViewRow,
   type UnbilledVisit,
 } from '../../src/lib/invoices/view.ts'
 import { invoiceStatusBadge, lineStateBadge } from '../../src/components/ui/status-badge-tones.ts'
 
 const TODAY = '2026-10-07'
-
-const ALL: InvoiceFilter = { query: '', status: 'all', clientId: '', showArchived: false }
 
 function row(overrides: Partial<InvoiceViewRow> & { id: string }): InvoiceViewRow {
   return {
@@ -82,42 +80,6 @@ test('dueLabel for a non-issued invoice is the plain date or Not set, never late
   assert.equal(dueLabel({ status: 'draft', due_date: null }, TODAY), 'Not set')
   assert.equal(dueLabel({ status: 'paid', due_date: '2026-10-03' }, TODAY), 'Oct 3, 2026')
   assert.equal(daysOverdue({ status: 'paid', due_date: '2026-10-03' }, TODAY), 0)
-})
-
-test('filterInvoices hides archived rows unless asked', () => {
-  const rows = [row({ id: 'a' }), row({ id: 'b', is_archived: true })]
-
-  assert.deepEqual(ids(filterInvoices(rows, ALL)), ['a'])
-  assert.deepEqual(ids(filterInvoices(rows, { ...ALL, showArchived: true })), ['a', 'b'])
-})
-
-test('filterInvoices narrows by status and client', () => {
-  const rows = [
-    row({ id: 'a' }),
-    row({ id: 'b', status: 'paid', effective_status: 'paid' }),
-    row({ id: 'c', client_id: 'c2' }),
-  ]
-
-  assert.deepEqual(ids(filterInvoices(rows, { ...ALL, status: 'paid' })), ['b'])
-  assert.deepEqual(ids(filterInvoices(rows, { ...ALL, clientId: 'c2' })), ['c'])
-})
-
-test('filterInvoices query matches number or client name, case-insensitively', () => {
-  const rows = [
-    row({ id: 'a', invoice_number: '2026-0042', clients: { name: 'Acme Corp' } }),
-    row({
-      id: 'b',
-      invoice_number: null,
-      status: 'draft',
-      effective_status: 'draft',
-      clients: [{ name: 'Birch Dental' }],
-    }),
-  ]
-
-  assert.deepEqual(ids(filterInvoices(rows, { ...ALL, query: '0042' })), ['a'])
-  assert.deepEqual(ids(filterInvoices(rows, { ...ALL, query: ' birch ' })), ['b'])
-  assert.deepEqual(ids(filterInvoices(rows, { ...ALL, query: 'ACME' })), ['a'])
-  assert.deepEqual(filterInvoices(rows, { ...ALL, query: 'nope' }), [])
 })
 
 test('clientBalances drops zero balances and sorts overdue desc then owed desc', () => {
@@ -239,4 +201,49 @@ test('contactLinks keeps an x that is not a trailing extension', () => {
   assert.equal(contactLinks({ phone: '1-800-FLOWERS x', email: null }).phoneHref, 'tel:1800')
   assert.equal(contactLinks({ phone: '416 555 0101 x23', email: null }).phoneHref, 'tel:4165550101')
   assert.equal(contactLinks({ phone: '+1 (416) 555-0101', email: null }).phoneHref, 'tel:+14165550101')
+})
+
+function draft(overrides: Partial<OpenDraft> & { id: string }): OpenDraft {
+  return {
+    clientId: 'c1',
+    clientName: 'Acme',
+    createdAt: '2026-10-07T15:00:00Z',
+    appointmentCount: 1,
+    unpricedCount: 0,
+    totalCents: 1000,
+    ...overrides,
+  }
+}
+
+test('draftRows words the age by Business date: today, 1 day, N days', () => {
+  const rows = draftRows(
+    [
+      draft({ id: 'a', createdAt: '2026-10-07T15:00:00Z' }),
+      draft({ id: 'b', createdAt: '2026-10-06T15:00:00Z' }),
+      draft({ id: 'c', createdAt: '2026-09-25T15:00:00Z' }),
+    ],
+    TODAY,
+  )
+  const labels = Object.fromEntries(rows.map((r) => [r.id, r.ageLabel]))
+  assert.deepEqual(labels, { a: 'Created today', b: 'Created 1 day ago', c: 'Created 12 days ago' })
+})
+
+test('draftRows ages a late-evening Eastern creation on its Eastern day, not the UTC one', () => {
+  // 02:30 UTC on Oct 7 is 22:30 Eastern on Oct 6.
+  const [row] = draftRows([draft({ id: 'a', createdAt: '2026-10-07T02:30:00Z' })], TODAY)
+  assert.equal(row.ageLabel, 'Created 1 day ago')
+})
+
+test('draftRows lists the oldest first', () => {
+  const rows = draftRows(
+    [
+      draft({ id: 'new', createdAt: '2026-10-06T15:00:00Z' }),
+      draft({ id: 'old', createdAt: '2026-09-01T15:00:00Z' }),
+    ],
+    TODAY,
+  )
+  assert.deepEqual(
+    rows.map((r) => r.id),
+    ['old', 'new'],
+  )
 })

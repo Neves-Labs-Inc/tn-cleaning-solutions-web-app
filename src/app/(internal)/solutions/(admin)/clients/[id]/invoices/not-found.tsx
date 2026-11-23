@@ -19,9 +19,9 @@ export default function InvoiceNotFound() {
           variant="outline"
           className="active:scale-[0.98]"
           nativeButton={false}
-          render={<Link href="/solutions/invoices" />}
+          render={<Link href="/solutions/clients" />}
         >
-          Back to invoices
+          Back to clients
         </Button>
       </EmptyContent>
     </Empty>

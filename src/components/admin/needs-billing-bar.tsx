@@ -7,6 +7,7 @@ import { OUTLINE_PRESS_CLASS_NAME, PRESS_CLASS_NAME } from '@/components/admin/d
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { totalPrices } from '@/lib/appointments/overview'
+import { clientBillingHref } from '@/lib/invoices/paths'
 import type { NeedsBillingAppointment } from '@/lib/invoices/payment-state-queries'
 import { formatCents } from '@/lib/pricing/money'
 import { cn } from '@/lib/utils'
@@ -20,14 +21,11 @@ type NeedsBillingBarProps = {
   isMarkPaidLoading?: boolean
 }
 
-const NEW_INVOICE_PATH = '/solutions/invoices/new'
-
-function createInvoiceHref(selected: NeedsBillingAppointment[]): string {
-  const params = new URLSearchParams({
-    client: selected[0]?.clientId ?? '',
-    visits: selected.map((appointment) => appointment.id).join(','),
-  })
-  return `${NEW_INVOICE_PATH}?${params.toString()}`
+function billClientHref(selected: NeedsBillingAppointment[]): string {
+  return clientBillingHref(
+    selected[0]?.clientId ?? '',
+    selected.map((appointment) => appointment.id),
+  )
 }
 
 // The floating bar over the Needs billing list. Always mounted so it can animate in and out.
@@ -87,9 +85,9 @@ export default function NeedsBillingBar({
             {isMarkPaidLoading ? <Spinner className="size-4" /> : <Wallet aria-hidden="true" />}
             Mark paid
           </Button>
-          <Button className={PRESS_CLASS_NAME} nativeButton={false} render={<Link href={createInvoiceHref(selected)} />}>
+          <Button className={PRESS_CLASS_NAME} nativeButton={false} render={<Link href={billClientHref(selected)} />}>
             <FilePlus2 aria-hidden="true" />
-            Create invoice
+            Bill client
           </Button>
         </div>
       </div>
