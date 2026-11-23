@@ -35,7 +35,6 @@ type InvoiceVisitsCardProps = {
   unpricedCount: number
   paidDate: string | null
   claimable: ClaimableVisit[]
-  businessDate: string
 }
 
 const REMOVE_ERROR_TITLE = "Couldn't remove that appointment"
@@ -175,7 +174,6 @@ export default function InvoiceVisitsCard({
   unpricedCount,
   paidDate,
   claimable,
-  businessDate,
 }: InvoiceVisitsCardProps) {
   const router = useRouter()
   const submitDraftUpdate = useSubmitDraftUpdate()
@@ -281,7 +279,6 @@ export default function InvoiceVisitsCard({
           invoiceId={invoiceId}
           clientName={clientName}
           visits={claimable}
-          businessDate={businessDate}
         />
       ) : null}
 

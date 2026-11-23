@@ -209,7 +209,6 @@ export default async function InvoiceDetailPage({ params }: InvoiceDetailPagePro
                 unpricedCount={unpricedCount}
                 paidDate={invoice.paid_date}
                 claimable={claimable}
-                businessDate={businessDate}
               />
             </div>
 

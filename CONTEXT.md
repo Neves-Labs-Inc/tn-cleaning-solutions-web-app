@@ -143,7 +143,7 @@ An appointment whose Live price can't be worked out. Every appointment has a Job
 An appointment's line on an invoice that has not been voided. An appointment has at most one Live claim.
 
 **Billable appointment**:
-An appointment that is not cancelled, has no Live claim, and is not Unpriced. This is what an admin can pick onto an invoice; every invoice is made this way, or by Mark paid.
+An appointment that is not cancelled and has no Live claim. This is what an admin can pick onto an invoice; every invoice is made this way, or by Mark paid.
 
 **Automatic invoice**:
 An issued, paid or void invoice started by the retired Automatic invoicing, which put a client's completed appointments on a draft by itself. It is marked only by a badge; no new one is ever made.
