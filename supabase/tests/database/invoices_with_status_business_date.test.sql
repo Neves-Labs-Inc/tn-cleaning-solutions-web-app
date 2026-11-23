@@ -45,8 +45,8 @@ select view_owner_is('public', 'invoices_with_status', 'postgres', 'invoices_wit
 select columns_are('public', 'invoices_with_status', array[
 	'id', 'client_id', 'status', 'issued_date', 'due_date', 'notes', 'created_at', 'updated_at',
 	'is_archived', 'invoice_number', 'is_automatic', 'paid_date', 'payment_method',
-	'payment_reference', 'total_cents', 'effective_status', 'activity_date'
-], 'invoices_with_status lists every invoices column plus total_cents, effective_status and activity_date');
+	'payment_reference', 'total_cents', 'effective_status', 'activity_date', 'is_mark_paid'
+], 'invoices_with_status lists every invoices column plus total_cents, effective_status, activity_date and is_mark_paid');
 select is(
 	(select reloptions::text[] @> array['security_invoker=true'] from pg_class where oid = 'public.invoices_with_status'::regclass),
 	true, 'invoices_with_status keeps security_invoker');

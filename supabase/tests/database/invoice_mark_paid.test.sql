@@ -11,7 +11,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(47);
+select plan(52);
 
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
@@ -208,6 +208,13 @@ select public.invoice_mark_paid('c6100000-0000-4000-8000-000000000001',
 
 reset role;
 
+select is((select is_mark_paid from public.invoices_with_status
+	where id = (select (result ->> 'invoice_id')::uuid from pgtap_mark_paid_result)),
+	true, 'Mark paid sets the marker on the invoice it creates');
+
+select is((select is_mark_paid from public.invoices_with_status where id = '16000000-0000-4000-8000-000000000004'),
+	false, 'an invoice that was not made by Mark paid is unmarked');
+
 select is((select result ->> 'invoice_number' from pgtap_mark_paid_result),
 	'INV-002-SMI' || public.pgtap_mark_paid_year(), 'Mark paid returns the next number in the count issued invoices use');
 
@@ -316,6 +323,22 @@ select results_eq($$
 	select status, paid_date, payment_method, payment_reference from public.invoices
 	where id = (select (result ->> 'invoice_id')::uuid from pgtap_mark_paid_result)
 $$, $$ values ('issued'::text, null::date, null::text, null::text) $$, 'undoing the payment leaves it issued with no Payment');
+
+select is((select is_mark_paid from public.invoices
+	where id = (select (result ->> 'invoice_id')::uuid from pgtap_mark_paid_result)),
+	false, 'undoing the Payment clears the marker');
+
+set local role authenticated;
+
+select lives_ok(format('select public.invoice_record_payment(%L, null, %L, null)',
+	(select result ->> 'invoice_id' from pgtap_mark_paid_result), 'Cash'),
+	'a Payment can be recorded on the undone invoice');
+
+reset role;
+
+select is((select is_mark_paid from public.invoices_with_status
+	where id = (select (result ->> 'invoice_id')::uuid from pgtap_mark_paid_result)),
+	false, 'a Payment recorded later leaves the marker false');
 
 set local role authenticated;
 

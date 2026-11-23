@@ -10,7 +10,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(113);
+select plan(114);
 
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
@@ -316,6 +316,8 @@ select results_eq($$
 $$, $$
 	values ('paid'::text, public.pgtap_today(), 'Wire'::text, 'CONF-9'::text)
 $$, 'recording a Payment sets paid, the date, the method text and the trimmed reference');
+select is((select is_mark_paid from public.invoices_with_status where id = '10000000-0000-4000-8000-000000000003'),
+	false, 'recording a normal Payment never sets the Mark paid marker');
 select results_eq($$
 	select name, is_hidden, sort_order from public.payment_methods where name ilike 'wire'
 $$, $$

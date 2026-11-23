@@ -482,6 +482,7 @@ export type Database = {
           payment_method: string | null
           payment_reference: string | null
           internal_note: string | null
+          is_mark_paid: boolean
         }
         Insert: {
           id?: string
@@ -499,6 +500,7 @@ export type Database = {
           payment_method?: string | null
           payment_reference?: string | null
           internal_note?: string | null
+          is_mark_paid?: boolean
         }
         Update: {
           id?: string
@@ -516,6 +518,7 @@ export type Database = {
           payment_method?: string | null
           payment_reference?: string | null
           internal_note?: string | null
+          is_mark_paid?: boolean
         }
         Relationships: [
           {
@@ -961,6 +964,7 @@ export type Database = {
           total_cents: number
           effective_status: 'draft' | 'issued' | 'paid' | 'void' | 'overdue'
           activity_date: string | null
+          is_mark_paid: boolean
         }
         Relationships: []
       }
