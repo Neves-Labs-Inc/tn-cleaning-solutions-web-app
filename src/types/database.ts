@@ -19,7 +19,7 @@
 // RPCs the invoice ledger calls through the typed session client; `p_lines` is the Billed amounts
 // TypeScript priced. It also lists the two Clock correction functions (20261010120000), which refuse
 // through `clock_error` the same way, with the overlap's clashing assignment id in `hint`, and the
-// Payroll write functions (20261014231000, 20261014233000), which refuse through `payroll_error`;
+// Payroll write functions (20261014231000, 20261014233000, 20261123100000), which refuse through `payroll_error`;
 // `finalize_pay_runs` and `mark_pay_runs_paid` instead return one row per target with `code` 'ok'
 // or the refusal code. The
 // other SQL functions are called through untyped clients and stay out until a
@@ -757,6 +757,7 @@ export type Database = {
           finalized_at: string | null
           paid_on: string | null
           payout_method: string | null
+          split_parts: Json | null
           paid_at: string | null
           created_at: string
           created_by: string
@@ -770,6 +771,7 @@ export type Database = {
           finalized_at?: string | null
           paid_on?: string | null
           payout_method?: string | null
+          split_parts?: Json | null
           paid_at?: string | null
           created_at?: string
           created_by: string
@@ -783,6 +785,7 @@ export type Database = {
           finalized_at?: string | null
           paid_on?: string | null
           payout_method?: string | null
+          split_parts?: Json | null
           paid_at?: string | null
           created_at?: string
           created_by?: string
@@ -1029,8 +1032,23 @@ export type Database = {
           period_start: string
           kind: string
           paid_on: string
-          payout_method: string
+          payout_method: string | null
           total_cents: number
+          payout_parts: Json
+        }
+        Relationships: []
+      }
+      // Admin-only. payout_parts: the paid run's ordered [{ method, amount_cents }]; null until paid.
+      pay_runs_with_payout_parts: {
+        Row: {
+          id: string
+          employee_id: string
+          period_start: string
+          kind: 'regular' | 'off_cycle'
+          status: 'draft' | 'finalized' | 'paid'
+          paid_on: string | null
+          payout_method: string | null
+          payout_parts: Json | null
         }
         Relationships: []
       }
@@ -1230,7 +1248,12 @@ export type Database = {
         }[]
       }
       update_pay_run_payout: {
-        Args: { p_run_id: string; p_payout_method: string; p_paid_on: string }
+        Args: { p_run_id: string; p_payout_method: string | null; p_paid_on: string; p_parts?: Json | null }
+        Returns: undefined
+      }
+      // Split payout (20261123100000): p_parts is [{ method, amount_cents }], two or more.
+      mark_pay_run_paid_with_parts: {
+        Args: { p_run_id: string; p_parts: Json; p_paid_on: string }
         Returns: undefined
       }
     }

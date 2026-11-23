@@ -6,6 +6,7 @@ import {
   formatShortDate,
   type PayPeriod,
 } from "./period.ts";
+import type { PayoutPart } from "./payroll-data.ts";
 import type { PeriodRow } from "./period-summary.ts";
 import type {
   PeriodRun,
@@ -109,6 +110,20 @@ export function describePaidRun(
     run.payoutMethod === null ? null : `by ${run.payoutMethod}`,
   ];
   return parts.filter((part) => part !== null).join(" ");
+}
+
+// A paid run's payout in words. A split reads "Cash $200.00 + e-Transfer $340.00" with the
+// separator " + " (admin state line, export) or "Cash $200.00, e-Transfer $340.00" with ", " (My
+// pay, Pay statement). A single-method run is just its method, as before.
+export function formatPayoutParts(
+  parts: PayoutPart[],
+  separator: string,
+): string {
+  if (parts.length === 1) return parts[0].method;
+
+  return parts
+    .map((part) => `${part.method} ${formatCents(part.amount_cents)}`)
+    .join(separator);
 }
 
 function countOddDurations(run: PeriodRun): number {

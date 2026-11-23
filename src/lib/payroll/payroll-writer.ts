@@ -6,6 +6,9 @@ import type {
   MarkPaidItem,
   PayoutEdit,
   RunTarget,
+  SplitMarkPaidRequest,
+  SplitPart,
+  SplitPayoutEdit,
 } from "./action-input.ts";
 import type { BulkResultRow } from "./bulk-result.ts";
 import type { MarkPaidRow } from "./mark-paid.ts";
@@ -29,6 +32,14 @@ export type FinalizeRow = BulkResultRow & {
 const STATUS_OK = 200;
 const STATUS_CREATED = 201;
 const STATUS_SERVER_ERROR = 500;
+
+// The SQL reads each part as { method, amount_cents }.
+function toPartsJson(parts: SplitPart[]) {
+  return parts.map((part) => ({
+    method: part.method,
+    amount_cents: part.amountCents,
+  }));
+}
 
 // The Payroll writes the period page makes. Each calls one SQL function (20261014231000), which
 // checks the admin role and every rule; a payroll_error refusal comes back as a readable 4xx
@@ -165,6 +176,39 @@ export class PayrollWriter {
     if (error) {
       const context = { runId: edit.runId, paidOn: edit.paidOn };
       return this.#fail("update payout", context, error);
+    }
+    return { value: null, error: null, status: STATUS_OK };
+  }
+
+  // Marks one run paid on one date with a Split payout. A refusal is the Result's error.
+  async markPaidWithParts(
+    request: Pick<SplitMarkPaidRequest, "runId" | "parts">,
+    paidOn: string,
+  ): Promise<Result<null>> {
+    const { error } = await this.#db.rpc("mark_pay_run_paid_with_parts", {
+      p_run_id: request.runId,
+      p_parts: toPartsJson(request.parts),
+      p_paid_on: paidOn,
+    });
+    // The methods are free text, so they stay out of the logs.
+    if (error) {
+      return this.#fail("mark paid with parts", { runId: request.runId, paidOn }, error);
+    }
+    return { value: null, error: null, status: STATUS_OK };
+  }
+
+  // Replaces a paid run's payout with a split (single -> split or split -> split). Going back to
+  // one method is updatePayout.
+  async updatePayoutParts(edit: SplitPayoutEdit): Promise<Result<null>> {
+    const { error } = await this.#db.rpc("update_pay_run_payout", {
+      p_run_id: edit.runId,
+      p_payout_method: null,
+      p_parts: toPartsJson(edit.parts),
+      p_paid_on: edit.paidOn,
+    });
+    if (error) {
+      const context = { runId: edit.runId, paidOn: edit.paidOn };
+      return this.#fail("update payout parts", context, error);
     }
     return { value: null, error: null, status: STATUS_OK };
   }

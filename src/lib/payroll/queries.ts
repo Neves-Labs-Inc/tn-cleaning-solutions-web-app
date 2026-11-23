@@ -41,7 +41,7 @@ const SESSION_COLUMNS = `
   amount_cents, has_no_rate, pay_run_id, pay_run_kind, pay_run_status
 `;
 const RUN_COLUMNS =
-  "id, employee_id, period_start, kind, status, paid_on, payout_method";
+  "id, employee_id, period_start, kind, status, paid_on, payout_method, payout_parts";
 const RUN_LINE_COLUMNS = `
   id, pay_run_id, appointment_employee_id, scheduled_date, client_name, job_name, minutes,
   rate_cents, amount_cents,
@@ -95,7 +95,7 @@ function fetchSessions(db: Db, range: PeriodRange): Promise<PaySessionRow[]> {
 function fetchRuns(db: Db, range: PeriodRange): Promise<PayRunRow[]> {
   return readAllPages<PayRunRow>((from, to) =>
     db
-      .from("pay_runs")
+      .from("pay_runs_with_payout_parts")
       .select(RUN_COLUMNS)
       .gte("period_start", range.from)
       .lte("period_start", range.to)
@@ -263,7 +263,7 @@ export function fetchPayRatesUpTo(db: Db, day: string): Promise<PayRateRow[]> {
 }
 
 const MY_RUN_COLUMNS =
-  "id, period_start, kind, paid_on, payout_method, total_cents";
+  "id, period_start, kind, paid_on, payout_method, total_cents, payout_parts";
 const MY_LINE_COLUMNS =
   "id, pay_run_id, scheduled_date, client_name, minutes, rate_cents, amount_cents";
 const MY_ADJUSTMENT_COLUMNS =

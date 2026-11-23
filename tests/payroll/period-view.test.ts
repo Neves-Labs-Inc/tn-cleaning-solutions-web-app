@@ -683,3 +683,29 @@ describe("buildPeriodView: run keys", () => {
     assert.ok(offCycleKeys.includes(getRunKey("ana", "off_cycle", "r-off-2")));
   });
 });
+
+describe("buildPeriodView: payout parts", () => {
+  it("carries a split run's parts in order, with no single method", () => {
+    const parts = [
+      { method: "Cash", amount_cents: 20000 },
+      { method: "e-Transfer", amount_cents: 34000 },
+    ];
+    const paid = run("r-ana", "ana", {
+      status: "paid",
+      paid_on: "2026-10-20",
+      payout_method: null,
+      payout_parts: parts,
+    });
+
+    const view = buildPeriodView(payrollData({ runs: [paid] }), OCT_5, NOW);
+
+    assert.equal(view.runs[0].payoutMethod, null);
+    assert.deepEqual(view.runs[0].payoutParts, parts);
+  });
+
+  it("has no parts until the run is paid", () => {
+    const view = buildPeriodView(payrollData({ runs: [run("r-ana", "ana")] }), OCT_5, NOW);
+
+    assert.deepEqual(view.runs[0].payoutParts, []);
+  });
+});

@@ -7,6 +7,12 @@ import type { Database, Tables } from "../../types/database.ts";
 export type PaySessionRow =
   Database["public"]["Views"]["pay_period_sessions"]["Row"];
 
+// One part of a paid run's payout, as pay_runs_with_payout_parts and the My pay view return it.
+export type PayoutPart = { method: string; amount_cents: number };
+
+// A run as the admin read returns it. payout_parts is null until the run is paid; once paid it is
+// one part for a single-method run (its whole total) and two or more for a Split payout, whose
+// payout_method is null.
 export type PayRunRow = Pick<
   Tables<"pay_runs">,
   | "id"
@@ -16,7 +22,7 @@ export type PayRunRow = Pick<
   | "status"
   | "paid_on"
   | "payout_method"
->;
+> & { payout_parts: PayoutPart[] | null };
 
 // A claim. Its frozen columns are set only once its run is paid.
 export type PayRunLineRow = Pick<

@@ -12,14 +12,15 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(16);
+select plan(18);
 
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
 --
 -- Ana: a paid regular run for Oct 5 (two lines, one linked and one unlinked Adjustment), a
 -- finalized off-cycle run for Oct 5 (unfrozen line) and a draft regular run for Oct 19 (an
--- Adjustment). Bea: a paid regular run for Oct 5 (one line, one Adjustment).
+-- Adjustment). Bea: a paid regular run for Oct 5 (one line, one Adjustment), paid as a Split payout
+-- (20261123100000).
 
 insert into auth.users (id, email) values
 	('a6000000-0000-4000-8000-000000000001', 'pgtap.mypay.ana@example.test'),
@@ -78,12 +79,17 @@ insert into public.pay_adjustments (id, pay_run_id, amount_cents, reason, appoin
 	('92000000-0000-4000-8000-000000000004', '90000000-0000-4000-8000-0000000000b1', 500, 'Bea parking',
 	 null, 'a6000000-0000-4000-8000-000000000003', '2026-10-19 12:15+00');
 
+-- Bea's run was paid in two parts: no single method, her total of $45.00 divided.
+update public.pay_runs
+set payout_method = null, split_parts = '[{"method": "Cash", "amount_cents": 1500}, {"method": "e-Transfer", "amount_cents": 3000}]'
+where id = '90000000-0000-4000-8000-0000000000b1';
+
 
 -- Columns and grants (catalog) ------------------------------------------------------------------
 
 select columns_are(
 	'public', 'pay_runs_employee_view',
-	array['id', 'period_start', 'kind', 'paid_on', 'payout_method', 'total_cents'],
+	array['id', 'period_start', 'kind', 'paid_on', 'payout_method', 'total_cents', 'payout_parts'],
 	'the runs view exposes only what My pay shows: no status, creator or Payout default'
 );
 
@@ -119,6 +125,12 @@ select results_eq(
 	$$ select id, period_start, kind, paid_on, payout_method, total_cents::bigint from public.pay_runs_employee_view $$,
 	$$ values ('90000000-0000-4000-8000-0000000000a1'::uuid, '2026-10-05'::date, 'regular', '2026-10-20'::date, 'e-Transfer', 9450::bigint) $$,
 	'a Cleaner reads only her own paid run, with its total of lines plus Adjustments'
+);
+
+select is(
+	(select payout_parts from public.pay_runs_employee_view),
+	'[{"method": "e-Transfer", "amount_cents": 9450}]'::jsonb,
+	'a single-method run reads as one part holding the whole total'
 );
 
 select results_eq(
@@ -179,6 +191,12 @@ select results_eq(
 	$$ select id, total_cents::bigint from public.pay_runs_employee_view $$,
 	$$ values ('90000000-0000-4000-8000-0000000000b1'::uuid, 4500::bigint) $$,
 	'a teammate reads only her own paid run'
+);
+
+select results_eq(
+	$$ select payout_method, payout_parts from public.pay_runs_employee_view $$,
+	$$ values (null::text, '[{"method": "Cash", "amount_cents": 1500}, {"method": "e-Transfer", "amount_cents": 3000}]'::jsonb) $$,
+	'a split run reads the parts in order and no single method'
 );
 
 

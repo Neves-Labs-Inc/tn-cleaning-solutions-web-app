@@ -1,6 +1,7 @@
 // Relative imports: node --test runs this file without the @/ alias.
 import type { Database } from "../../types/database.ts";
 import { formatCents } from "../pricing/money.ts";
+import type { PayoutPart } from "./payroll-data.ts";
 import { addDays, formatHoursMinutes, formatShortDate } from "./period.ts";
 
 // Shapes a Cleaner's own paid Pay runs, as the My pay views return them, into what her My pay
@@ -9,7 +10,10 @@ import { addDays, formatHoursMinutes, formatShortDate } from "./period.ts";
 
 type Views = Database["public"]["Views"];
 
-export type MyPayRunRow = Views["pay_runs_employee_view"]["Row"];
+// payout_parts: the run's ordered { method, amount_cents } parts (one for a single-method run).
+export type MyPayRunRow = Omit<Views["pay_runs_employee_view"]["Row"], "payout_parts"> & {
+  payout_parts: PayoutPart[] | null;
+};
 export type MyPayLineRow = Views["pay_run_lines_employee_view"]["Row"];
 export type MyPayAdjustmentRow = Views["pay_adjustments_employee_view"]["Row"];
 

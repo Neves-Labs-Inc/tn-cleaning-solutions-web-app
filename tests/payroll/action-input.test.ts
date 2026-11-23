@@ -5,6 +5,8 @@ import {
   parseAdjustmentForm,
   parseMarkPaidRequest,
   parsePayoutEdit,
+  parseSplitMarkPaidRequest,
+  parseSplitPayoutEdit,
   parseRunTarget,
   parseSignedDollarsToCents,
 } from "../../src/lib/payroll/action-input.ts";
@@ -258,6 +260,123 @@ describe("parsePayoutEdit", () => {
     );
     assert.equal(
       parsePayoutEdit({ runId: RUN_ID, payoutMethod: "Cash", paidOn: "" }),
+      null,
+    );
+  });
+});
+
+const SPLIT_PARTS = [
+  { method: "Cash", amountCents: 20000 },
+  { method: "e-Transfer", amountCents: 34000 },
+];
+
+describe("parseSplitMarkPaidRequest", () => {
+  it("reads the run, its parts in order and the paid date", () => {
+    assert.deepEqual(
+      parseSplitMarkPaidRequest({
+        runId: RUN_ID,
+        parts: SPLIT_PARTS,
+        paidOn: "2026-10-20",
+      }),
+      { runId: RUN_ID, parts: SPLIT_PARTS, paidOn: "2026-10-20" },
+    );
+  });
+
+  it("passes the rules the SQL owns through, so each refusal is named there", () => {
+    const parsed = parseSplitMarkPaidRequest({
+      runId: RUN_ID,
+      parts: [
+        { method: "", amountCents: 0 },
+        { method: "cash", amountCents: -5 },
+      ],
+      paidOn: "2026-10-20",
+    });
+
+    assert.deepEqual(parsed?.parts, [
+      { method: "", amountCents: 0 },
+      { method: "cash", amountCents: -5 },
+    ]);
+    assert.notEqual(
+      parseSplitMarkPaidRequest({ runId: RUN_ID, parts: [], paidOn: "2026-10-20" }),
+      null,
+    );
+  });
+
+  it("refuses a malformed run id, paid date or parts list", () => {
+    const valid = { runId: RUN_ID, parts: SPLIT_PARTS, paidOn: "2026-10-20" };
+
+    assert.equal(parseSplitMarkPaidRequest({ ...valid, runId: "run-1" }), null);
+    assert.equal(parseSplitMarkPaidRequest({ ...valid, paidOn: "2026-02-30" }), null);
+    assert.equal(parseSplitMarkPaidRequest({ ...valid, parts: "nope" }), null);
+  });
+
+  it("refuses a part whose method isn't text or is too long", () => {
+    const valid = { runId: RUN_ID, paidOn: "2026-10-20" };
+
+    assert.equal(
+      parseSplitMarkPaidRequest({ ...valid, parts: [{ method: 4, amountCents: 100 }] }),
+      null,
+    );
+    assert.equal(
+      parseSplitMarkPaidRequest({
+        ...valid,
+        parts: [{ method: "x".repeat(61), amountCents: 100 }],
+      }),
+      null,
+    );
+  });
+
+  it("refuses an amount that isn't a whole number of cents", () => {
+    const valid = { runId: RUN_ID, paidOn: "2026-10-20" };
+
+    for (const amountCents of ["200", 10.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.equal(
+        parseSplitMarkPaidRequest({
+          ...valid,
+          parts: [{ method: "Cash", amountCents }],
+        }),
+        null,
+        String(amountCents),
+      );
+    }
+  });
+
+  it("refuses more parts than any run could need", () => {
+    const parts = Array.from({ length: 21 }, (_, index) => ({
+      method: `M${index}`,
+      amountCents: 100,
+    }));
+
+    assert.equal(
+      parseSplitMarkPaidRequest({ runId: RUN_ID, parts, paidOn: "2026-10-20" }),
+      null,
+    );
+  });
+});
+
+describe("parseSplitPayoutEdit", () => {
+  it("reads the run, its parts and the paid date", () => {
+    assert.deepEqual(
+      parseSplitPayoutEdit({
+        runId: RUN_ID,
+        parts: SPLIT_PARTS,
+        paidOn: "2026-10-20",
+      }),
+      { runId: RUN_ID, parts: SPLIT_PARTS, paidOn: "2026-10-20" },
+    );
+  });
+
+  it("refuses a malformed run id, paid date or part", () => {
+    assert.equal(
+      parseSplitPayoutEdit({ runId: "x", parts: SPLIT_PARTS, paidOn: "2026-10-20" }),
+      null,
+    );
+    assert.equal(
+      parseSplitPayoutEdit({ runId: RUN_ID, parts: SPLIT_PARTS, paidOn: "" }),
+      null,
+    );
+    assert.equal(
+      parseSplitPayoutEdit({ runId: RUN_ID, parts: [null], paidOn: "2026-10-20" }),
       null,
     );
   });

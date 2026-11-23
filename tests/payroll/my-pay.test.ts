@@ -17,6 +17,7 @@ function runRow(overrides: Partial<MyPayRunRow> = {}): MyPayRunRow {
     paid_on: "2026-10-20",
     payout_method: "e-Transfer",
     total_cents: 84250,
+    payout_parts: [{ method: "e-Transfer", amount_cents: 84250 }],
     ...overrides,
   };
 }

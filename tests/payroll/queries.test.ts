@@ -31,6 +31,7 @@ function runRow(id: string, periodStart: string) {
     status: "paid",
     paid_on: "2026-10-20",
     payout_method: "Cash",
+    payout_parts: [{ method: "Cash", amount_cents: 7500 }],
   };
 }
 
@@ -84,7 +85,7 @@ function tables() {
       session("b-oct19", "ana", { period_start: OCT_19.start }),
       session("c-nov16", "ana", { period_start: NOV_16 }),
     ],
-    pay_runs: [
+    pay_runs_with_payout_parts: [
       runRow("r-oct5", OCT_5.start),
       runRow("r-oct19", OCT_19.start),
       runRow("r-nov16", NOV_16),
@@ -134,6 +135,9 @@ describe("fetchPayPeriodData", () => {
       data.runs.map((item) => item.id),
       ["r-oct5"],
     );
+    assert.deepEqual(data.runs[0].payout_parts, [
+      { method: "Cash", amount_cents: 7500 },
+    ]);
     assert.deepEqual(data.runLines, [
       {
         pay_run_id: "r-oct5",
@@ -252,8 +256,12 @@ describe("fetchMyPaidRuns", () => {
           period_start: OCT_5.start,
           kind: "regular",
           paid_on: "2026-10-20",
-          payout_method: "Cash",
+          payout_method: null,
           total_cents: 6000,
+          payout_parts: [
+            { method: "Cash", amount_cents: 2000 },
+            { method: "e-Transfer", amount_cents: 4000 },
+          ],
         },
       ],
       pay_run_lines_employee_view: lineIds.map((id) => ({
@@ -284,6 +292,10 @@ describe("fetchMyPaidRuns", () => {
       data.runs.map((row) => row.id),
       ["r-oct5"],
     );
+    assert.deepEqual(data.runs[0].payout_parts, [
+      { method: "Cash", amount_cents: 2000 },
+      { method: "e-Transfer", amount_cents: 4000 },
+    ]);
     assert.equal(data.lines.length, SESSION_COUNT);
     assert.deepEqual(
       data.adjustments.map((row) => row.reason),
