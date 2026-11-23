@@ -6,7 +6,9 @@ import type { AppointmentStatus } from '@/lib/appointments/lifecycle'
 import { APPOINTMENT_PRICE_COLUMNS, type LivePrice, type PriceableAppointment } from '@/lib/pricing'
 import type { Database, Views } from '@/types/database'
 import { priceAppointmentsInBatches, readAllPages } from './batch'
+import { splitClaimable, type PickerAppointment } from './appointment-picker'
 import { scopeToClient } from './client-scope'
+import type { ClientInvoice } from './client-invoices'
 import { loadDraftLines } from './draft-lines'
 import { draftTotalCents, hasUnpricedLine, lineAmountCents, lineState } from './lines'
 import { LIVE_CLAIM_EMBED, unbilledQuery } from './unbilled-query'
@@ -69,10 +71,6 @@ export type InvoiceDetail = {
 
 // A visit that may join a draft: not cancelled, not archived, no Live claim; any status or date.
 export type ClaimableVisit = VisitDetails & { state: LineState; amount_cents: number }
-
-// A client with at least one claimable visit. Inactive and archived clients are listed: their old
-// visits can still be billed.
-export type BillableClient = { id: string; name: string; is_active: boolean; is_archived: boolean }
 
 export type UnbilledVisitRow = UnbilledVisit & {
   scheduled_start_time: string
@@ -271,33 +269,6 @@ export async function listClaimableVisits(db: Db, clientId: string): Promise<Cla
   }))
 }
 
-type BillableRow = { client_id: string; clients: Omit<BillableClient, 'id'> | null }
-
-// Only clients with a claimable visit (the same rule as listClaimableVisits), by name.
-export async function listBillableClients(db: Db): Promise<BillableClient[]> {
-  const rows = await readAllPages((from, to) =>
-    db
-      .from('appointments')
-      .select(`client_id, clients ( name, is_active, is_archived ), ${LIVE_CLAIM_EMBED}`)
-      .eq('live.is_archived', false)
-      .is('live.cancelled_at', null)
-      .is('live', null)
-      .neq('status', 'cancelled')
-      .eq('is_archived', false)
-      .order('id', { ascending: true })
-      .range(from, to)
-  )
-
-  const byId = new Map<string, BillableClient>()
-  for (const row of rows as unknown as BillableRow[]) {
-    if (row.clients) {
-      byId.set(row.client_id, { id: row.client_id, ...row.clients })
-    }
-  }
-
-  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
-}
-
 // The Receivables figures, summed in the database so they stay right past the row cap. Drafts are
 // only counted: their Live price is computed here (ADR 0001), by loadOpenDrafts.
 export async function getReceivablesTotals(db: Db, clientId: string | null = null): Promise<ReceivablesTotals> {
@@ -395,4 +366,54 @@ export async function countUnbilledVisits(db: Db): Promise<number> {
   const { count, error } = await unbilledQuery(db, 'id', { clientId: null, isCount: true })
   if (error) throw error
   return count ?? 0
+}
+
+const CLIENT_INVOICE_COLUMNS = `
+  id, status, invoice_number, created_at, issued_date, due_date, paid_date, payment_method,
+  total_cents, is_archived, is_automatic, is_mark_paid
+`
+
+type ClientInvoiceRow = Omit<ClientInvoice, 'line_count'>
+
+// Every invoice of one client, archived too (the Billing tab's Show archived is client-side). An open
+// draft carries its Live price and line count; no other invoice has Live lines.
+async function loadClientInvoices(db: Db, clientId: string): Promise<ClientInvoice[]> {
+  const [rows, drafts] = await Promise.all([
+    readAllPages((from, to) =>
+      db
+        .from('invoices_with_status')
+        .select(CLIENT_INVOICE_COLUMNS)
+        .eq('client_id', clientId)
+        .order('id', { ascending: true })
+        .range(from, to)
+    ),
+    loadOpenDrafts(db, clientId),
+  ])
+  const draftsById = new Map(drafts.map((draft) => [draft.id, draft]))
+
+  return (rows as unknown as ClientInvoiceRow[]).map((row) => {
+    const draft = draftsById.get(row.id)
+    return draft
+      ? { ...row, total_cents: draft.totalCents, line_count: draft.appointmentCount }
+      : { ...row, line_count: null }
+  })
+}
+
+export type ClientBilling = {
+  totals: ReceivablesTotals
+  invoices: ClientInvoice[]
+  // The picker's two groups: completed work not on an invoice, and open work that can be billed ahead.
+  unbilled: PickerAppointment[]
+  upcoming: PickerAppointment[]
+}
+
+// Everything the client page's Billing tab reads, in parallel. Read failures throw.
+export async function getClientBilling(db: Db, clientId: string): Promise<ClientBilling> {
+  const [totals, invoices, claimable] = await Promise.all([
+    getReceivablesTotals(db, clientId),
+    loadClientInvoices(db, clientId),
+    listClaimableVisits(db, clientId),
+  ])
+
+  return { totals, invoices, ...splitClaimable(claimable) }
 }

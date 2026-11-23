@@ -1,12 +1,11 @@
 import {
 	DetailHeaderSkeleton,
-	ItemListSkeleton,
 	TabsSkeleton,
-	TabToolbarSkeleton,
 } from '@/components/admin/detail-page/detail-skeleton'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { ClientTabSkeleton } from './billing-skeleton'
 
 const CLIENT_TAB_COUNT = 3
 
@@ -36,8 +35,7 @@ export default function ClientDetailLoading() {
 
 			<div className="space-y-4">
 				<TabsSkeleton count={CLIENT_TAB_COUNT} />
-				<TabToolbarSkeleton />
-				<ItemListSkeleton rows={3} />
+				<ClientTabSkeleton />
 			</div>
 		</div>
 	)

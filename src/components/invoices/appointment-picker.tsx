@@ -18,6 +18,8 @@ type AppointmentPickerProps = {
   // A client switch is loading: the body shows placeholder rows.
   isLoading?: boolean
   isUpcomingOpenByDefault?: boolean
+  // Overrides the picker's own surface, for a host that already draws the card around it.
+  className?: string
 }
 
 function sumCents(rows: PickerAppointment[]): number {
@@ -89,6 +91,7 @@ export function AppointmentPicker({
   disabled = false,
   isLoading = false,
   isUpcomingOpenByDefault = false,
+  className,
 }: AppointmentPickerProps) {
   const [isUpcomingOpen, setIsUpcomingOpen] = useState(isUpcomingOpenByDefault)
   const upcomingId = useId()
@@ -109,7 +112,10 @@ export function AppointmentPicker({
   return (
     <div
       aria-busy={isLoading || disabled}
-      className="divide-y divide-border overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-foreground/10"
+      className={cn(
+        'divide-y divide-border overflow-hidden rounded-lg bg-popover shadow-sm ring-1 ring-foreground/10',
+        className
+      )}
     >
       {isLoading ? (
         <PickerSkeleton />

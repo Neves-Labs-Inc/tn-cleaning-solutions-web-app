@@ -12,6 +12,9 @@ type StatTileProps = {
   href?: string;
   // Sizes the value to the tile's width, for dense grids where money values could overflow.
   fitValue?: boolean;
+  // For a pill-sized icon: the header wraps (the pill drops under the label when too tight, never
+  // crushing it) and holds two rows until the pill fits beside the label (8.25rem, a container query), so tiles side by side align their values.
+  wrapHeader?: boolean;
   // The tile whose view is showing: a primary ring, and aria-current on its Link.
   isActive?: boolean;
   className?: string;
@@ -26,6 +29,7 @@ export default function StatTile({
   icon,
   href,
   fitValue = false,
+  wrapHeader = false,
   isActive = false,
   className,
 }: StatTileProps): React.ReactNode {
@@ -40,9 +44,14 @@ export default function StatTile({
   );
   const content = (
     <>
-      <div className="flex items-start justify-between gap-2">
+      <div
+        className={cn(
+          "flex items-start justify-between gap-2",
+          wrapHeader && "min-h-[2.875rem] flex-wrap gap-x-2 gap-y-1 @[8.25rem]:min-h-[1.625rem]",
+        )}
+      >
         {/* Wraps rather than truncates: a long label in a narrow grid tile must stay readable. */}
-        <p className="min-w-0 text-balance break-words text-xs font-medium tracking-wider text-muted-foreground uppercase">
+        <p className={cn("min-w-0 text-balance break-words text-xs font-medium tracking-wider text-muted-foreground uppercase", wrapHeader && "shrink-0")}>
           {label}
         </p>
         {icon ? <span className="shrink-0 text-muted-foreground">{icon}</span> : null}
@@ -81,6 +90,8 @@ type StatTileSkeletonProps = {
   icon?: boolean;
   caption?: boolean;
   fitValue?: boolean;
+  // Matches StatTile wrapHeader: a pill-high label row.
+  wrapHeader?: boolean;
   // Hold two lines for the label or the caption until the tile is wide enough for one, as the
   // loaded text wraps in narrow tiles. Need fitValue, whose container the widths are read from.
   reserveLabelWrap?: boolean;
@@ -94,6 +105,7 @@ export function StatTileSkeleton({
   icon = false,
   caption = false,
   fitValue = false,
+  wrapHeader = false,
   reserveLabelWrap = false,
   reserveCaptionWrap = false,
   className,
@@ -105,6 +117,7 @@ export function StatTileSkeleton({
         className={cn(
           "flex items-center",
           icon ? "h-5" : "h-4",
+          wrapHeader && "h-[2.875rem] @[8.25rem]:h-[1.625rem]",
           reserveLabelWrap && "h-8 @[10.5rem]:h-5",
         )}
       >
