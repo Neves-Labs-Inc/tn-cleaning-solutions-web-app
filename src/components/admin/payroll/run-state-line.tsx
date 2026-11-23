@@ -25,12 +25,12 @@ export default function RunStateLine({
     <p
       id={id}
       className={cn(
-        "flex items-center gap-2 text-sm",
+        "flex items-start gap-2 text-sm",
         TONE_CLASS_NAMES[line.tone],
       )}
     >
       {line.tone === "paid" ? (
-        <Lock className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Lock className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
       ) : null}
       {line.text}
     </p>

@@ -100,14 +100,18 @@ export function describeProblemSession(
   return `Clocked in${clockIn}, no clock-out`;
 }
 
-// "Paid Oct 20, 2026 by e-Transfer".
+// "Paid Oct 20, 2026 by e-Transfer", or "... by Cash $200.00 + e-Transfer $340.00" for a split.
 export function describePaidRun(
-  run: Pick<PeriodRun, "paidOn" | "payoutMethod">,
+  run: Pick<PeriodRun, "paidOn" | "payoutMethod" | "payoutParts">,
 ): string {
+  const payout =
+    run.payoutParts.length > 0
+      ? formatPayoutParts(run.payoutParts, " + ")
+      : run.payoutMethod;
   const parts = [
     "Paid",
     run.paidOn === null ? null : formatLongDate(run.paidOn),
-    run.payoutMethod === null ? null : `by ${run.payoutMethod}`,
+    payout === null ? null : `by ${payout}`,
   ];
   return parts.filter((part) => part !== null).join(" ");
 }

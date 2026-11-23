@@ -9,10 +9,14 @@ import {
   parseMarkPaidRequest,
   parsePayoutEdit,
   parseRunTarget,
+  parseSplitMarkPaidRequest,
+  parseSplitPayoutEdit,
   type AdjustmentFieldErrors,
   type MarkPaidItem,
   type PayoutEdit,
   type RunTarget,
+  type SplitMarkPaidRequest,
+  type SplitPayoutEdit,
 } from "@/lib/payroll/action-input";
 import {
   getPayrollErrorMessage,
@@ -230,6 +234,37 @@ export async function updatePayRunPayout(
   const writer = await getAdminWriter();
   if (writer === null) return refuseNonAdmin();
   const result = await writer.updatePayout(parsed);
+  revalidatePayroll(periodStart);
+  return result;
+}
+
+// Mark one run paid with a Split payout. Its own action: a split is one run and one result, not a
+// bulk row per run.
+export async function markPayRunPaidWithParts(
+  periodStart: string,
+  request: SplitMarkPaidRequest,
+): Promise<PayrollActionResult> {
+  const parsed = parseSplitMarkPaidRequest(request);
+  if (parsed === null || !isDateText(periodStart)) return refuseInput();
+
+  const writer = await getAdminWriter();
+  if (writer === null) return refuseNonAdmin();
+  const result = await writer.markPaidWithParts(parsed, parsed.paidOn);
+  revalidatePayroll(periodStart);
+  return result;
+}
+
+// Replaces a paid run's payout with a Split payout; going back to one method is updatePayRunPayout.
+export async function updatePayRunPayoutParts(
+  periodStart: string,
+  edit: SplitPayoutEdit,
+): Promise<PayrollActionResult> {
+  const parsed = parseSplitPayoutEdit(edit);
+  if (parsed === null || !isDateText(periodStart)) return refuseInput();
+
+  const writer = await getAdminWriter();
+  if (writer === null) return refuseNonAdmin();
+  const result = await writer.updatePayoutParts(parsed);
   revalidatePayroll(periodStart);
   return result;
 }

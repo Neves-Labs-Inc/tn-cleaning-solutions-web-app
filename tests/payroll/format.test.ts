@@ -108,8 +108,26 @@ describe("describeProblemSession", () => {
 describe("describePaidRun", () => {
   it("gives the paid date and Payout method", () => {
     assert.equal(
-      describePaidRun({ paidOn: "2026-10-20", payoutMethod: "e-Transfer" }),
+      describePaidRun({
+        paidOn: "2026-10-20",
+        payoutMethod: "e-Transfer",
+        payoutParts: [],
+      }),
       "Paid Oct 20, 2026 by e-Transfer",
+    );
+  });
+
+  it("lists a split payout's parts", () => {
+    assert.equal(
+      describePaidRun({
+        paidOn: "2026-10-20",
+        payoutMethod: null,
+        payoutParts: [
+          { method: "Cash", amount_cents: 20000 },
+          { method: "e-Transfer", amount_cents: 34000 },
+        ],
+      }),
+      "Paid Oct 20, 2026 by Cash $200.00 + e-Transfer $340.00",
     );
   });
 });

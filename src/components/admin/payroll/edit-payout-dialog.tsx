@@ -1,12 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { AlertCircle, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 import { OUTLINE_PRESS_CLASS_NAME } from "@/components/admin/detail-page/press";
 import { PayoutMethodInput } from "@/components/admin/payroll/payout-method-input";
+import {
+  SplitPayoutEditor,
+  SplitPayoutLink,
+  splitDescribedBy,
+  splitRefusalId,
+} from "@/components/admin/payroll/split-payout-editor";
 import {
   ERROR_MOTION_CLASS,
   INPUT_HOVER_CLASS,
@@ -30,11 +36,19 @@ import ResponsiveDialog from "@/components/ui/responsive-dialog";
 import SubmitButton from "@/components/ui/submit-button";
 import { useBusinessDateOnOpen } from "@/hooks/use-business-date-on-open";
 import { useFocusAfterPending } from "@/hooks/use-focus-after-pending";
-import { updatePayRunPayout } from "@/lib/actions/payroll";
 import {
+  updatePayRunPayout,
+  updatePayRunPayoutParts,
+} from "@/lib/actions/payroll";
+import {
+  canConfirmSplit,
   methodError,
   paidOnError,
   paidOnFieldError,
+  partsToDrafts,
+  splitRefusalMessage,
+  toSplitParts,
+  type PartDraft,
 } from "@/lib/payroll/mark-paid";
 import { formatShortDate } from "@/lib/payroll/period";
 import { getFirstName } from "@/lib/payroll/period-actions";
@@ -83,6 +97,18 @@ function EditPayoutForm({
     null,
   );
   const [formError, setFormError] = useState<string | null>(null);
+  // Opens on the run's current payout: its parts when it was split, else one method (null).
+  const [splitParts, setSplitParts] = useState<PartDraft[] | null>(() =>
+    run.payoutParts.length > 1 ? partsToDrafts(run.payoutParts) : null,
+  );
+  const [splitRefusal, setSplitRefusal] = useState<string | null>(null);
+  const [shouldFocusSplit, setShouldFocusSplit] = useState(false);
+  const shouldFocusSingleRef = useRef(false);
+
+  const canSplit = run.totalCents > 0;
+  const isSplit = splitParts !== null;
+  const hasUnpayableSplit =
+    splitParts !== null && !canConfirmSplit(splitParts, run.totalCents);
 
   const ids = {
     method: `${idPrefix}-method`,
@@ -100,14 +126,60 @@ function EditPayoutForm({
     run.eTransferContact === null ? null : ids.contact,
   ].filter((id) => id !== null);
 
+  // The refusal message takes focus once it has rendered, so a screen reader reads it.
+  useEffect(() => {
+    if (splitRefusal === null) return;
+    document.getElementById(splitRefusalId(ids.method))?.focus();
+    // Only a new refusal moves focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [splitRefusal]);
+
+  useEffect(() => {
+    if (isSplit || !shouldFocusSingleRef.current) return;
+    shouldFocusSingleRef.current = false;
+    document.getElementById(ids.method)?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSplit]);
+
+  // The first row keeps the method already chosen; its amount is left for the admin.
+  function handleStartSplit(): void {
+    setSplitParts([
+      { method, amount: "" },
+      { method: "", amount: "" },
+    ]);
+    setShouldFocusSplit(true);
+  }
+
+  function handleSplitChange(parts: PartDraft[]): void {
+    setSplitParts(parts);
+    setSplitRefusal(null);
+  }
+
+  // Keeps the first row's method; the other rows and every amount are dropped.
+  function handleUseOneMethod(): void {
+    if (splitParts === null) return;
+    setMethod(splitParts[0].method);
+    setSplitParts(null);
+    setSplitRefusal(null);
+    setShouldFocusSplit(false);
+    shouldFocusSingleRef.current = true;
+  }
+
   async function submit(runId: string): Promise<void> {
     let result: Awaited<ReturnType<typeof updatePayRunPayout>>;
     try {
-      result = await updatePayRunPayout(periodStart, {
-        runId,
-        payoutMethod: method,
-        paidOn,
-      });
+      result =
+        splitParts === null
+          ? await updatePayRunPayout(periodStart, {
+              runId,
+              payoutMethod: method,
+              paidOn,
+            })
+          : await updatePayRunPayoutParts(periodStart, {
+              runId,
+              parts: toSplitParts(splitParts),
+              paidOn,
+            });
     } catch (cause) {
       console.error("payroll: update payout request failed", cause);
       showFormError(CONNECTION_ERROR_MESSAGE);
@@ -116,12 +188,16 @@ function EditPayoutForm({
 
     const fieldError =
       result.error === null ? null : paidOnFieldError(result.error, periodEnd);
+    const splitMessage =
+      result.error === null ? null : splitRefusalMessage(result.error);
     if (result.error === null) {
       onSuccess();
       toast.success("Payout updated");
     } else if (fieldError !== null) {
       setServerPaidOnError(fieldError);
       focusAfterPending(paidOnRef.current);
+    } else if (splitMessage !== null) {
+      setSplitRefusal(splitMessage);
     } else {
       showFormError(
         result.status >= SERVER_ERROR_STATUS
@@ -144,40 +220,61 @@ function EditPayoutForm({
       paidOnRef.current?.focus();
       return;
     }
-    if (methodHint !== null || runId === null) return;
+    const isUnpayable =
+      splitParts === null ? methodHint !== null : hasUnpayableSplit;
+    if (isUnpayable || runId === null) return;
 
     setFormError(null);
+    setSplitRefusal(null);
     startTransition(() => submit(runId));
   }
 
   return (
     // noValidate: every check shows under its field instead of the browser's bubble.
     <form onSubmit={handleSubmit} noValidate className="space-y-5">
-      <Field>
-        <FieldLabel htmlFor={ids.method}>Payout method</FieldLabel>
-        <PayoutMethodInput
-          id={ids.method}
-          name="payout_method"
-          value={method}
-          onChange={(event) => setMethod(event.target.value)}
-          placeholder="e.g. Cash"
-          disabled={isPending}
-          className={INPUT_HOVER_CLASS}
-          describedBy={
-            methodDescribedBy.length === 0
-              ? undefined
-              : methodDescribedBy.join(" ")
-          }
+      {splitParts === null ? (
+        <Field>
+          <FieldLabel htmlFor={ids.method}>Payout method</FieldLabel>
+          <PayoutMethodInput
+            id={ids.method}
+            name="payout_method"
+            value={method}
+            onChange={(event) => setMethod(event.target.value)}
+            placeholder="e.g. Cash"
+            disabled={isPending}
+            className={INPUT_HOVER_CLASS}
+            describedBy={
+              methodDescribedBy.length === 0
+                ? undefined
+                : methodDescribedBy.join(" ")
+            }
+          />
+          {methodHint === null ? null : (
+            <FieldDescription id={ids.methodHint}>
+              {methodHint}
+            </FieldDescription>
+          )}
+          {run.eTransferContact === null ? null : (
+            <FieldDescription id={ids.contact} className="break-words">
+              e-Transfer to {run.eTransferContact}
+            </FieldDescription>
+          )}
+          {canSplit ? (
+            <SplitPayoutLink isPending={isPending} onClick={handleStartSplit} />
+          ) : null}
+        </Field>
+      ) : (
+        <SplitPayoutEditor
+          idPrefix={ids.method}
+          parts={splitParts}
+          totalCents={run.totalCents}
+          isPending={isPending}
+          refusal={splitRefusal}
+          shouldFocusOnMount={shouldFocusSplit}
+          onChange={handleSplitChange}
+          onUseOneMethod={handleUseOneMethod}
         />
-        {methodHint === null ? null : (
-          <FieldDescription id={ids.methodHint}>{methodHint}</FieldDescription>
-        )}
-        {run.eTransferContact === null ? null : (
-          <FieldDescription id={ids.contact} className="break-words">
-            e-Transfer to {run.eTransferContact}
-          </FieldDescription>
-        )}
-      </Field>
+      )}
 
       <Field data-invalid={dateError === null ? undefined : true}>
         <FieldLabel htmlFor={ids.paidOn}>Paid on</FieldLabel>
@@ -212,8 +309,8 @@ function EditPayoutForm({
       </Field>
 
       <p className="text-xs text-muted-foreground">
-        A paid run can&apos;t go back to unpaid. Fix money with an Adjustment
-        on a later run.
+        A paid run can&apos;t go back to unpaid. Fix money with an Adjustment on
+        a later run.
       </p>
 
       {formError === null ? null : (
@@ -235,7 +332,12 @@ function EditPayoutForm({
             label="Save"
             pendingLabel="Saving…"
             isPending={isPending}
-            disabled={methodHint !== null}
+            disabled={isSplit ? hasUnpayableSplit : methodHint !== null}
+            aria-describedby={
+              splitParts === null
+                ? undefined
+                : splitDescribedBy(ids.method, splitParts)
+            }
             className={SHEET_BUTTON_CLASS}
           />
         </SheetButtons>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -10,6 +10,12 @@ import {
   SpecBadge,
 } from "@/components/admin/payroll/payroll-badges";
 import { PayoutMethodInput } from "@/components/admin/payroll/payout-method-input";
+import {
+  SplitPayoutEditor,
+  SplitPayoutLink,
+  splitDescribedBy,
+  splitRefusalId,
+} from "@/components/admin/payroll/split-payout-editor";
 import {
   ERROR_MOTION_CLASS,
   INPUT_HOVER_CLASS,
@@ -32,15 +38,23 @@ import { OFF_CYCLE_BADGE } from "@/components/ui/status-badge-tones";
 import SubmitButton from "@/components/ui/submit-button";
 import { useBusinessDateOnOpen } from "@/hooks/use-business-date-on-open";
 import { useFocusAfterPending } from "@/hooks/use-focus-after-pending";
-import { markPayRunsPaid } from "@/lib/actions/payroll";
+import {
+  markPayRunPaidWithParts,
+  markPayRunsPaid,
+} from "@/lib/actions/payroll";
 import { pluralize } from "@/lib/payroll/format";
 import {
+  canConfirmSplit,
   getBlockerLink,
   markPaidSubmitLabel,
   markPaidSuccessText,
   methodError,
   paidOnError,
+  paidOnFieldError,
   readMarkPaidRows,
+  splitRefusalMessage,
+  toSplitParts,
+  type PartDraft,
 } from "@/lib/payroll/mark-paid";
 import { formatShortDate } from "@/lib/payroll/period";
 import { getFirstName } from "@/lib/payroll/period-actions";
@@ -129,6 +143,18 @@ type MethodRowProps = {
   serverError: string | null;
   isPending: boolean;
   onChange: (value: string) => void;
+  split: SplitRowState | null;
+};
+
+// A lone run can be split; null on every other row.
+type SplitRowState = {
+  // null while the run is paid with one method.
+  parts: PartDraft[] | null;
+  refusal: string | null;
+  shouldFocusOnMount: boolean;
+  onStart: () => void;
+  onChange: (parts: PartDraft[]) => void;
+  onUseOneMethod: () => void;
 };
 
 function MethodRow({
@@ -138,6 +164,7 @@ function MethodRow({
   serverError,
   isPending,
   onChange,
+  split,
 }: MethodRowProps): React.ReactNode {
   const hint = methodError(value, getFirstName(run.cleaner.name));
   const ids = {
@@ -154,47 +181,63 @@ function MethodRow({
         <RunName run={run} />
         <Amount cents={run.totalCents} />
       </div>
-      <Field data-invalid={serverError === null ? undefined : true}>
-        <FieldLabel htmlFor={inputId}>
-          Payout method
-          {/* Every row has this label; the name tells them apart for a screen reader. */}
-          <span className="sr-only"> for {run.cleaner.name}</span>
-        </FieldLabel>
-        <PayoutMethodInput
-          id={inputId}
-          name={`payout_method_${run.runId}`}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="e.g. Cash"
-          disabled={isPending}
-          className={INPUT_HOVER_CLASS}
-          error={serverError}
-          describedBy={joinIds([
-            serverError === null ? null : ids.error,
-            hint === null ? null : ids.hint,
-            run.eTransferContact === null ? null : ids.contact,
-            hasNoDefault ? ids.noDefault : null,
-          ])}
+      {split?.parts == null ? (
+        <Field data-invalid={serverError === null ? undefined : true}>
+          <FieldLabel htmlFor={inputId}>
+            Payout method
+            {/* Every row has this label; the name tells them apart for a screen reader. */}
+            <span className="sr-only"> for {run.cleaner.name}</span>
+          </FieldLabel>
+          <PayoutMethodInput
+            id={inputId}
+            name={`payout_method_${run.runId}`}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="e.g. Cash"
+            disabled={isPending}
+            className={INPUT_HOVER_CLASS}
+            error={serverError}
+            describedBy={joinIds([
+              serverError === null ? null : ids.error,
+              hint === null ? null : ids.hint,
+              run.eTransferContact === null ? null : ids.contact,
+              hasNoDefault ? ids.noDefault : null,
+            ])}
+          />
+          {serverError === null ? null : (
+            <FieldError id={ids.error} className={ERROR_MOTION_CLASS}>
+              {serverError}
+            </FieldError>
+          )}
+          {hint === null || serverError !== null ? null : (
+            <FieldDescription id={ids.hint}>{hint}</FieldDescription>
+          )}
+          {run.eTransferContact === null ? null : (
+            <FieldDescription id={ids.contact} className="break-words">
+              e-Transfer to {run.eTransferContact}
+            </FieldDescription>
+          )}
+          {hasNoDefault ? (
+            <FieldDescription id={ids.noDefault}>
+              No default method set
+            </FieldDescription>
+          ) : null}
+          {split === null ? null : (
+            <SplitPayoutLink isPending={isPending} onClick={split.onStart} />
+          )}
+        </Field>
+      ) : (
+        <SplitPayoutEditor
+          idPrefix={inputId}
+          parts={split.parts}
+          totalCents={run.totalCents}
+          isPending={isPending}
+          refusal={split.refusal}
+          shouldFocusOnMount={split.shouldFocusOnMount}
+          onChange={split.onChange}
+          onUseOneMethod={split.onUseOneMethod}
         />
-        {serverError === null ? null : (
-          <FieldError id={ids.error} className={ERROR_MOTION_CLASS}>
-            {serverError}
-          </FieldError>
-        )}
-        {hint === null || serverError !== null ? null : (
-          <FieldDescription id={ids.hint}>{hint}</FieldDescription>
-        )}
-        {run.eTransferContact === null ? null : (
-          <FieldDescription id={ids.contact} className="break-words">
-            e-Transfer to {run.eTransferContact}
-          </FieldDescription>
-        )}
-        {hasNoDefault ? (
-          <FieldDescription id={ids.noDefault}>
-            No default method set
-          </FieldDescription>
-        ) : null}
-      </Field>
+      )}
     </li>
   );
 }
@@ -230,6 +273,18 @@ export default function MarkPaidRunsForm({
     Record<string, string>
   >({});
   const [formError, setFormError] = useState<string | null>(null);
+  // A lone run with a total can be paid in parts; null parts means one method.
+  const [splitParts, setSplitParts] = useState<PartDraft[] | null>(null);
+  const [splitRefusal, setSplitRefusal] = useState<string | null>(null);
+  const [shouldFocusSplit, setShouldFocusSplit] = useState(false);
+  const shouldFocusSingleRef = useRef(false);
+
+  const [onlyRun] = ready;
+  const canSplit =
+    ready.length === 1 && blocked.length === 0 && onlyRun.totalCents > 0;
+  const isSplit = splitParts !== null;
+  const hasUnpayableSplit =
+    splitParts !== null && !canConfirmSplit(splitParts, onlyRun.totalCents);
 
   const ids = {
     paidOn: `${idPrefix}-paid-on`,
@@ -245,6 +300,45 @@ export default function MarkPaidRunsForm({
 
   function methodInputId(run: PeriodRun): string {
     return `${idPrefix}-method-${run.key}`;
+  }
+
+  // The refusal message takes focus once it has rendered, so a screen reader reads it.
+  useEffect(() => {
+    if (splitRefusal === null) return;
+    document.getElementById(splitRefusalId(methodInputId(onlyRun)))?.focus();
+    // Only a new refusal moves focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [splitRefusal]);
+
+  useEffect(() => {
+    if (isSplit || !shouldFocusSingleRef.current) return;
+    shouldFocusSingleRef.current = false;
+    document.getElementById(methodInputId(onlyRun))?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSplit]);
+
+  // The first row keeps the method already chosen; its amount is left for the admin.
+  function handleStartSplit(): void {
+    setSplitParts([
+      { method: methods[onlyRun.key] ?? "", amount: "" },
+      { method: "", amount: "" },
+    ]);
+    setShouldFocusSplit(true);
+  }
+
+  function handleSplitChange(parts: PartDraft[]): void {
+    setSplitParts(parts);
+    setSplitRefusal(null);
+  }
+
+  // Keeps the first row's method; the other rows and every amount are dropped.
+  function handleUseOneMethod(): void {
+    if (splitParts === null) return;
+    setMethods({ ...methods, [onlyRun.key]: splitParts[0].method });
+    setSplitParts(null);
+    setSplitRefusal(null);
+    setShouldFocusSplit(false);
+    shouldFocusSingleRef.current = true;
   }
 
   function handleMethodChange(run: PeriodRun, value: string): void {
@@ -282,6 +376,41 @@ export default function MarkPaidRunsForm({
   function showFormError(message: string): void {
     setFormError(message);
     focusAfterPending(submitRef.current);
+  }
+
+  async function submitSplit(runId: string, parts: PartDraft[]): Promise<void> {
+    let result: Awaited<ReturnType<typeof markPayRunPaidWithParts>>;
+    try {
+      result = await markPayRunPaidWithParts(periodStart, {
+        runId,
+        parts: toSplitParts(parts),
+        paidOn,
+      });
+    } catch (cause) {
+      console.error("payroll: mark paid with parts request failed", cause);
+      showFormError(CONNECTION_ERROR_MESSAGE);
+      return;
+    }
+
+    if (result.error === null) {
+      onSuccess([onlyRun]);
+      toast.success(markPaidSuccessText([onlyRun]));
+      return;
+    }
+
+    onRefusal();
+    const paidOnMessage = paidOnFieldError(result.error, periodEnd);
+    const splitMessage = splitRefusalMessage(result.error);
+    if (result.status >= SERVER_ERROR_STATUS) {
+      showFormError(CONNECTION_ERROR_MESSAGE);
+    } else if (paidOnMessage !== null) {
+      setServerPaidOnError(paidOnMessage);
+      focusAfterPending(paidOnRef.current);
+    } else if (splitMessage !== null) {
+      setSplitRefusal(splitMessage);
+    } else {
+      showFormError(result.error);
+    }
   }
 
   async function submit(): Promise<void> {
@@ -329,9 +458,16 @@ export default function MarkPaidRunsForm({
       paidOnRef.current?.focus();
       return;
     }
+    setFormError(null);
+    if (splitParts !== null) {
+      const { runId } = onlyRun;
+      if (hasUnpayableSplit || runId === null) return;
+      setSplitRefusal(null);
+      startTransition(() => submitSplit(runId, splitParts));
+      return;
+    }
     if (hasBlankMethod) return;
 
-    setFormError(null);
     startTransition(submit);
   }
 
@@ -346,10 +482,24 @@ export default function MarkPaidRunsForm({
             inputId={methodInputId(run)}
             value={methods[run.key] ?? ""}
             serverError={
-              run.runId === null ? null : (serverMethodErrors[run.runId] ?? null)
+              run.runId === null
+                ? null
+                : (serverMethodErrors[run.runId] ?? null)
             }
             isPending={isPending}
             onChange={(value) => handleMethodChange(run, value)}
+            split={
+              canSplit
+                ? {
+                    parts: splitParts,
+                    refusal: splitRefusal,
+                    shouldFocusOnMount: shouldFocusSplit,
+                    onStart: handleStartSplit,
+                    onChange: handleSplitChange,
+                    onUseOneMethod: handleUseOneMethod,
+                  }
+                : null
+            }
           />
         ))}
         {blocked.map((run) => (
@@ -373,7 +523,9 @@ export default function MarkPaidRunsForm({
           }}
           disabled={isPending}
           aria-invalid={dateError === null ? undefined : true}
-          aria-describedby={dateError === null ? ids.paidOnHint : ids.paidOnError}
+          aria-describedby={
+            dateError === null ? ids.paidOnHint : ids.paidOnError
+          }
           className={INPUT_HOVER_CLASS}
         />
         {dateError === null ? (
@@ -411,7 +563,12 @@ export default function MarkPaidRunsForm({
             label={markPaidSubmitLabel(ready.length, totalCents)}
             pendingLabel="Marking paid…"
             isPending={isPending}
-            disabled={hasBlankMethod}
+            disabled={isSplit ? hasUnpayableSplit : hasBlankMethod}
+            aria-describedby={
+              splitParts === null
+                ? undefined
+                : splitDescribedBy(methodInputId(onlyRun), splitParts)
+            }
             className={SHEET_BUTTON_CLASS}
           />
         </SheetButtons>
