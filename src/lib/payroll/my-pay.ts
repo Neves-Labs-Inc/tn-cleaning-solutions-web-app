@@ -1,6 +1,7 @@
 // Relative imports: node --test runs this file without the @/ alias.
 import type { Database } from "../../types/database.ts";
 import { formatCents } from "../pricing/money.ts";
+import { formatPayoutParts } from "./format.ts";
 import type { PayoutPart } from "./payroll-data.ts";
 import { addDays, formatHoursMinutes, formatShortDate } from "./period.ts";
 
@@ -62,6 +63,8 @@ const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 // U+2212, so a negative Adjustment reads as a true minus, not a hyphen.
 const MINUS_SIGN = "−";
 
+const PART_SEPARATOR = ", ";
+
 function getYear(day: string): string {
   return day.slice(0, 4);
 }
@@ -75,6 +78,19 @@ function formatLongDate(day: string): string {
 function formatWeekdayDate(day: string): string {
   const weekday = WEEKDAY_NAMES[new Date(`${day}T00:00:00Z`).getUTCDay()];
   return `${weekday}, ${formatShortDate(day)}`;
+}
+
+// "Paid Oct 20, 2026 by e-Transfer", or "Paid Nov 20, 2026: Cash $200.00, e-Transfer $340.00" for a
+// Split payout. Also the Pay statement's paid line.
+export function formatPaidLabel(
+  row: Pick<MyPayRunRow, "paid_on" | "payout_method" | "payout_parts">,
+): string {
+  const paid = `Paid ${formatLongDate(row.paid_on)}`;
+  const parts = row.payout_parts ?? [];
+  if (parts.length > 1) {
+    return `${paid}: ${formatPayoutParts(parts, PART_SEPARATOR)}`;
+  }
+  return `${paid} by ${parts[0]?.method ?? row.payout_method}`;
 }
 
 function formatSignedCents(cents: number): string {
@@ -153,7 +169,7 @@ function toRun(
     id: row.id,
     periodLabel: formatPayPeriodRange(row.period_start),
     isOffCycle: row.kind === "off_cycle",
-    paidLabel: `Paid ${formatLongDate(row.paid_on)} by ${row.payout_method}`,
+    paidLabel: formatPaidLabel(row),
     totalCents: row.total_cents,
     minutes: runLines.reduce((total, line) => total + line.minutes, 0),
     lines: runLines.map(toLine),

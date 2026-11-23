@@ -81,6 +81,20 @@ describe("buildMyPay: runs", () => {
     assert.equal(run.isOffCycle, false);
   });
 
+  it("lists each part with its amount on a split run's paid line", () => {
+    const split = runRow({
+      paid_on: "2026-11-20",
+      payout_method: null,
+      payout_parts: [
+        { method: "Cash", amount_cents: 20000 },
+        { method: "e-Transfer", amount_cents: 34000 },
+      ],
+    });
+    const [run] = allRuns(buildMyPay({ runs: [split], lines: [], adjustments: [] }));
+
+    assert.equal(run.paidLabel, "Paid Nov 20, 2026: Cash $200.00, e-Transfer $340.00");
+  });
+
   it("marks an off-cycle run", () => {
     const [run] = allRuns(
       buildMyPay({ runs: [runRow({ kind: "off_cycle" })], lines: [], adjustments: [] }),

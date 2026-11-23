@@ -46,13 +46,18 @@ const RIGHT_ALIGNED_STYLE: Partial<ExcelJS.Style> = {
   alignment: { horizontal: "right" },
 };
 
+// A 3-part split runs past the column, so it wraps and the row grows instead of clipping.
+const WRAPPED_STYLE: Partial<ExcelJS.Style> = {
+  alignment: { wrapText: true, vertical: "top" },
+};
+
 const SUMMARY_COLUMNS: ColumnSpec[] = [
   { header: "Cleaner", width: 24 },
   { header: "Hours", width: 10, style: HOURS_STYLE },
   { header: "Shift pay", width: 12, style: MONEY_STYLE },
   { header: "Adjustments", width: 13, style: MONEY_STYLE },
   { header: "Total", width: 12, style: MONEY_STYLE },
-  { header: "Payout method", width: 22 },
+  { header: "Payout method", width: 36, style: WRAPPED_STYLE },
   { header: "Paid date", width: 22, style: DATE_STYLE },
 ];
 

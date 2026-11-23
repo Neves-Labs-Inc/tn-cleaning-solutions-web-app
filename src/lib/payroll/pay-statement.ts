@@ -20,10 +20,11 @@ import { formatCad, formatSignedCad } from "../pdf/format.ts";
 import { formatRate } from "../pricing/money.ts";
 import { PDF_COLORS, PDF_FONTS, PDF_STYLES } from "../pdf/theme.ts";
 import { formatLongDate } from "./format.ts";
-import type {
-  MyPayAdjustmentRow,
-  MyPayLineRow,
-  MyPayRunRow,
+import {
+  formatPaidLabel,
+  type MyPayAdjustmentRow,
+  type MyPayLineRow,
+  type MyPayRunRow,
 } from "./my-pay.ts";
 import {
   addDays,
@@ -142,7 +143,7 @@ export function buildPayStatementModel(
     documentTitle: `Pay statement · ${cleanerName} · ${period}`,
     cleanerName,
     periodLine: `Pay period ${period}${offCycleNote}`,
-    paidLine: `Paid ${formatLongDate(run.paid_on)} by ${run.payout_method}`,
+    paidLine: formatPaidLabel(run),
     shiftRows:
       lines.length === 0
         ? [["", { text: NO_SHIFTS_LABEL, muted: true }, "", "", ""]]
