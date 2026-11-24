@@ -194,4 +194,105 @@ describe("PayrollWriter", () => {
     assert.equal(result.error, "The paid date can't be in the future");
     assert.equal(result.status, 409);
   });
+  describe("split payouts", () => {
+    const PARTS = [
+      { method: "Cash", amountCents: 20000 },
+      { method: "e-Transfer", amountCents: 34000 },
+    ];
+
+    function recordingWriter(response: RpcResponse) {
+      const calls: unknown[][] = [];
+      const db = {
+        rpc: async (...args: unknown[]) => {
+          calls.push(args);
+          return response;
+        },
+      };
+      const silent = { warn: () => {}, error: () => {} };
+      return { calls, writer: new PayrollWriter(db as never, silent) };
+    }
+
+    it("marks one run paid with its parts in the order given", async () => {
+      const { calls, writer } = recordingWriter({ data: null, error: null });
+
+      const result = await writer.markPaidWithParts(
+        { runId: "run-1", parts: PARTS },
+        "2026-10-20",
+      );
+
+      assert.deepEqual(calls, [
+        [
+          "mark_pay_run_paid_with_parts",
+          {
+            p_run_id: "run-1",
+            p_parts: [
+              { method: "Cash", amount_cents: 20000 },
+              { method: "e-Transfer", amount_cents: 34000 },
+            ],
+            p_paid_on: "2026-10-20",
+          },
+        ],
+      ]);
+      assert.deepEqual(result, { value: null, error: null, status: 200 });
+    });
+
+    it("edits a paid run's payout to a split", async () => {
+      const { calls, writer } = recordingWriter({ data: null, error: null });
+
+      const result = await writer.updatePayoutParts({
+        runId: "run-1",
+        parts: PARTS,
+        paidOn: "2026-10-21",
+      });
+
+      assert.deepEqual(calls, [
+        [
+          "update_pay_run_payout",
+          {
+            p_run_id: "run-1",
+            p_payout_method: null,
+            p_parts: [
+              { method: "Cash", amount_cents: 20000 },
+              { method: "e-Transfer", amount_cents: 34000 },
+            ],
+            p_paid_on: "2026-10-21",
+          },
+        ],
+      ]);
+      assert.equal(result.status, 200);
+    });
+
+    const REFUSALS = [
+      ["split_too_few_parts", "Add at least two parts", 422],
+      ["split_part_not_positive", "Each part needs an amount above $0", 422],
+      ["split_duplicate_method", "Each part needs a different Payout method", 422],
+      ["split_sum_mismatch", "The parts must add up to the run's total", 422],
+      ["split_not_allowed", "A Pay run of $0 or less can't be split", 409],
+    ] as const;
+
+    for (const [code, message, status] of REFUSALS) {
+      it(`maps ${code} on Mark paid to its message and status`, async () => {
+        const writer = writerReturning(refusal(code));
+
+        const result = await writer.markPaidWithParts(
+          { runId: "run-1", parts: PARTS },
+          "2026-10-20",
+        );
+
+        assert.deepEqual(result, { value: null, error: message, status });
+      });
+
+      it(`maps ${code} on Edit payout to its message and status`, async () => {
+        const writer = writerReturning(refusal(code));
+
+        const result = await writer.updatePayoutParts({
+          runId: "run-1",
+          parts: PARTS,
+          paidOn: "2026-10-20",
+        });
+
+        assert.deepEqual(result, { value: null, error: message, status });
+      });
+    }
+  });
 });

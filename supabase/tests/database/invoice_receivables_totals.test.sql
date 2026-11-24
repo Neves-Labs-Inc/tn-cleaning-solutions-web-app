@@ -25,10 +25,9 @@ insert into auth.users (id, email) values
 	('a0000000-0000-4000-8000-000000000021', 'pgtap.totals.admin@example.test'),
 	('a0000000-0000-4000-8000-000000000022', 'pgtap.totals.employee@example.test');
 
--- Automatic invoicing off, so no trigger opens drafts of its own.
-insert into public.clients (id, name, automatic_invoicing) values
-	('c0000000-0000-4000-8000-000000000021', 'pgTAP Totals Big', false),
-	('c0000000-0000-4000-8000-000000000022', 'pgTAP Totals Small', false);
+insert into public.clients (id, name) values
+	('c0000000-0000-4000-8000-000000000021', 'pgTAP Totals Big'),
+	('c0000000-0000-4000-8000-000000000022', 'pgTAP Totals Small');
 
 insert into public.jobs (id, name, hourly_rate_cents) values
 	('b0000000-0000-4000-8000-000000000021', 'pgTAP Totals Job', 4500);

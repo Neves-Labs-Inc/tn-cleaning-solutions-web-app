@@ -20,9 +20,8 @@ set local time zone 'UTC';
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
 
--- Automatic invoicing off, so no trigger opens drafts of its own.
-insert into public.clients (id, name, automatic_invoicing) values
-	('c0000000-0000-4000-8000-000000000031', 'pgTAP Activity Client', false);
+insert into public.clients (id, name) values
+	('c0000000-0000-4000-8000-000000000031', 'pgTAP Activity Client');
 
 insert into public.invoices (id, client_id, status, invoice_number, issued_date, due_date, created_at) values
 	-- Draft created 23:30 Eastern on Oct 9 (03:30 UTC on Oct 10).

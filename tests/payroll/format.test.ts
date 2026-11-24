@@ -8,6 +8,7 @@ import {
   formatDayLabel,
   formatLongDate,
   formatPeriodRange,
+  formatPayoutParts,
   formatPeriodRowCaption,
   formatSignedCents,
   getRunStateLine,
@@ -107,8 +108,26 @@ describe("describeProblemSession", () => {
 describe("describePaidRun", () => {
   it("gives the paid date and Payout method", () => {
     assert.equal(
-      describePaidRun({ paidOn: "2026-10-20", payoutMethod: "e-Transfer" }),
+      describePaidRun({
+        paidOn: "2026-10-20",
+        payoutMethod: "e-Transfer",
+        payoutParts: [],
+      }),
       "Paid Oct 20, 2026 by e-Transfer",
+    );
+  });
+
+  it("lists a split payout's parts", () => {
+    assert.equal(
+      describePaidRun({
+        paidOn: "2026-10-20",
+        payoutMethod: null,
+        payoutParts: [
+          { method: "Cash", amount_cents: 20000 },
+          { method: "e-Transfer", amount_cents: 34000 },
+        ],
+      }),
+      "Paid Oct 20, 2026 by Cash $200.00 + e-Transfer $340.00",
     );
   });
 });
@@ -241,5 +260,37 @@ describe("formatPeriodRowCaption", () => {
     const [, , october] = summarizePeriods(data, NOV_3).rows;
 
     assert.equal(formatPeriodRowCaption(october), "1 Cleaner · 1 draft");
+  });
+});
+
+describe("formatPayoutParts", () => {
+  const SPLIT = [
+    { method: "Cash", amount_cents: 20000 },
+    { method: "e-Transfer", amount_cents: 34000 },
+  ];
+
+  it("joins a split's parts with the admin separator", () => {
+    assert.equal(
+      formatPayoutParts(SPLIT, " + "),
+      "Cash $200.00 + e-Transfer $340.00",
+    );
+  });
+
+  it("joins a split's parts with the Cleaner separator", () => {
+    assert.equal(
+      formatPayoutParts(SPLIT, ", "),
+      "Cash $200.00, e-Transfer $340.00",
+    );
+  });
+
+  it("keeps a single-method run's wording: the method alone", () => {
+    assert.equal(
+      formatPayoutParts([{ method: "e-Transfer", amount_cents: 54000 }], " + "),
+      "e-Transfer",
+    );
+  });
+
+  it("writes nothing for a run with no parts", () => {
+    assert.equal(formatPayoutParts([], " + "), "");
   });
 });

@@ -1,6 +1,7 @@
 // Relative imports: node --test runs this file without the @/ alias.
 import type { Tables } from "../../types/database.ts";
 import type { PayrollData } from "./payroll-data.ts";
+import { formatPayoutParts } from "./format.ts";
 import { addDays, type PayPeriod } from "./period.ts";
 import { buildPeriodView, type PeriodRun } from "./period-view.ts";
 
@@ -49,7 +50,8 @@ export type ExportCleaner = ExportTotals & {
 export type ExportSummaryLine = ExportTotals & {
   cleanerId: string;
   name: string;
-  // Distinct values across her paid runs; empty while none is paid.
+  // Distinct values across her paid runs ("Cash $200.00 + e-Transfer $340.00" for a Split payout);
+  // empty while none is paid.
   payoutMethods: string[];
   paidDates: string[];
 };
@@ -68,6 +70,14 @@ function sum(values: number[]): number {
 
 function distinctSorted(values: (string | null)[]): string[] {
   return [...new Set(values.filter((value) => value !== null))].sort();
+}
+
+const SPLIT_SEPARATOR = " + ";
+
+function getPayoutLabel(run: PeriodRun): string | null {
+  if (run.payoutParts.length === 0) return run.payoutMethod;
+
+  return formatPayoutParts(run.payoutParts, SPLIT_SEPARATOR);
 }
 
 function getLinkedDates(data: PayrollData): Map<string, string> {
@@ -150,7 +160,7 @@ function toSummaryLine(
     shiftPayCents: cleaner.shiftPayCents,
     adjustmentsCents: cleaner.adjustmentsCents,
     totalCents: cleaner.totalCents,
-    payoutMethods: distinctSorted(paidRuns.map((run) => run.payoutMethod)),
+    payoutMethods: distinctSorted(paidRuns.map(getPayoutLabel)),
     paidDates: distinctSorted(paidRuns.map((run) => run.paidOn)),
   };
 }

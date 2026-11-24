@@ -26,6 +26,7 @@ import {
 } from '@/lib/appointments/lifecycle'
 import { completeAppointments } from '@/lib/appointments/needs-completion'
 import { followingRecurrenceDates, recurrenceDates } from '@/lib/appointments/recurrence'
+import { revalidateBillingPages } from '@/lib/invoices/revalidate'
 import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -253,7 +254,6 @@ export async function updateAppointment(
     return parsedRecurrence
   }
 
-  let claimingInvoiceId: string | null = null
   // Every appointment the edit touched, so the client can patch its cached rows.
   const changedIds = [id]
 
@@ -304,20 +304,6 @@ export async function updateAppointment(
         fieldErrors: { scheduled_date: scheduledDateError },
       }
     }
-
-    // Read before the write: a client change drops a draft line, and that invoice's page must refresh too.
-    const { data: liveClaim, error: liveClaimError } = await adminClient
-      .from('invoice_appointments')
-      .select('invoice_id')
-      .eq('appointment_id', id)
-      .eq('is_archived', false)
-      .is('cancelled_at', null)
-      .maybeSingle()
-
-    if (liveClaimError) {
-      return { success: false, error: toAppointmentErrorMessage(liveClaimError, 'updateAppointment') }
-    }
-    claimingInvoiceId = liveClaim?.invoice_id ?? null
 
     if (parsedRecurrence.data.edit_scope === 'series' || parsedRecurrence.data.edit_scope === 'future') {
       if (!parsedRecurrence.data.recurrence_series_id) {
@@ -668,9 +654,7 @@ export async function updateAppointment(
 
   revalidatePath('/solutions/appointments')
   revalidatePath(`/solutions/appointments/${id}`)
-  if (claimingInvoiceId) {
-    revalidatePath(`/solutions/invoices/${claimingInvoiceId}`)
-  }
+  revalidateBillingPages()
   return { success: true, data: { id, ids: changedIds } }
 }
 
@@ -710,6 +694,8 @@ async function loadAppointmentForLifecycle(id: string): Promise<LifecycleLoadRes
 function revalidateAppointment(id: string) {
   revalidatePath('/solutions/appointments')
   revalidatePath(`/solutions/appointments/${id}`)
+  // Completion and restore move appointments in and out of Unbilled.
+  revalidateBillingPages()
 }
 
 export async function restoreAppointment(id: string): Promise<AppointmentActionResult> {
@@ -835,6 +821,7 @@ export async function markAppointmentsComplete(ids: string[]): Promise<BulkCompl
   if (result.success) {
     revalidatePath('/solutions/appointments')
     revalidatePath('/solutions/appointments/[id]', 'page')
+    revalidateBillingPages()
   }
 
   return result

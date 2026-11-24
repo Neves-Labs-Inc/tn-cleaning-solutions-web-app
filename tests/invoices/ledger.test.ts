@@ -129,50 +129,6 @@ test('issue surfaces any other refusal without retrying', async () => {
   assert.equal(rpcCalls.length, 1)
 })
 
-test('bulkIssue issues the priced drafts and skips Unpriced ones without calling SQL for them', async () => {
-  const { ledger, rpcCalls } = setup(
-    {
-      appointments: [visit('appt-1'), visit('appt-2', { isUnpriced: true }), visit('appt-3')],
-      invoice_appointments: [draftLine('inv-1', 'appt-1'), draftLine('inv-2', 'appt-2'), draftLine('inv-3', 'appt-3')],
-    },
-    (call) => success(`NUM-${call.args.p_invoice_id}`)
-  )
-
-  const result = await ledger.bulkIssue(['inv-1', 'inv-2', 'inv-3'], null)
-
-  assert.deepEqual(result, {
-    ok: true,
-    data: {
-      issued: ['inv-1', 'inv-3'],
-      skipped: [{ id: 'inv-2', code: 'unpriced_line', message: messageFor('unpriced_line') }],
-    },
-  })
-  assert.deepEqual(
-    rpcCalls.map((call) => call.args.p_invoice_id),
-    ['inv-1', 'inv-3']
-  )
-})
-
-test('bulkIssue reports any other refusal per draft and carries on with the rest', async () => {
-  const { ledger } = setup(
-    {
-      appointments: [visit('appt-1'), visit('appt-2')],
-      invoice_appointments: [draftLine('inv-1', 'appt-1'), draftLine('inv-2', 'appt-2')],
-    },
-    (call) => (call.args.p_invoice_id === 'inv-1' ? refusal('archived_invoice') : success('INV-001-SMI2026'))
-  )
-
-  const result = await ledger.bulkIssue(['inv-1', 'inv-2'], DUE_DATE)
-
-  assert.deepEqual(result, {
-    ok: true,
-    data: {
-      issued: ['inv-2'],
-      skipped: [{ id: 'inv-1', code: 'archived_invoice', message: messageFor('archived_invoice') }],
-    },
-  })
-})
-
 test('issue returns a failed read as an unknown error instead of throwing, without calling SQL', async () => {
   const { ledger, rpcCalls } = setup(
     { appointments: [visit('appt-1')], invoice_appointments: [draftLine('inv-1', 'appt-1')] },
@@ -184,24 +140,6 @@ test('issue returns a failed read as an unknown error instead of throwing, witho
 
   assert.deepEqual(result, { ok: false, code: 'unknown', message: 'connection reset' })
   assert.equal(rpcCalls.length, 0)
-})
-
-test('bulkIssue keeps going and reports each draft whose read failed', async () => {
-  const { ledger } = setup(
-    { appointments: [visit('appt-1')], invoice_appointments: [draftLine('inv-1', 'appt-1')] },
-    undefined,
-    ['appointments']
-  )
-
-  const result = await ledger.bulkIssue(['inv-1', 'inv-2'], DUE_DATE)
-
-  assert.deepEqual(result, {
-    ok: true,
-    data: {
-      issued: ['inv-2'],
-      skipped: [{ id: 'inv-1', code: 'unknown', message: 'connection reset' }],
-    },
-  })
 })
 
 test('markPaid sends the lines, paid date, method, reference and internal note to invoice_mark_paid and returns the new invoice', async () => {

@@ -18,8 +18,8 @@ insert into auth.users (id, email) values
 	('a7000000-0000-4000-8000-000000000001', 'pgtap.note.admin@example.test'),
 	('a7000000-0000-4000-8000-000000000002', 'pgtap.note.employee@example.test');
 
-insert into public.clients (id, name, automatic_invoicing) values
-	('c7000000-0000-4000-8000-000000000001', 'Note Client', false);
+insert into public.clients (id, name) values
+	('c7000000-0000-4000-8000-000000000001', 'Note Client');
 
 insert into public.jobs (id, name, hourly_rate_cents) values
 	('b7000000-0000-4000-8000-000000000001', 'pgTAP Note Job', 4500);

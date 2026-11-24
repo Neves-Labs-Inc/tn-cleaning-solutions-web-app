@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 
 import { APPOINTMENTS_PATH } from '@/lib/appointments/overview'
+import { RECEIVABLES_PATH } from '@/lib/invoices/paths'
 import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 
@@ -31,7 +32,7 @@ const navItems = [
   { label: 'Employees', href: '/solutions/employees', icon: UserRound },
   { label: 'Time Sheets', href: '/solutions/time-tracking', icon: Clock },
   { label: 'Payroll', href: '/solutions/payroll', icon: Wallet },
-  { label: 'Invoices', href: '/solutions/invoices', icon: FileText },
+  { label: 'Receivables', href: RECEIVABLES_PATH, icon: FileText },
   { label: 'Profile', href: '/solutions/profile', icon: UserRound },
 ] as const
 

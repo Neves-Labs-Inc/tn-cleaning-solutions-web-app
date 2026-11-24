@@ -130,6 +130,7 @@ export function run(
     status: "draft",
     paid_on: null,
     payout_method: null,
+    payout_parts: null,
     ...overrides,
   };
 }

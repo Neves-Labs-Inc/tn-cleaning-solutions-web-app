@@ -1,3 +1,5 @@
+import { getBusinessDate } from '../schedule/business-time.ts'
+
 export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'void'
 export type InvoiceEffectiveStatus = InvoiceStatus | 'overdue'
 export type LineState = 'ok' | 'unpriced' | 'upcoming' | 'cancelled'
@@ -18,14 +20,6 @@ export type InvoiceViewRow = {
   // A draft holding an Unpriced line can't be issued; always false once issued.
   has_unpriced: boolean
   clients: ClientRelation
-}
-
-export type InvoiceFilter = {
-  query: string
-  status: 'all' | InvoiceEffectiveStatus
-  clientId: string
-  automaticOnly: boolean
-  showArchived: boolean
 }
 
 // From invoice_receivables_totals: owed figures over issued, unarchived invoices, and open drafts.
@@ -61,6 +55,19 @@ export type UnbilledGroup<T extends UnbilledVisit = UnbilledVisit> = {
   clientName: string
   visits: Array<T & { tag: UnbilledTag }>
 }
+
+// One open (unarchived) draft as the Receivables Drafts section reads it. totalCents is the Live price.
+export type OpenDraft = {
+  id: string
+  clientId: string
+  clientName: string
+  createdAt: string
+  appointmentCount: number
+  unpricedCount: number
+  totalCents: number
+}
+
+export type DraftRow = OpenDraft & { ageDays: number; ageLabel: string }
 
 const MS_PER_DAY = 86_400_000
 
@@ -115,23 +122,20 @@ export function dueLabel(
   return late > 0 ? `${formatted} · ${late}d late` : formatted
 }
 
-function relationName(clients: ClientRelation): string {
-  const client = Array.isArray(clients) ? clients[0] : clients
-  return client?.name ?? ''
+function draftAgeLabel(ageDays: number): string {
+  if (ageDays === 0) return 'Created today'
+  return `Created ${ageDays} day${ageDays === 1 ? '' : 's'} ago`
 }
 
-export function filterInvoices(rows: InvoiceViewRow[], filter: InvoiceFilter): InvoiceViewRow[] {
-  const query = filter.query.trim().toLowerCase()
-
-  return rows.filter((row) => {
-    if (row.is_archived && !filter.showArchived) return false
-    if (filter.status !== 'all' && row.effective_status !== filter.status) return false
-    if (filter.clientId && row.client_id !== filter.clientId) return false
-    if (filter.automaticOnly && !row.is_automatic) return false
-    if (!query) return true
-
-    return `${row.invoice_number ?? ''} ${relationName(row.clients)}`.toLowerCase().includes(query)
-  })
+// Oldest first, to match Overdue. Age counts Business dates, so a late-evening draft isn't a day old at midnight UTC.
+export function draftRows(drafts: OpenDraft[], businessDate: string): DraftRow[] {
+  return drafts
+    .map((draft) => {
+      const createdDate = getBusinessDate(new Date(draft.createdAt))
+      const ageDays = Math.max(0, Math.round((parseDateOnly(businessDate) - parseDateOnly(createdDate)) / MS_PER_DAY))
+      return { ...draft, ageDays, ageLabel: draftAgeLabel(ageDays) }
+    })
+    .sort((a, b) => b.ageDays - a.ageDays || a.createdAt.localeCompare(b.createdAt))
 }
 
 function isOwed(row: InvoiceViewRow): boolean {
@@ -204,78 +208,6 @@ export function groupUnbilled<T extends UnbilledVisit>(visits: T[]): Array<Unbil
   }
 
   return [...groups.values()].sort((a, b) => a.clientName.localeCompare(b.clientName))
-}
-
-// --- Ledger list: URL filter, row shape (ticket 09) ---
-
-// listInvoices returns at most this many rows (PostgREST max_rows), so a list this long was cut off.
-export const INVOICE_LIST_LIMIT = 1000
-
-// The bulk-issue action rejects a post with more ids than this, so a selection stops here.
-export const BULK_ISSUE_LIMIT = 200
-
-const FILTER_STATUSES: InvoiceEffectiveStatus[] = ['draft', 'issued', 'overdue', 'paid', 'void']
-
-type SearchParamValue = string | string[] | undefined
-
-// What the ledger list needs per row; the client's contact details stay on the server.
-export type LedgerListRow = Omit<InvoiceViewRow, 'clients'> & { client_name: string }
-
-export type ClientOption = { id: string; name: string }
-
-// A repeated param is ambiguous, so it counts as absent.
-function singleParam(value: SearchParamValue): string {
-  return typeof value === 'string' ? value : ''
-}
-
-function isFilterStatus(value: string): value is InvoiceEffectiveStatus {
-  return (FILTER_STATUSES as string[]).includes(value)
-}
-
-export function parseInvoiceFilter(params: Record<string, SearchParamValue>): InvoiceFilter {
-  const status = singleParam(params.status)
-
-  return {
-    query: singleParam(params.q).trim(),
-    status: isFilterStatus(status) ? status : 'all',
-    clientId: singleParam(params.client),
-    automaticOnly: singleParam(params.automatic) === '1',
-    showArchived: singleParam(params.archived) === '1',
-  }
-}
-
-// Defaults are omitted so the unfiltered list keeps a clean URL.
-export function invoiceFilterToSearchParams(filter: InvoiceFilter): URLSearchParams {
-  const params = new URLSearchParams()
-  if (filter.query) params.set('q', filter.query)
-  if (filter.status !== 'all') params.set('status', filter.status)
-  if (filter.clientId) params.set('client', filter.clientId)
-  if (filter.automaticOnly) params.set('automatic', '1')
-  if (filter.showArchived) params.set('archived', '1')
-  return params
-}
-
-export function isInvoiceFilterActive(filter: InvoiceFilter): boolean {
-  return invoiceFilterToSearchParams(filter).size > 0
-}
-
-// An archived draft is read-only, so only open drafts can join a bulk issue.
-export function isSelectableDraft(row: { status: InvoiceStatus; is_archived: boolean }): boolean {
-  return row.status === 'draft' && !row.is_archived
-}
-
-export function toLedgerListRow(row: InvoiceViewRow): LedgerListRow {
-  const { clients, ...rest } = row
-  return { ...rest, client_name: relationName(clients) || 'Unknown client' }
-}
-
-// Clients that have an invoice, A to Z: a client with none can't match a filter anyway.
-export function invoiceClientOptions(rows: InvoiceViewRow[]): ClientOption[] {
-  const byId = new Map(rows.map((row) => [row.client_id, relationName(row.clients)]))
-
-  return [...byId.entries()]
-    .map(([id, name]) => ({ id, name: name || 'Unknown client' }))
-    .sort((a, b) => a.name.localeCompare(b.name))
 }
 
 // --- Payment methods (ticket 14) ---

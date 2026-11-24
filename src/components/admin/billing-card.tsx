@@ -20,6 +20,7 @@ import type {
   AppointmentBilling,
   BillingPrice,
 } from "@/lib/invoices/appointment-billing";
+import { clientBillingHref, invoiceHref } from "@/lib/invoices/paths";
 import type { MarkPaidAppointment } from "@/lib/invoices/mark-paid";
 import { formatCents, UNPRICED_LABEL } from "@/lib/pricing/money";
 import { cn } from "@/lib/utils";
@@ -42,16 +43,9 @@ type BillingCardProps = {
   businessDate: string;
 };
 
-const NEW_INVOICE_PATH = "/solutions/invoices/new";
-const INVOICES_PATH = "/solutions/invoices";
 const CARD_CLASS = "gap-4 p-4 text-sm sm:p-5";
 const ACTION_CLASS = cn(PRESS_CLASS_NAME, "w-full");
 const OUTLINE_ACTION_CLASS = cn(OUTLINE_PRESS_CLASS_NAME, "w-full");
-
-function createInvoiceHref(clientId: string, appointmentId: string): string {
-  const params = new URLSearchParams({ client: clientId, visits: appointmentId });
-  return `${NEW_INVOICE_PATH}?${params.toString()}`;
-}
 
 function priceValue(price: BillingPrice): string {
   let value = "Unavailable";
@@ -113,10 +107,10 @@ export default function BillingCard({
   }
 
   const { state, claim, price } = billing;
-  const invoiceHref = claim ? `${INVOICES_PATH}/${claim.id}` : null;
+  const claimHref = claim ? invoiceHref(appointment.clientId, claim.id) : null;
   const isIssued = claim?.status === "issued";
   const canMarkPaid = state !== "paid";
-  // Unbilled leads with Create invoice, so Mark paid steps back to outline there.
+  // Unbilled leads with Bill client, so Mark paid steps back to outline there.
   const isMarkPaidPrimary = state === "billed";
   const markPaidAppointment: MarkPaidAppointment = {
     id: appointment.id,
@@ -155,10 +149,10 @@ export default function BillingCard({
           <Button
             className={ACTION_CLASS}
             nativeButton={false}
-            render={<Link href={createInvoiceHref(appointment.clientId, appointment.id)} />}
+            render={<Link href={clientBillingHref(appointment.clientId, [appointment.id])} />}
           >
             <FilePlus2 aria-hidden="true" />
-            Create invoice
+            Bill client
           </Button>
         ) : null}
         {canMarkPaid ? (
@@ -171,12 +165,12 @@ export default function BillingCard({
             {isIssued ? "Record payment" : "Mark paid"}
           </Button>
         ) : null}
-        {invoiceHref ? (
+        {claimHref ? (
           <Button
             variant="outline"
             className={OUTLINE_ACTION_CLASS}
             nativeButton={false}
-            render={<Link href={invoiceHref} />}
+            render={<Link href={claimHref} />}
           >
             <ReceiptText aria-hidden="true" />
             Open invoice

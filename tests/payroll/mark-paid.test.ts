@@ -9,8 +9,15 @@ import {
   methodError,
   paidOnError,
   paidOnFieldError,
+  parsePartAmount,
+  partRowErrors,
   payableRuns,
   readMarkPaidRows,
+  splitRefusalMessage,
+  splitSumLine,
+  canConfirmSplit,
+  toSplitParts,
+  partsToDrafts,
   type MarkPaidRow,
 } from "../../src/lib/payroll/mark-paid.ts";
 import {
@@ -316,5 +323,158 @@ describe("paidOnFieldError", () => {
       paidOnFieldError("Only a paid Pay run's payout can be edited.", PERIOD_END),
       null,
     );
+  });
+});
+
+const CASH_200 = { method: "Cash", amount: "200.00" };
+const ETRANSFER_340 = { method: "e-Transfer", amount: "340.00" };
+const TOTAL_540 = 54000;
+
+describe("parsePartAmount", () => {
+  it("reads dollars with up to two decimals as cents", () => {
+    assert.equal(parsePartAmount("200"), 20000);
+    assert.equal(parsePartAmount(" 200.5 "), 20050);
+    assert.equal(parsePartAmount("0.07"), 7);
+  });
+
+  it("is null for blank, a sign, a third decimal or text", () => {
+    for (const text of ["", " ", "-5", "1.005", "abc", "1,000"]) {
+      assert.equal(parsePartAmount(text), null, text);
+    }
+  });
+});
+
+describe("partRowErrors", () => {
+  it("has no messages for a clean split", () => {
+    assert.deepEqual(partRowErrors([CASH_200, ETRANSFER_340]), [
+      { method: null, amount: null },
+      { method: null, amount: null },
+    ]);
+  });
+
+  it("names a blank method by its part number", () => {
+    const [, second] = partRowErrors([CASH_200, { method: " ", amount: "5" }]);
+    assert.equal(second.method, "Enter a method for part 2.");
+  });
+
+  it("flags a later row that repeats an earlier method, ignoring case and spaces", () => {
+    const errors = partRowErrors([
+      CASH_200,
+      { method: "e-Transfer", amount: "1" },
+      { method: " cash ", amount: "1" },
+    ]);
+    assert.equal(errors[0].method, null);
+    assert.equal(errors[2].method, "Part 3 repeats part 1's method.");
+  });
+
+  it("asks for an amount above $0.00 on zero and negative", () => {
+    const errors = partRowErrors([
+      { method: "Cash", amount: "0" },
+      { method: "e-Transfer", amount: "-3" },
+    ]);
+    assert.equal(errors[0].amount, "Enter an amount above $0.00.");
+    assert.equal(errors[1].amount, "Enter an amount above $0.00.");
+  });
+
+  it("asks for a shape like 200.00 on unreadable text and leaves a blank amount to the live line", () => {
+    const errors = partRowErrors([
+      { method: "Cash", amount: "abc" },
+      { method: "e-Transfer", amount: "" },
+    ]);
+    assert.equal(errors[0].amount, "Enter an amount like 200.00.");
+    assert.equal(errors[1].amount, null);
+  });
+});
+
+describe("splitSumLine", () => {
+  it("says how much is left to assign", () => {
+    assert.deepEqual(splitSumLine(TOTAL_540, 20000), {
+      text: "$340.00 left to assign",
+      tone: "muted",
+    });
+  });
+
+  it("says $0.00 left to assign when the parts add up", () => {
+    assert.deepEqual(splitSumLine(TOTAL_540, TOTAL_540), {
+      text: "$0.00 left to assign",
+      tone: "muted",
+    });
+  });
+
+  it("says how much is over, in the destructive tone", () => {
+    assert.deepEqual(splitSumLine(TOTAL_540, 60000), {
+      text: "$60.00 over",
+      tone: "destructive",
+    });
+  });
+});
+
+describe("canConfirmSplit", () => {
+  it("accepts parts that add up to the total", () => {
+    assert.equal(canConfirmSplit([CASH_200, ETRANSFER_340], TOTAL_540), true);
+  });
+
+  it("refuses fewer than two parts", () => {
+    assert.equal(canConfirmSplit([{ method: "Cash", amount: "540" }], TOTAL_540), false);
+  });
+
+  it("refuses a blank method, a duplicate method, a blank or $0 amount", () => {
+    const bad = [
+      [CASH_200, { method: "", amount: "340" }],
+      [CASH_200, { method: "cash", amount: "340" }],
+      [CASH_200, { method: "e-Transfer", amount: "" }],
+      [{ method: "Cash", amount: "540" }, { method: "e-Transfer", amount: "0" }],
+    ];
+    for (const parts of bad) {
+      assert.equal(canConfirmSplit(parts, TOTAL_540), false);
+    }
+  });
+
+  it("refuses a sum short or over", () => {
+    assert.equal(canConfirmSplit([CASH_200, { method: "e-Transfer", amount: "339.99" }], TOTAL_540), false);
+    assert.equal(canConfirmSplit([CASH_200, { method: "e-Transfer", amount: "340.01" }], TOTAL_540), false);
+  });
+});
+
+describe("toSplitParts and partsToDrafts", () => {
+  it("turns the drafts into trimmed methods with cents", () => {
+    assert.deepEqual(
+      toSplitParts([{ method: " Cash ", amount: "200" }, ETRANSFER_340]),
+      [
+        { method: "Cash", amountCents: 20000 },
+        { method: "e-Transfer", amountCents: 34000 },
+      ],
+    );
+  });
+
+  it("turns a stored split back into drafts", () => {
+    assert.deepEqual(
+      partsToDrafts([
+        { method: "Cash", amount_cents: 20000 },
+        { method: "e-Transfer", amount_cents: 34005 },
+      ]),
+      [
+        { method: "Cash", amount: "200.00" },
+        { method: "e-Transfer", amount: "340.05" },
+      ],
+    );
+  });
+});
+
+describe("splitRefusalMessage", () => {
+  it("keeps the four split refusals for the parts area", () => {
+    for (const message of [
+      "Add at least two parts",
+      "Each part needs an amount above $0",
+      "Each part needs a different Payout method",
+      "The parts must add up to the run's total",
+    ]) {
+      assert.equal(splitRefusalMessage(message), message);
+    }
+  });
+
+  it("is null for any other refusal", () => {
+    assert.equal(splitRefusalMessage("A Pay run of $0 or less can't be split"), null);
+    assert.equal(splitRefusalMessage("Enter the paid date"), null);
   });
 });

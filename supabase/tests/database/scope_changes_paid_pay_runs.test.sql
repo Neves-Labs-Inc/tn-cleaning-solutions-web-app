@@ -26,8 +26,8 @@ insert into public.employees (id, user_id, full_name) values
 	('e6000000-0000-4000-8000-00000000000a', 'a6000000-0000-4000-8000-000000000002', 'Paid Cleaner'),
 	('e6000000-0000-4000-8000-00000000000b', 'a6000000-0000-4000-8000-000000000003', 'Finalized Cleaner');
 
-insert into public.clients (id, name, automatic_invoicing) values
-	('c6000000-0000-4000-8000-000000000001', 'pgTAP Scope Pay Client', false);
+insert into public.clients (id, name) values
+	('c6000000-0000-4000-8000-000000000001', 'pgTAP Scope Pay Client');
 
 insert into public.jobs (id, name, hourly_rate_cents) values
 	('b6000000-0000-4000-8000-000000000001', 'pgTAP Scope Pay Job', 4500);

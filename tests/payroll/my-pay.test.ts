@@ -17,6 +17,7 @@ function runRow(overrides: Partial<MyPayRunRow> = {}): MyPayRunRow {
     paid_on: "2026-10-20",
     payout_method: "e-Transfer",
     total_cents: 84250,
+    payout_parts: [{ method: "e-Transfer", amount_cents: 84250 }],
     ...overrides,
   };
 }
@@ -78,6 +79,20 @@ describe("buildMyPay: runs", () => {
     assert.equal(run.paidLabel, "Paid Oct 20, 2026 by e-Transfer");
     assert.equal(run.totalCents, 84250);
     assert.equal(run.isOffCycle, false);
+  });
+
+  it("lists each part with its amount on a split run's paid line", () => {
+    const split = runRow({
+      paid_on: "2026-11-20",
+      payout_method: null,
+      payout_parts: [
+        { method: "Cash", amount_cents: 20000 },
+        { method: "e-Transfer", amount_cents: 34000 },
+      ],
+    });
+    const [run] = allRuns(buildMyPay({ runs: [split], lines: [], adjustments: [] }));
+
+    assert.equal(run.paidLabel, "Paid Nov 20, 2026: Cash $200.00, e-Transfer $340.00");
   });
 
   it("marks an off-cycle run", () => {

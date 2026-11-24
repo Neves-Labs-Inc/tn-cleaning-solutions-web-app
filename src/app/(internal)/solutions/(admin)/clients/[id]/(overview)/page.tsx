@@ -5,7 +5,8 @@ import UrlTabs from '@/components/admin/detail-page/url-tabs'
 import StatusBadge, { activeStateBadge, ARCHIVED_BADGE } from '@/components/ui/status-badge'
 import { parseTabParam } from '@/lib/admin/tab-param'
 import { CLIENT_TABS, DEFAULT_CLIENT_TAB } from '@/lib/clients/client-page'
-import { getReceivables } from '@/lib/invoices/queries'
+import { InvoiceLedger } from '@/lib/invoices/ledger'
+import { getClientBilling } from '@/lib/invoices/queries'
 import { getBusinessDate } from '@/lib/schedule/business-time'
 import { createClient } from '@/lib/supabase/server'
 import { BillingSection } from './billing-section'
@@ -21,8 +22,23 @@ type ClientDetailPageProps = {
 	searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
+// The Billing tab's reads plus the payment methods Mark paid offers. A failure stays in the tab.
+async function loadBilling(supabase: Awaited<ReturnType<typeof createClient>>, clientId: string) {
+	try {
+		const [billing, methods] = await Promise.all([
+			getClientBilling(supabase, clientId),
+			new InvoiceLedger(supabase).listPaymentMethods(),
+		])
+		if (!methods.ok) throw new Error(`Couldn't load payment methods: ${methods.message}`)
+		return { ...billing, methods: methods.data }
+	} catch (error) {
+		console.error('Failed to load billing for client', clientId, error)
+		return null
+	}
+}
+
 export default async function ClientDetailPage({ params, searchParams }: ClientDetailPageProps) {
-	const [{ id }, { tab }] = await Promise.all([params, searchParams])
+	const [{ id }, { tab, pick }] = await Promise.all([params, searchParams])
 	const activeTab = parseTabParam(tab, CLIENT_TABS, DEFAULT_CLIENT_TAB)
 	const supabase = await createClient()
 
@@ -31,11 +47,11 @@ export default async function ClientDetailPage({ params, searchParams }: ClientD
 		{ data: client, error: clientError },
 		{ data: locations, error: locationsError },
 		pricing,
-		receivables,
+		billing,
 	] = await Promise.all([
 		supabase
 			.from('clients')
-			.select('id, name, email, phone, notes, is_active, is_archived, automatic_invoicing')
+			.select('id, name, email, phone, notes, is_active, is_archived')
 			.eq('id', id)
 			.maybeSingle(),
 		supabase
@@ -45,10 +61,7 @@ export default async function ClientDetailPage({ params, searchParams }: ClientD
 			.order('is_archived', { ascending: true })
 			.order('label', { ascending: true }),
 		loadPricingTab(supabase, id),
-		getReceivables(supabase, id).catch((error: unknown) => {
-			console.error('Failed to load billing for client', id, error)
-			return null
-		}),
+		loadBilling(supabase, id),
 	])
 
 	if (clientError || !client) {
@@ -119,7 +132,14 @@ export default async function ClientDetailPage({ params, searchParams }: ClientD
 					{
 						value: 'billing',
 						label: 'Billing',
-						content: <BillingSection client={client} receivables={receivables} businessDate={businessDate} />,
+						content: (
+							<BillingSection
+								client={client}
+								billing={billing}
+								businessDate={businessDate}
+								pick={typeof pick === 'string' ? pick : undefined}
+							/>
+						),
 					},
 				]}
 			/>

@@ -4,6 +4,7 @@ import type {
   PayCleaner,
   PayrollData,
   PayRunLineRow,
+  PayoutPart,
   PayRunRow,
   PaySessionRow,
 } from "./payroll-data.ts";
@@ -93,7 +94,11 @@ export type PeriodRun = {
   totalCents: number;
   flagCount: number;
   blockedReason: string | null;
+  // Null on a Split payout: read payoutParts, which covers both kinds.
   payoutMethod: string | null;
+  // The paid run's ordered parts: one for a single-method run, two or more for a split; empty
+  // until the run is paid.
+  payoutParts: PayoutPart[];
   paidOn: string | null;
   defaultPayoutMethod: string | null;
   eTransferContact: string | null;
@@ -456,6 +461,7 @@ function buildRun(input: RunInput, context: PeriodContext): PeriodRun {
     flagCount: parts.problemSessions.length + oddCount,
     blockedReason,
     payoutMethod: stored?.payout_method ?? null,
+    payoutParts: stored?.payout_parts ?? [],
     paidOn: stored?.paid_on ?? null,
     defaultPayoutMethod: input.cleaner?.defaultPayoutMethod ?? null,
     eTransferContact: input.cleaner?.eTransferContact ?? null,

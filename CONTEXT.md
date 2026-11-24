@@ -65,8 +65,12 @@ A Pay run an admin makes for a shift in an ended Pay period that became payable 
 _Avoid_: bonus run, early payout
 
 **Payout method**:
-How an admin paid a Cleaner a Pay run, as free text: e-Transfer and Cash are suggested, but any method can be entered. Each Cleaner has a default, set only by an admin, with an optional e-Transfer contact. A Pay run is paid one way, never split, and the Payout method is recorded with the paid date when the run is marked paid. Both can be fixed afterwards, but a paid Pay run can't go back to unpaid. A $0 or negative Pay run is finalized and marked paid like any other.
+How an admin paid a Cleaner a Pay run, as free text: e-Transfer and Cash are suggested, but any method can be entered. Each Cleaner has a default, set only by an admin, with an optional e-Transfer contact. A Pay run is paid in full on one paid date, by one Payout method or as a Split payout, recorded when the run is marked paid. Both can be fixed afterwards, but a paid Pay run can't go back to unpaid. A $0 or negative Pay run is finalized and marked paid like any other, always by one method.
 _Avoid_: payment method (that is how a client paid an invoice)
+
+**Split payout**:
+A paid Pay run's payout divided across Payout methods on its one paid date, such as part Cash and part e-Transfer. It has at least two parts, each above $0 with a different method, adding up to exactly the run's total; there is no part-paid run. An admin splits a run when marking that one run paid or by editing its payout afterwards, which can also turn a split back into one method. The Cleaner sees each part with its amount.
+_Avoid_: partial payment, partial payout, instalment
 
 **Pay statement**:
 The document a Cleaner downloads from My pay for one paid Pay run.
@@ -139,19 +143,11 @@ An appointment whose Live price can't be worked out. Every appointment has a Job
 An appointment's line on an invoice that has not been voided. An appointment has at most one Live claim.
 
 **Billable appointment**:
-An appointment that is not cancelled, has no Live claim, and is not Unpriced. This is what the manual invoice flow can add; an Automatic draft also takes Unpriced ones.
+An appointment that is not cancelled and has no Live claim. This is what an admin can pick onto an invoice; every invoice is made this way, or by Mark paid.
 
-**Automatic draft**:
-The draft invoice a client's completed appointments join as each one is completed. A client has at most one at a time; issuing it means the next completion starts a new one. It never joins a draft an admin made.
-_Avoid_: invoice run, billing cycle
-
-**Automatic invoicing**:
-A per-client setting, off by default, that decides whether the client's completed appointments join an Automatic draft. Turning it off leaves an open Automatic draft as it is; turning it back on picks up only appointments completed from then on. The client's active or archived status plays no part.
-_Avoid_: manual-only client, billing mode
-
-**Excluded appointment**:
-A completed appointment an admin removed from an Automatic draft. It never rejoins one, but can still be billed on a manual invoice. It only matters for a client with Automatic invoicing on; elsewhere it is an ordinary Unbilled appointment.
-_Avoid_: excluded visit
+**Automatic invoice**:
+An issued, paid or void invoice started by the retired Automatic invoicing, which put a client's completed appointments on a draft by itself. It is marked only by a badge; no new one is ever made.
+_Avoid_: Automatic draft, Excluded appointment (both retired)
 
 **Upcoming line**:
 A line on an invoice for an appointment that is not completed yet: billed ahead, as a prepayment.
@@ -171,21 +167,29 @@ _Avoid_: invoice ID, ref
 The record that an issued invoice was paid in full: the paid date, the Payment method, and an optional reference such as an e-Transfer confirmation or cheque number. It can be edited, or undone to put the invoice back to issued.
 
 **Payment method**:
-How a Payment was made, chosen from a list the admin manages. The list starts with e-Transfer, Cash, Cheque and Credit card, and a new method typed in while recording a Payment joins it.
+How a Payment was made, chosen from a list. The list starts with e-Transfer, Cash, Cheque and Credit card, and grows only when a new method is typed in while recording a Payment; methods are never renamed or hidden.
 
 **Archived invoice**:
-A draft, paid or void invoice hidden from the working list and read-only, except its Internal note, until it is unarchived. An invoice still owed (issued) can't be archived. Archiving a draft releases its Live claims, and its appointments become Excluded appointments if it was an Automatic draft.
+A draft, paid or void invoice hidden from its client's billing history and read-only, except its Internal note, until it is unarchived. An invoice still owed (issued) can't be archived. Archiving a draft releases its Live claims.
 _Avoid_: deleted, hidden
 
 **Internal note**:
 An admin-only note on an invoice, editable at any status and while archived. Never shown or printed for the client. Not the invoice's Notes, which the client sees.
+
+**Invoice PDF**:
+The document an admin downloads for one invoice and sends the client themselves. It shows the business name, the client's name, the Invoice number, the issued and due dates, one line per appointment with its Billed amount (Upcoming and Cancelled lines tagged), the total and the Notes. A draft or void one carries a DRAFT or VOID watermark, and a paid one a PAID stamp with the paid date and Payment method. Every invoice has one except a Mark paid one while it stays paid.
+_Avoid_: receipt, statement (a Pay statement is a Cleaner's)
+
+**Receivables**:
+The one view across all clients of what is owed and still to bill: Outstanding and overdue invoices, open drafts and Unbilled appointments, each leading to its client. Every invoice otherwise lives with its client.
+_Avoid_: invoice list, ledger
 
 **Outstanding**:
 What clients owe: the total of every issued invoice. An issued invoice with no due date is outstanding but never overdue. Drafts are not outstanding.
 _Avoid_: open (it hid overdue invoices), receivable balance
 
 **Unbilled appointment**:
-A completed appointment that is not archived and has no Live claim. It includes Excluded appointments, shown like any other, and Unpriced appointments, shown with a tag so they aren't forgotten.
+A completed appointment that is not archived and has no Live claim. It includes Unpriced appointments, shown with a tag so they aren't forgotten.
 _Avoid_: uninvoiced, missed appointment, visit
 
 **Payment state**:
@@ -193,7 +197,7 @@ Where an appointment stands with billing: Unbilled (an Unbilled appointment), Bi
 _Avoid_: paid status, billing status
 
 **Mark paid**:
-Recording that one or more of a client's appointments were paid without a prior invoice, e.g. cash on the spot. It creates an ordinary invoice for them that is issued and paid in one step and never sent. Any appointment that isn't cancelled can be marked paid; one on a draft leaves the draft, and one on an issued invoice is paid through that invoice instead.
+Recording that one or more of a client's appointments were paid without a prior invoice, e.g. cash on the spot. It creates an ordinary invoice for them that is issued and paid in one step and never sent, so it has no Invoice PDF until its Payment is undone or it is voided. Any appointment that isn't cancelled can be marked paid; one on a draft leaves the draft, and one on an issued invoice is paid through that invoice instead.
 _Avoid_: cash receipt, quick invoice
 
 ## Relationships
@@ -207,8 +211,7 @@ _Avoid_: cash receipt, quick invoice
 - An invoice moves draft → issued → paid; recording a **Payment** makes it paid and undoing the Payment makes it issued again
 - An issued or paid invoice can be voided, which clears any **Payment** and releases its **Live claims**; a draft is archived instead
 - An issued invoice is never edited; it is corrected by voiding it and issuing a new one
-- An archived draft can be unarchived only while none of its appointments has been claimed by another invoice; it comes back as an ordinary draft if the client already has an **Automatic draft**
-
+- An archived draft can be unarchived only while none of its appointments has been claimed by another invoice
 ## Flagged ambiguities
 
 - "hourly rate" was used both for what a client pays (**Job rate**) and what a Cleaner earns (**Pay rate**). These are distinct.

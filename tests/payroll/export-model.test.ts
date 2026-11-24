@@ -60,6 +60,29 @@ describe("buildPayrollExportModel: which runs count", () => {
   });
 });
 
+describe("buildPayrollExportModel: Split payout", () => {
+  it("reads a split run's method as its parts joined with +, totals unchanged", () => {
+    const split = run("r-ana", "ana", {
+      status: "paid",
+      paid_on: "2026-11-20",
+      payout_method: null,
+      payout_parts: [
+        { method: "Cash", amount_cents: 2000 },
+        { method: "e-Transfer", amount_cents: 4100 },
+      ],
+    });
+    const data = payrollData({
+      runs: [split],
+      runLines: [frozenLine("r-ana", "s1", { amount_cents: 6100 })],
+    });
+
+    const [line] = buildPayrollExportModel(data, OCT_5, []).summary.lines;
+
+    assert.deepEqual(line.payoutMethods, ["Cash $20.00 + e-Transfer $41.00"]);
+    assert.equal(line.totalCents, 6100);
+  });
+});
+
 describe("buildPayrollExportModel: one Cleaner's runs merged", () => {
   it("merges a paid regular run and an off-cycle run paid later into one line", () => {
     const regular = run("r-reg", "ana", {

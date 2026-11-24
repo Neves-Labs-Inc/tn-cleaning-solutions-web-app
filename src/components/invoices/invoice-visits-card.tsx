@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card'
 import ConfirmDialog from '@/components/ui/confirm-dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { claimableStates, lineMismatchLiveLabel } from '@/lib/invoices/lines'
+import { clientBillingHref } from '@/lib/invoices/paths'
 import type { ClaimableVisit, InvoiceDetailLine } from '@/lib/invoices/queries'
 import { formatDateOnly, type InvoiceStatus, type LineState } from '@/lib/invoices/view'
 import { formatCents } from '@/lib/pricing/money'
@@ -24,20 +25,18 @@ import { formatVisitDate, VisitLineSummary } from './visit-line-summary'
 
 type InvoiceVisitsCardProps = {
   invoiceId: string
+  clientId: string
   status: InvoiceStatus
   clientName: string
   lines: InvoiceDetailLine[]
   totalCents: number
   // An open draft: lines can be removed and added, Unpriced lines open the total editor.
   isEditable: boolean
-  isAutomatic: boolean
   unpricedCount: number
   paidDate: string | null
   claimable: ClaimableVisit[]
-  businessDate: string
 }
 
-const INVOICES_PATH = '/solutions/invoices'
 const REMOVE_ERROR_TITLE = "Couldn't remove that appointment"
 
 // A draft shows every pill that applies (Unpriced and Upcoming together); an issued line shows its state.
@@ -166,16 +165,15 @@ function TotalRow({ status, totalCents, paidDate }: { status: InvoiceStatus; tot
 
 export default function InvoiceVisitsCard({
   invoiceId,
+  clientId,
   status,
   clientName,
   lines,
   totalCents,
   isEditable,
-  isAutomatic,
   unpricedCount,
   paidDate,
   claimable,
-  businessDate,
 }: InvoiceVisitsCardProps) {
   const router = useRouter()
   const submitDraftUpdate = useSubmitDraftUpdate()
@@ -191,7 +189,7 @@ export default function InvoiceVisitsCard({
 
   function leaveIfDeleted(isDeleted: boolean) {
     if (isDeleted) {
-      router.replace(INVOICES_PATH)
+      router.replace(clientBillingHref(clientId))
     }
   }
 
@@ -250,13 +248,6 @@ export default function InvoiceVisitsCard({
         <p className="text-sm text-muted-foreground tabular-nums">{lines.length}</p>
       </div>
 
-      {isEditable && isAutomatic ? (
-        <p className="text-xs text-muted-foreground">
-          Appointments you remove won&apos;t rejoin an Automatic draft. You can add them back here or bill them on a manual
-          invoice.
-        </p>
-      ) : null}
-
       {isEditable && unpricedCount > 0 ? (
         <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
@@ -288,7 +279,6 @@ export default function InvoiceVisitsCard({
           invoiceId={invoiceId}
           clientName={clientName}
           visits={claimable}
-          businessDate={businessDate}
         />
       ) : null}
 
@@ -310,7 +300,7 @@ export default function InvoiceVisitsCard({
           setLastLine(null)
         }}
         title="Delete this draft?"
-        description={`This is its only appointment. Removing it deletes the draft.${isAutomatic ? " The appointment won't rejoin an Automatic draft." : ''}`}
+        description="This is its only appointment. Removing it deletes the draft."
         confirmLabel="Delete draft"
         pendingLabel="Deleting…"
         keepLabel="Keep draft"

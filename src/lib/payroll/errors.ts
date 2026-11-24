@@ -1,5 +1,5 @@
 // Mirrors the CASE block of payroll_error() in the newest migration that defines it
-// (supabase/migrations/20261014233000_payroll_mark_paid.sql); tests/payroll/errors.test.ts fails
+// (supabase/migrations/20261123100000_split_payout.sql); tests/payroll/errors.test.ts fails
 // when the two drift.
 export const PAYROLL_ERROR_CODES = [
   "not_admin",
@@ -24,6 +24,11 @@ export const PAYROLL_ERROR_CODES = [
   "paid_on_future",
   "paid_on_before_period_end",
   "not_paid",
+  "split_too_few_parts",
+  "split_part_not_positive",
+  "split_duplicate_method",
+  "split_sum_mismatch",
+  "split_not_allowed",
 ] as const;
 
 export type PayrollErrorCode = (typeof PAYROLL_ERROR_CODES)[number];
@@ -55,6 +60,10 @@ const PAYROLL_ERROR_STATUSES: Partial<Record<PayrollErrorCode, number>> = {
   reason_required: STATUS_UNPROCESSABLE,
   method_required: STATUS_UNPROCESSABLE,
   paid_on_required: STATUS_UNPROCESSABLE,
+  split_too_few_parts: STATUS_UNPROCESSABLE,
+  split_part_not_positive: STATUS_UNPROCESSABLE,
+  split_duplicate_method: STATUS_UNPROCESSABLE,
+  split_sum_mismatch: STATUS_UNPROCESSABLE,
 };
 
 const PAYROLL_ERROR_MESSAGES: Record<PayrollErrorCode, string> = {
@@ -81,6 +90,11 @@ const PAYROLL_ERROR_MESSAGES: Record<PayrollErrorCode, string> = {
   paid_on_future: "The paid date can't be in the future",
   paid_on_before_period_end: "The paid date can't be before the Pay period ends",
   not_paid: "Only a paid Pay run's payout can be edited.",
+  split_too_few_parts: "Add at least two parts",
+  split_part_not_positive: "Each part needs an amount above $0",
+  split_duplicate_method: "Each part needs a different Payout method",
+  split_sum_mismatch: "The parts must add up to the run's total",
+  split_not_allowed: "A Pay run of $0 or less can't be split",
 };
 
 export function isPayrollErrorCode(value: unknown): value is PayrollErrorCode {

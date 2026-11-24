@@ -35,8 +35,22 @@ export type MarkPaidRequest = { items: MarkPaidItem[]; paidOn: string };
 
 export type PayoutEdit = MarkPaidItem & { paidOn: string };
 
+// One part of a Split payout. The SQL owns the rules (two or more, each above $0, distinct
+// methods, adding up to the run's total); this only reads the shape.
+export type SplitPart = { method: string; amountCents: number };
+
+export type SplitMarkPaidRequest = {
+  runId: string;
+  parts: SplitPart[];
+  paidOn: string;
+};
+
+export type SplitPayoutEdit = SplitMarkPaidRequest;
+
 // One mark_pay_runs_paid call takes one savepoint per run; no period has anywhere near this many.
 const MAX_MARK_PAID_ITEMS = 200;
+// A Split payout is a few Payout methods at most; this only stops a runaway request.
+const MAX_SPLIT_PARTS = 20;
 
 export const ADJUSTMENT_AMOUNT_ERROR = "Enter an amount, e.g. 20 or -12.50";
 export const ADJUSTMENT_REASON_ERROR = "Add a reason the Cleaner will see";
@@ -180,6 +194,42 @@ export function parsePayoutEdit(input: {
   const { paidOn } = input;
   return item !== null && isDateText(paidOn) ? { ...item, paidOn } : null;
 }
+
+function parseSplitPart(value: unknown): SplitPart | null {
+  const item =
+    typeof value === "object" && value !== null
+      ? (value as Record<string, unknown>)
+      : {};
+  const { method, amountCents } = item;
+  const isValid = isPayoutMethodText(method) && Number.isSafeInteger(amountCents);
+  return isValid ? { method, amountCents: amountCents as number } : null;
+}
+
+// Marking one run paid with a Split payout, or editing a paid run's payout to one: the run, its
+// parts in order and the paid date. null when anything is malformed.
+function parseSplitRequest(input: {
+  runId: unknown;
+  parts: unknown;
+  paidOn: unknown;
+}): SplitMarkPaidRequest | null {
+  const { runId, parts, paidOn } = input;
+  const raw = Array.isArray(parts) ? parts : [];
+  const parsed = raw.flatMap((value) => {
+    const part = parseSplitPart(value);
+    return part === null ? [] : [part];
+  });
+  const isValid =
+    isUuid(runId) &&
+    isDateText(paidOn) &&
+    Array.isArray(parts) &&
+    parsed.length === raw.length &&
+    parsed.length <= MAX_SPLIT_PARTS;
+  return isValid ? { runId, parts: parsed, paidOn } : null;
+}
+
+export const parseSplitMarkPaidRequest = parseSplitRequest;
+
+export const parseSplitPayoutEdit = parseSplitRequest;
 
 // A yyyy-MM-dd calendar date, from a caller that may send anything.
 export function isDateText(value: unknown): value is string {

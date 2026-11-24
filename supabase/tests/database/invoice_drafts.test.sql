@@ -1,8 +1,7 @@
 -- invoice_create_draft and invoice_update_draft (20261009140000), called as an authenticated admin.
 --
--- Pins each refusal code, the lines a draft ends up with, the Excluded flag on removal from an
--- Automatic draft, that an update only applies the visits it names (a line that joined after the
--- page loaded stays), that only Save (write_details on) writes the due date and notes, and
+-- Pins each refusal code, the lines a draft ends up with, that an update only applies the visits
+-- it names, that a completion joins no draft, that only Save (write_details on) writes the due date and notes, and
 -- deletion of a draft left with no live line. Rows are read back as postgres.
 --
 -- Fixtures are built here and rolled back; nothing depends on seed.sql or test-data.sql.
@@ -11,7 +10,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(52);
+select plan(46);
 
 
 -- Fixtures (as postgres, so RLS is bypassed) ---------------------------------------------------
@@ -20,17 +19,16 @@ insert into auth.users (id, email) values
 	('a5000000-0000-4000-8000-000000000001', 'pgtap.drafts.admin@example.test'),
 	('a5000000-0000-4000-8000-000000000002', 'pgtap.drafts.employee@example.test');
 
--- Automatic invoicing is off by default (20261011150000); the Automatic draft scenarios need it on.
-insert into public.clients (id, name, automatic_invoicing) values
-	('c5000000-0000-4000-8000-000000000001', 'pgTAP Drafts Client One', true),
-	('c5000000-0000-4000-8000-000000000002', 'pgTAP Drafts Client Two', true);
+insert into public.clients (id, name) values
+	('c5000000-0000-4000-8000-000000000001', 'pgTAP Drafts Client One'),
+	('c5000000-0000-4000-8000-000000000002', 'pgTAP Drafts Client Two');
 
 insert into public.jobs (id, name, hourly_rate_cents) values
 	('b5000000-0000-4000-8000-000000000001', 'pgTAP Drafts Job', 4500);
 
 -- d1-d3: client one, scheduled (Upcoming). d4: client one, completed. d5: client one, cancelled.
 -- d6: client one, archived. d7: client two. d8: client one, completed, on a manual draft below.
--- d9: client one, completed, on the Automatic draft below. da-dd: client one, completed, on the
+-- d9: client one, completed, on the second manual draft below. da-dd: client one, completed, on the
 -- live-line drafts below.
 insert into public.appointments (id, client_id, job_id, scheduled_date, scheduled_start_time, scheduled_end_time, status, is_archived)
 values
@@ -48,13 +46,13 @@ values
 	('d5000000-0000-4000-8000-00000000000c', 'c5000000-0000-4000-8000-000000000001', 'b5000000-0000-4000-8000-000000000001', '2026-10-12', '09:00', '11:00', 'completed', false),
 	('d5000000-0000-4000-8000-00000000000d', 'c5000000-0000-4000-8000-000000000001', 'b5000000-0000-4000-8000-000000000001', '2026-10-13', '09:00', '11:00', 'completed', false);
 
--- i1: a manual draft holding d8. i2: client one's Automatic draft holding d9.
+-- i1: a manual draft holding d8. i2: a second manual draft holding d9.
 -- i3-i5: issued, paid and void invoices. i6: an archived draft. i7: a draft with one live line
 -- (da), a Cancelled line (d5) and a released line (db). i8: a draft with live lines dc and dd and
 -- a Cancelled line (d5). i9: an issued invoice whose only line is Cancelled (d5).
 insert into public.invoices (id, client_id, status, is_automatic, invoice_number, issued_date, paid_date, payment_method, is_archived) values
 	('15000000-0000-4000-8000-000000000001', 'c5000000-0000-4000-8000-000000000001', 'draft', false, null, null, null, null, false),
-	('15000000-0000-4000-8000-000000000002', 'c5000000-0000-4000-8000-000000000001', 'draft', true, null, null, null, null, false),
+	('15000000-0000-4000-8000-000000000002', 'c5000000-0000-4000-8000-000000000001', 'draft', false, null, null, null, null, false),
 	('15000000-0000-4000-8000-000000000003', 'c5000000-0000-4000-8000-000000000001', 'issued', false, 'INV-901-PGT2026', '2026-10-01', null, null, false),
 	('15000000-0000-4000-8000-000000000004', 'c5000000-0000-4000-8000-000000000001', 'paid', false, 'INV-902-PGT2026', '2026-10-01', '2026-10-02', 'Cash', false),
 	('15000000-0000-4000-8000-000000000005', 'c5000000-0000-4000-8000-000000000001', 'void', false, 'INV-903-PGT2026', '2026-10-01', null, null, false),
@@ -157,7 +155,7 @@ $$), 'visit_claimed', 'a visit on a manual draft is refused');
 select is(public.pgtap_drafts_code($$
 	select public.invoice_create_draft('c5000000-0000-4000-8000-000000000001',
 		array['d5000000-0000-4000-8000-000000000009']::uuid[], null, null, null)
-$$), 'visit_claimed', 'a visit on the Automatic draft is refused');
+$$), 'visit_claimed', 'a visit on another manual draft is refused');
 
 select ok(public.invoice_create_draft('c5000000-0000-4000-8000-000000000001',
 		array['d5000000-0000-4000-8000-000000000001', 'd5000000-0000-4000-8000-000000000004',
@@ -278,8 +276,6 @@ reset role;
 
 select is(public.pgtap_drafts_lines('15000000-0000-4000-8000-000000000001'), '{2}',
 	'the removed line is gone from the manual draft');
-select is((select excluded_from_automatic from public.appointments where id = 'd5000000-0000-4000-8000-000000000008'),
-	false, 'a visit removed from a manual draft is not Excluded');
 select is((select row(due_date, notes)::text from public.invoices where id = '15000000-0000-4000-8000-000000000001'),
 	row('2026-12-01'::date, 'Edited')::text, 'removing a line leaves the stored due date and notes');
 
@@ -295,11 +291,11 @@ reset role;
 select is((select row(due_date, notes)::text from public.invoices where id = '15000000-0000-4000-8000-000000000001'),
 	row(null::date, null::text)::text, 'Save with a null due date and notes clears them');
 
--- The admin loaded the Automatic draft holding d9; then d3 completed and joined it.
+-- The admin loaded the second draft holding d9; then d3 completed. A completion joins no draft.
 update public.appointments set status = 'completed' where id = 'd5000000-0000-4000-8000-000000000003';
 
-select is(public.pgtap_drafts_lines('15000000-0000-4000-8000-000000000002'), '{3,9}',
-	'a visit completed after the page loaded joins the Automatic draft');
+select is(public.pgtap_drafts_lines('15000000-0000-4000-8000-000000000002'), '{9}',
+	'a visit completed after the page loaded joins no draft');
 
 set local role authenticated;
 
@@ -307,27 +303,16 @@ select lives_ok($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000002',
 		array[]::uuid[], array['d5000000-0000-4000-8000-000000000009', 'd5000000-0000-4000-8000-000000000002']::uuid[],
 		false, null, null)
-$$, 'an admin removes the line they saw from the Automatic draft');
+$$, 'an admin removes the line they saw from the draft');
 
 reset role;
 
-select is(public.pgtap_drafts_lines('15000000-0000-4000-8000-000000000002'), '{3}',
-	'the line that joined after the page loaded stays');
-select is((select excluded_from_automatic from public.appointments where id = 'd5000000-0000-4000-8000-000000000009'),
-	true, 'a visit removed from an Automatic draft is Excluded');
-select is((select excluded_from_automatic from public.appointments where id = 'd5000000-0000-4000-8000-000000000003'),
-	false, 'the visit that joined after the page loaded is not Excluded');
+select is_empty($$ select 1 from public.invoice_appointments where appointment_id = 'd5000000-0000-4000-8000-000000000003' $$,
+	'the visit completed after the page loaded is on no draft');
 select is(public.pgtap_drafts_lines('15000000-0000-4000-8000-000000000001'), '{2}',
 	'removing a visit that is on another draft leaves that draft alone');
-select is((select excluded_from_automatic from public.appointments where id = 'd5000000-0000-4000-8000-000000000002'),
-	false, 'a removed id that wasn''t on the draft is not Excluded');
 
 set local role authenticated;
-
-select lives_ok($$
-	select public.invoice_update_draft('15000000-0000-4000-8000-000000000002',
-		null, array['d5000000-0000-4000-8000-000000000003']::uuid[], false, null, null)
-$$, 'removing the last line of the Automatic draft succeeds');
 
 select lives_ok($$
 	select public.invoice_update_draft('15000000-0000-4000-8000-000000000001',
@@ -340,8 +325,6 @@ select is_empty($$
 	select 1 from public.invoices
 	where id in ('15000000-0000-4000-8000-000000000001', '15000000-0000-4000-8000-000000000002')
 $$, 'a draft left with no lines is deleted');
-select is((select excluded_from_automatic from public.appointments where id = 'd5000000-0000-4000-8000-000000000003'),
-	true, 'the last line removed from an Automatic draft is Excluded too');
 
 
 -- Only live lines keep a draft ---------------------------------------------------------------
@@ -391,7 +374,6 @@ where (pg_namespace.nspname, pg_proc.proname) in (
 	('private', 'invoice_lock_visits'),
 	('private', 'invoice_add_lines'),
 	('private', 'invoice_delete_if_empty'),
-	('private', 'invoice_join_automatic_draft'),
 	('private', 'stamp_appointment_completed_at'),
 	('private', 'sync_invoicing_on_appointment_update')
 );

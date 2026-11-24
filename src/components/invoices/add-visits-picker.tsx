@@ -11,11 +11,13 @@ import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import ResponsiveDialog from '@/components/ui/responsive-dialog'
 import SubmitButton from '@/components/ui/submit-button'
+import { selectionSummary, splitClaimable } from '@/lib/invoices/appointment-picker'
 import type { ClaimableVisit } from '@/lib/invoices/queries'
+import { formatCents } from '@/lib/pricing/money'
 import { cn } from '@/lib/utils'
 
-import { ClaimableVisitList } from './claimable-visit-list'
-import { CONNECTION_ERROR_MESSAGE, useInvoiceDetail } from './invoice-detail-context'
+import { AppointmentPicker } from './appointment-picker'
+import { useInvoiceDetail } from './invoice-detail-context'
 import { SHEET_BUTTON_CLASS, SheetButtons } from './sheet-buttons'
 import { useSubmitDraftUpdate } from './submit-draft-update'
 
@@ -23,9 +25,9 @@ type AddVisitsPickerProps = {
   invoiceId: string
   clientName: string
   visits: ClaimableVisit[]
-  businessDate: string
 }
 
+const UNREACHABLE_MESSAGE = "Couldn't reach the server. Try again."
 const ERROR_TITLE = "Couldn't add those appointments"
 
 function visitCount(count: number): string {
@@ -36,7 +38,6 @@ export default function AddVisitsPicker({
   invoiceId,
   clientName,
   visits,
-  businessDate,
 }: AddVisitsPickerProps) {
   const router = useRouter()
   const submitDraftUpdate = useSubmitDraftUpdate()
@@ -48,8 +49,10 @@ export default function AddVisitsPicker({
   const triggerRef = useRef<HTMLButtonElement>(null)
 
   // Visits that left the list since the page loaded can't stay checked.
+  const { unbilled, upcoming } = splitClaimable(visits)
   const chosenIds = visits.filter((visit) => selected.has(visit.id)).map((visit) => visit.id)
   const listedSelection = new Set(chosenIds)
+  const summary = selectionSummary(listedSelection, [...unbilled, ...upcoming])
 
   function handleOpen() {
     // Nothing starts checked.
@@ -89,7 +92,7 @@ export default function AddVisitsPicker({
       router.refresh()
     } catch (thrown) {
       console.error('Add appointments failed:', thrown)
-      showError(CONNECTION_ERROR_MESSAGE)
+      showError(UNREACHABLE_MESSAGE)
     }
   }
 
@@ -125,16 +128,16 @@ export default function AddVisitsPicker({
             </EmptyHeader>
           </Empty>
         ) : (
-          <form action={handleSubmit} className="space-y-4">
-            <ClaimableVisitList
-              visits={visits}
+          <form action={handleSubmit} className="space-y-4 md:px-1">
+            <AppointmentPicker
+              unbilled={unbilled}
+              upcoming={upcoming}
               selected={listedSelection}
               onSelectedChange={setSelected}
-              businessDate={businessDate}
-              isInSheet
+              disabled={isPending}
             />
             {/* Pinned to the sheet's bottom edge, over the drawer body's safe-area padding, so no row shows beneath it. */}
-            <div className="sticky bottom-[calc(-1rem-var(--safe-bottom))] z-20 space-y-3 bg-popover pt-2 pb-[calc(1rem+var(--safe-bottom))] md:bottom-0 md:pb-1">
+            <div className="sticky bottom-[calc(-1rem-var(--safe-bottom))] z-20 space-y-3 border-t border-border bg-popover pt-2 pb-[calc(1rem+var(--safe-bottom))] md:bottom-0 md:pb-1">
               {error ? (
                 <Alert variant="destructive" className="animate-in fade-in-0 slide-in-from-top-1 duration-base ease-out-quart">
                   <AlertCircle aria-hidden="true" />
@@ -142,6 +145,9 @@ export default function AddVisitsPicker({
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               ) : null}
+              <p className="text-sm text-muted-foreground tabular-nums" aria-live="polite">
+                {visitCount(summary.count)} · {formatCents(summary.totalCents)}
+              </p>
               <SheetButtons onCancel={() => handleOpenChange(false)} onPendingChange={setIsPending}>
                 <SubmitButton
                   label={chosenIds.length === 0 ? 'Add appointments' : `Add ${visitCount(chosenIds.length)}`}

@@ -6,6 +6,7 @@ import {
   formatShortDate,
   type PayPeriod,
 } from "./period.ts";
+import type { PayoutPart } from "./payroll-data.ts";
 import type { PeriodRow } from "./period-summary.ts";
 import type {
   PeriodRun,
@@ -99,16 +100,34 @@ export function describeProblemSession(
   return `Clocked in${clockIn}, no clock-out`;
 }
 
-// "Paid Oct 20, 2026 by e-Transfer".
+// "Paid Oct 20, 2026 by e-Transfer", or "... by Cash $200.00 + e-Transfer $340.00" for a split.
 export function describePaidRun(
-  run: Pick<PeriodRun, "paidOn" | "payoutMethod">,
+  run: Pick<PeriodRun, "paidOn" | "payoutMethod" | "payoutParts">,
 ): string {
+  const payout =
+    run.payoutParts.length > 0
+      ? formatPayoutParts(run.payoutParts, " + ")
+      : run.payoutMethod;
   const parts = [
     "Paid",
     run.paidOn === null ? null : formatLongDate(run.paidOn),
-    run.payoutMethod === null ? null : `by ${run.payoutMethod}`,
+    payout === null ? null : `by ${payout}`,
   ];
   return parts.filter((part) => part !== null).join(" ");
+}
+
+// A paid run's payout in words. A split reads "Cash $200.00 + e-Transfer $340.00" with the
+// separator " + " (admin state line, export) or "Cash $200.00, e-Transfer $340.00" with ", " (My
+// pay, Pay statement). A single-method run is just its method, as before.
+export function formatPayoutParts(
+  parts: PayoutPart[],
+  separator: string,
+): string {
+  if (parts.length === 1) return parts[0].method;
+
+  return parts
+    .map((part) => `${part.method} ${formatCents(part.amount_cents)}`)
+    .join(separator);
 }
 
 function countOddDurations(run: PeriodRun): number {

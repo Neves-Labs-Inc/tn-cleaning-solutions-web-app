@@ -188,6 +188,29 @@ describe("renderPayrollWorkbook: Summary tab", () => {
     assert.equal(sheet(workbook, "Summary").getCell("F2").value, "Cash");
   });
 
+  it("widens Payout method so a split cell is not clipped", async () => {
+    const model: PayrollExportModel = {
+      ...MODEL,
+      summary: {
+        ...MODEL.summary,
+        lines: [
+          {
+            ...CARLA,
+            payoutMethods: ["Cash $200.00 + e-Transfer $340.00"],
+            paidDates: ["2026-11-20"],
+          },
+        ],
+      },
+    };
+
+    const summary = sheet(await readBack(model), "Summary");
+
+    assert.equal(summary.getCell("F2").value, "Cash $200.00 + e-Transfer $340.00");
+    assert.ok((summary.getColumn(6).width ?? 0) >= 36);
+    assert.equal(summary.getCell("F2").alignment?.wrapText, true);
+    assert.equal(summary.getCell("F2").alignment?.vertical, "top");
+  });
+
   it("formats money as CAD and hours with two decimals", async () => {
     const workbook = await readBack(MODEL);
 
@@ -363,7 +386,7 @@ describe("renderPayrollWorkbook: presentation", () => {
     }
     assert.deepEqual(
       summary.columns.map((column) => column.width),
-      [24, 10, 12, 13, 12, 22, 22],
+      [24, 10, 12, 13, 12, 36, 22],
     );
     assert.deepEqual(
       ana.columns.map((column) => column.width),

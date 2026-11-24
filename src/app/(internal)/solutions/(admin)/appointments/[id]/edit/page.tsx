@@ -131,7 +131,7 @@ export default async function EditAppointmentPage({ params }: EditAppointmentPag
 
   // A failed claim read blocks the form: it must never show without knowing whether it's invoiced.
   const loadError = clientsError ?? jobsError ?? employeesError ?? liveClaimError ?? recurrenceSeriesError
-  const invoiceClaim = toInvoiceClaim(liveClaim as LiveClaimRow | null)
+  const invoiceClaim = toInvoiceClaim(liveClaim as LiveClaimRow | null, typedAppointment.client_id)
 
   const jobRows = jobs ?? []
 
@@ -261,12 +261,13 @@ const CREW_CLOCKS_ERROR_MESSAGE = "Couldn't load this appointment's clocks. Try 
 const WARNING_ALERT_CLASSES = 'border-status-warning-border bg-status-warning text-status-warning-foreground'
 
 // Only an issued or paid invoice froze a price the edit won't reach; a draft line follows the edit.
-function toInvoiceClaim(row: LiveClaimRow | null): InvoiceClaim | null {
+// An invoice only holds its own client's appointments, so the appointment's client is the invoice's.
+function toInvoiceClaim(row: LiveClaimRow | null, clientId: string): InvoiceClaim | null {
   const invoice = row?.invoice ?? null
   if (!invoice || invoice.invoice_number === null) return null
   if (invoice.status !== 'issued' && invoice.status !== 'paid') return null
 
-  return { id: invoice.id, number: invoice.invoice_number, status: invoice.status }
+  return { id: invoice.id, clientId, number: invoice.invoice_number, status: invoice.status }
 }
 
 function formatDisplayPrice(display: DisplayPrice) {

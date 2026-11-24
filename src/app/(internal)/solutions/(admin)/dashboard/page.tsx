@@ -26,10 +26,9 @@ import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { fetchPayPeriodsOverview } from '@/lib/payroll/queries'
 import { summarizePeriods } from '@/lib/payroll/period-summary'
+import { RECEIVABLES_PATH } from '@/lib/invoices/paths'
 import type { BannerLine } from '@/lib/payroll/period-summary'
 import PayrollBanner from './payroll-banner'
-
-const RECEIVABLES_HREF = '/solutions/invoices/receivables'
 
 type ReceivablesSummary = { totals: ReceivablesTotals; unbilledCount: number }
 type Db = Awaited<ReturnType<typeof createClient>>
@@ -123,7 +122,7 @@ export default async function DashboardPage() {
                 >
                     <StatTile
                         fitValue
-                        href={RECEIVABLES_HREF}
+                        href={RECEIVABLES_PATH}
                         label="Outstanding"
                         value={formatCents(receivables.totals.outstandingCents)}
                         caption={receivables.totals.outstandingCents > 0 ? 'Issued invoices' : 'Nothing owed'}
@@ -131,7 +130,7 @@ export default async function DashboardPage() {
                     />
                     <StatTile
                         fitValue
-                        href={RECEIVABLES_HREF}
+                        href={RECEIVABLES_PATH}
                         label="Overdue"
                         value={formatCents(receivables.totals.overdueCents)}
                         caption={receivables.totals.overdueCents > 0 ? 'Past due date' : 'Nothing past due'}
@@ -139,7 +138,7 @@ export default async function DashboardPage() {
                     />
                     <StatTile
                         fitValue
-                        href={RECEIVABLES_HREF}
+                        href={RECEIVABLES_PATH}
                         label="Unbilled"
                         value={String(receivables.unbilledCount)}
                         caption={receivables.unbilledCount > 0 ? 'Appointments not invoiced' : 'All appointments billed'}
@@ -147,7 +146,7 @@ export default async function DashboardPage() {
                     />
                     <StatTile
                         fitValue
-                        href={RECEIVABLES_HREF}
+                        href={RECEIVABLES_PATH}
                         label="Unpaid invoices"
                         value={String(receivables.totals.unpaidCount)}
                         caption={receivables.totals.unpaidCount > 0 ? 'Issued, not paid' : 'All paid up'}

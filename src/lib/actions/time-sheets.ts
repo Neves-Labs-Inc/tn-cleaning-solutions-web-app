@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { revalidateBillingPages } from "@/lib/invoices/revalidate";
 import { createClient } from "@/lib/supabase/server";
 import {
   ClockCorrections,
@@ -23,7 +24,6 @@ const REVALIDATED_PATHS = [
   "/solutions/time-tracking",
   "/solutions/time-sheets",
   "/solutions/appointments",
-  "/solutions/invoices",
   "/solutions/dashboard",
 ];
 
@@ -46,6 +46,7 @@ function revalidateClockViews(appointmentId: string | null): void {
   for (const path of REVALIDATED_PATHS) {
     revalidatePath(path);
   }
+  revalidateBillingPages();
   if (appointmentId) {
     revalidatePath(`/solutions/appointments/${appointmentId}`);
   }

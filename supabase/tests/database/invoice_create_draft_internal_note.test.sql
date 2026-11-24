@@ -17,8 +17,8 @@ select plan(5);
 insert into auth.users (id, email) values
 	('a8000000-0000-4000-8000-000000000001', 'pgtap.create-note.admin@example.test');
 
-insert into public.clients (id, name, automatic_invoicing) values
-	('c8000000-0000-4000-8000-000000000001', 'pgTAP Create Note Client', false);
+insert into public.clients (id, name) values
+	('c8000000-0000-4000-8000-000000000001', 'pgTAP Create Note Client');
 
 insert into public.jobs (id, name, hourly_rate_cents) values
 	('b8000000-0000-4000-8000-000000000001', 'pgTAP Create Note Job', 4500);

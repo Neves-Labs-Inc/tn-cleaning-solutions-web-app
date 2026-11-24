@@ -2,12 +2,11 @@
 
 import { revalidatePath } from 'next/cache'
 
+import { revalidateBillingPages } from '@/lib/invoices/revalidate'
 import { messageFor, type LedgerErrorCode } from '@/lib/invoices/errors'
 import { readOptionalDate } from '@/lib/invoices/form-input'
-import { BULK_ISSUE_LIMIT } from '@/lib/invoices/view'
 import {
   InvoiceLedger,
-  type BulkIssueOutcome,
   type DraftInput,
   type LedgerResult,
   type MarkPaidInput,
@@ -25,11 +24,10 @@ export type InvoiceActionResult<T = null> =
   | { success: true; data: T; appointmentIds: string[] }
   | { success: false; error: string; code: LedgerErrorCode }
 
-const INVOICES_PATH = '/solutions/invoices'
 const APPOINTMENTS_PATH = '/solutions/appointments'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-// Caps on what a form can post: a bulk issue runs a few queries per draft in series.
-const MAX_IDS = BULK_ISSUE_LIMIT
+// Cap on how many appointment ids one form can post.
+const MAX_IDS = 200
 const MAX_NOTES_LENGTH = 2000
 const MAX_SHORT_TEXT_LENGTH = 200
 // The ledger logs the raw cause; the page gets no Postgres text.
@@ -121,16 +119,9 @@ function draftDetails(formData: FormData): { details: DraftInput | null } | { re
   return { details: { dueDate, notes } }
 }
 
-// Called only with an id the parser accepted as a UUID, so the detail path is never free text.
-function revalidateInvoicing(invoiceId?: string) {
-  revalidatePath(INVOICES_PATH)
-  revalidatePath(`${INVOICES_PATH}/receivables`)
-  revalidatePath(`${INVOICES_PATH}/payment-methods`)
-  revalidatePath('/(internal)/solutions/(admin)/clients/[id]/(overview)', 'page')
+function revalidateInvoicing() {
+  revalidateBillingPages()
   revalidatePath('/solutions/dashboard')
-  if (invoiceId) {
-    revalidatePath(`${INVOICES_PATH}/${invoiceId}`)
-  }
 }
 
 function toRefusal(failure: Extract<LedgerResult<unknown>, { ok: false }>): Refusal {
@@ -196,7 +187,7 @@ export async function updateDraft(
   // is not-found: it would flash before the client reaches the ledger. The ledger and the other
   // pages are dynamic, so they read fresh when navigated to.
   const isDeleted = result.ok && result.data.isDeleted
-  if (!isDeleted) revalidateInvoicing(invoiceId)
+  if (!isDeleted) revalidateInvoicing()
   return toActionResult(result, [...addAppointmentIds, ...removeAppointmentIds])
 }
 
@@ -222,7 +213,7 @@ export async function setDraftLinePrice(_previous: unknown, formData: FormData):
   const result = await admin.ledger.setDraftLinePrice(invoiceId, appointmentId, amountCents)
   if (result.ok) {
     // Both ids passed the UUID parser, so the paths are never free text.
-    revalidateInvoicing(invoiceId)
+    revalidateInvoicing()
     revalidatePath(`${APPOINTMENTS_PATH}/${appointmentId}`)
   }
   return toActionResult(result, [appointmentId])
@@ -244,24 +235,6 @@ export async function issueInvoice(
   if ('refusal' in touched) return touched.refusal
 
   const result = await admin.ledger.issue(invoiceId, dueDate)
-  revalidateInvoicing(invoiceId)
-  return toActionResult(result, touched.appointmentIds)
-}
-
-export async function bulkIssueInvoices(_previous: unknown, formData: FormData): Promise<InvoiceActionResult<BulkIssueOutcome>> {
-  const invoiceIds = ids(formData, 'invoice_ids')
-  const dueDate = readOptionalDate(formData, 'due_date')
-  if (!invoiceIds || invoiceIds.length === 0) return refuse('invalid_input')
-  if (dueDate === undefined) return refuse('invalid_due_date')
-
-  const admin = await requireAdmin()
-  if ('refusal' in admin) return admin.refusal
-
-  // Every requested draft, not only the ones that issue: re-reading a skipped draft's rows is harmless.
-  const touched = await readTouched(admin.ledger, invoiceIds)
-  if ('refusal' in touched) return touched.refusal
-
-  const result = await admin.ledger.bulkIssue(invoiceIds, dueDate)
   revalidateInvoicing()
   return toActionResult(result, touched.appointmentIds)
 }
@@ -277,7 +250,7 @@ export async function voidInvoice(_previous: unknown, formData: FormData): Promi
   if ('refusal' in touched) return touched.refusal
 
   const result = await admin.ledger.voidInvoice(invoiceId)
-  revalidateInvoicing(invoiceId)
+  revalidateInvoicing()
   return toActionResult(result, touched.appointmentIds)
 }
 
@@ -295,7 +268,7 @@ export async function recordPayment(_previous: unknown, formData: FormData): Pro
   if ('refusal' in touched) return touched.refusal
 
   const result = await admin.ledger.recordPayment(invoiceId, input)
-  revalidateInvoicing(invoiceId)
+  revalidateInvoicing()
   return toActionResult(result, touched.appointmentIds)
 }
 
@@ -325,7 +298,7 @@ export async function markAppointmentsPaid(
   if (!result.ok) return toActionResult(result)
 
   // The ids passed the UUID parser, so the detail paths are never free text.
-  revalidateInvoicing(result.data.invoiceId)
+  revalidateInvoicing()
   revalidatePath(APPOINTMENTS_PATH)
   for (const appointmentId of appointmentIds) {
     revalidatePath(`${APPOINTMENTS_PATH}/${appointmentId}`)
@@ -347,7 +320,7 @@ export async function updatePayment(_previous: unknown, formData: FormData): Pro
   if ('refusal' in touched) return touched.refusal
 
   const result = await admin.ledger.updatePayment(invoiceId, input)
-  revalidateInvoicing(invoiceId)
+  revalidateInvoicing()
   return toActionResult(result, touched.appointmentIds)
 }
 
@@ -362,7 +335,7 @@ export async function undoPayment(_previous: unknown, formData: FormData): Promi
   if ('refusal' in touched) return touched.refusal
 
   const result = await admin.ledger.undoPayment(invoiceId)
-  revalidateInvoicing(invoiceId)
+  revalidateInvoicing()
   return toActionResult(result, touched.appointmentIds)
 }
 
@@ -377,7 +350,7 @@ export async function archiveInvoice(_previous: unknown, formData: FormData): Pr
   if ('refusal' in touched) return touched.refusal
 
   const result = await admin.ledger.archive(invoiceId)
-  revalidateInvoicing(invoiceId)
+  revalidateInvoicing()
   return toActionResult(result, touched.appointmentIds)
 }
 
@@ -392,7 +365,7 @@ export async function unarchiveInvoice(_previous: unknown, formData: FormData): 
   if ('refusal' in touched) return touched.refusal
 
   const result = await admin.ledger.unarchive(invoiceId)
-  revalidateInvoicing(invoiceId)
+  revalidateInvoicing()
   return toActionResult(result, touched.appointmentIds)
 }
 
@@ -406,43 +379,6 @@ export async function setInternalNote(_previous: unknown, formData: FormData): P
   if ('refusal' in admin) return admin.refusal
 
   const result = await admin.ledger.setInternalNote(invoiceId, internalNote)
-  if (result.ok) revalidateInvoicing(invoiceId)
-  return toActionResult(result)
-}
-
-export async function setClientAutomaticInvoicing(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
-  const clientId = id(formData, 'client_id')
-  if (!clientId) return refuse('invalid_input')
-
-  const admin = await requireAdmin()
-  if ('refusal' in admin) return admin.refusal
-
-  const result = await admin.ledger.setAutomaticInvoicing(clientId, flag(formData, 'automatic_invoicing'))
-  revalidateInvoicing()
-  return toActionResult(result)
-}
-
-export async function renamePaymentMethod(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
-  const methodId = id(formData, 'payment_method_id')
-  const name = text(formData, 'name', MAX_SHORT_TEXT_LENGTH)
-  if (!methodId || name === undefined) return refuse('invalid_input')
-
-  const admin = await requireAdmin()
-  if ('refusal' in admin) return admin.refusal
-
-  const result = await admin.ledger.renamePaymentMethod(methodId, name)
-  revalidateInvoicing()
-  return toActionResult(result)
-}
-
-export async function setPaymentMethodHidden(_previous: unknown, formData: FormData): Promise<InvoiceActionResult> {
-  const methodId = id(formData, 'payment_method_id')
-  if (!methodId) return refuse('invalid_input')
-
-  const admin = await requireAdmin()
-  if ('refusal' in admin) return admin.refusal
-
-  const result = await admin.ledger.setPaymentMethodHidden(methodId, flag(formData, 'is_hidden'))
-  revalidateInvoicing()
+  if (result.ok) revalidateInvoicing()
   return toActionResult(result)
 }

@@ -19,9 +19,8 @@ insert into auth.users (id, email) values
 	('a7000000-0000-4000-8000-000000000001', 'pgtap.cancel.admin@example.test'),
 	('a7000000-0000-4000-8000-000000000002', 'pgtap.cancel.employee@example.test');
 
--- Automatic invoicing off, so completing a fixture visit opens no draft of its own.
-insert into public.clients (id, name, automatic_invoicing) values
-	('c7000000-0000-4000-8000-000000000001', 'pgTAP Cancel Client', false);
+insert into public.clients (id, name) values
+	('c7000000-0000-4000-8000-000000000001', 'pgTAP Cancel Client');
 
 insert into public.jobs (id, name, hourly_rate_cents) values
 	('b7000000-0000-4000-8000-000000000001', 'pgTAP Cancel Job', 4500);

@@ -38,13 +38,16 @@ export type PayrollSummary = {
 };
 
 const TITLE = "Payroll summary";
+// Same join the .xlsx uses when a Cleaner has several paid runs.
+const METHOD_SEPARATOR = "; ";
 
 const COLUMNS: PdfColumn[] = [
-  { label: "Cleaner", widthPct: 36, align: "left" },
-  { label: "Hours", widthPct: 12, align: "right" },
-  { label: "Pay rate", widthPct: 18, align: "right" },
-  { label: "Adjustments", widthPct: 17, align: "right" },
-  { label: "Total", widthPct: 17, align: "right" },
+  { label: "Cleaner", widthPct: 24, align: "left" },
+  { label: "Payout method", widthPct: 22, align: "left" },
+  { label: "Hours", widthPct: 10, align: "right" },
+  { label: "Pay rate", widthPct: 14, align: "right" },
+  { label: "Adjustments", widthPct: 15, align: "right" },
+  { label: "Total", widthPct: 15, align: "right" },
 ];
 
 function getYear(day: string): string {
@@ -67,6 +70,7 @@ export function buildPayrollSummary(
   const generatedOn = formatLongDate(getBusinessDate(generatedAt));
   const rows = model.summary.lines.map((line) => [
     line.name,
+    line.payoutMethods.join(METHOD_SEPARATOR),
     formatHoursMinutes(line.minutes),
     formatOptionalRate(model.currentRates[line.cleanerId] ?? null),
     formatSignedCad(line.adjustmentsCents),
@@ -82,6 +86,7 @@ export function buildPayrollSummary(
     rows,
     totalRow: [
       "Total",
+      "",
       formatHoursMinutes(total.minutes),
       "",
       formatSignedCad(total.adjustmentsCents),

@@ -9,6 +9,7 @@ import {
 } from "@/lib/appointments/errors";
 import { cancelInScope } from "@/lib/appointments/scope-cancel";
 import { deleteInScope, previewScope } from "@/lib/appointments/scope-changes";
+import { revalidateBillingPages } from "@/lib/invoices/revalidate";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -48,7 +49,6 @@ export type CancelAppointmentsResult =
   | { success: false; error: string };
 
 const APPOINTMENTS_PATH = "/solutions/appointments";
-const INVOICES_PATH = "/solutions/invoices";
 // A deleted visit's clocks leave the admin and Cleaner time sheets.
 const TIME_SHEET_PATHS = ["/solutions/time-tracking", "/solutions/time-sheets"];
 
@@ -130,15 +130,13 @@ export async function previewAppointmentScope(
 }
 
 // Ids come back from the database, never free text.
-function revalidateDeleted(deletedIds: string[], invoiceIds: string[]): void {
+function revalidateDeleted(deletedIds: string[]): void {
   revalidatePath(APPOINTMENTS_PATH);
   for (const id of deletedIds) {
     revalidatePath(`${APPOINTMENTS_PATH}/${id}`);
   }
-  if (invoiceIds.length > 0) revalidatePath(INVOICES_PATH);
-  for (const id of invoiceIds) {
-    revalidatePath(`${INVOICES_PATH}/${id}`);
-  }
+  // Unbilled appointments change the client's Unbilled list too, so no invoice is needed.
+  revalidateBillingPages();
   for (const path of TIME_SHEET_PATHS) {
     revalidatePath(path);
   }
@@ -168,8 +166,8 @@ export async function deleteAppointments(
       scope,
     });
     if (deleted.error === null) {
-      const { deletedIds, skipped, invoiceIds, chosenDeleted } = deleted.value;
-      revalidateDeleted(deletedIds, invoiceIds);
+      const { deletedIds, skipped, chosenDeleted } = deleted.value;
+      revalidateDeleted(deletedIds);
       result = {
         success: true,
         data: {
@@ -202,14 +200,13 @@ export async function deleteAppointments(
 }
 
 // Ids come back from the database, never free text.
-function revalidateCancelled(cancelledIds: string[], invoiceIds: string[]): void {
+function revalidateCancelled(cancelledIds: string[]): void {
   revalidatePath(APPOINTMENTS_PATH);
   for (const id of cancelledIds) {
     revalidatePath(`${APPOINTMENTS_PATH}/${id}`);
   }
-  for (const id of invoiceIds) {
-    revalidatePath(`${INVOICES_PATH}/${id}`);
-  }
+  // Unbilled appointments change the client's Unbilled list too, so no invoice is needed.
+  revalidateBillingPages();
 }
 
 // Cancels the chosen visit, the visits after it or its whole Series. Visits on a paid invoice are
@@ -237,8 +234,8 @@ export async function cancelAppointments(
       scope,
     });
     if (cancelled.error === null) {
-      const { cancelledIds, skipped, invoiceIds } = cancelled.value;
-      revalidateCancelled(cancelledIds, invoiceIds);
+      const { cancelledIds, skipped } = cancelled.value;
+      revalidateCancelled(cancelledIds);
       result = {
         success: true,
         data: {

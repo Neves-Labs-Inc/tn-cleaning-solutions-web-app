@@ -1,13 +1,15 @@
 // Relative imports: node --test runs this file without the @/ alias.
 import { isCalendarDate } from "../dates/calendar.ts";
-import { formatCents } from "../pricing/money.ts";
+import { formatCents, parseDollarsToCents } from "../pricing/money.ts";
 import {
   describeMarkPaidResult,
   toBulkOutcome,
   type BulkResultRow,
 } from "./bulk-result.ts";
-import { getPayrollErrorMessage } from "./errors.ts";
+import type { SplitPart } from "./action-input.ts";
+import { getPayrollErrorMessage, type PayrollErrorCode } from "./errors.ts";
 import { pluralize } from "./format.ts";
+import type { PayoutPart } from "./payroll-data.ts";
 import { formatShortDate } from "./period.ts";
 import { getFirstName } from "./period-actions.ts";
 import type { PeriodRun } from "./period-view.ts";
@@ -198,4 +200,143 @@ export function readMarkPaidRows(
     hasUnplacedRefusal:
       refused.length > paidOnMessages.length + methodRefusals.length,
   };
+}
+
+// ---- Split payout: the part rows' checks and copy -------------------------------------------
+
+// One part row as typed: the amount is dollars text until it is read.
+export type PartDraft = { method: string; amount: string };
+
+export type PartRowError = { method: string | null; amount: string | null };
+
+export type SplitSumLine = { text: string; tone: "muted" | "destructive" };
+
+const CENTS_PER_DOLLAR = 100;
+const MIN_SPLIT_PARTS = 2;
+const AMOUNT_ABOVE_ZERO_MESSAGE = "Enter an amount above $0.00.";
+const AMOUNT_SHAPE_MESSAGE = "Enter an amount like 200.00.";
+const TWO_DECIMALS = /^\d*(?:\.\d{0,2})?$/;
+const NEGATIVE_AMOUNT = /^\s*-/;
+const SPLIT_REFUSAL_CODES: PayrollErrorCode[] = [
+  "split_too_few_parts",
+  "split_part_not_positive",
+  "split_duplicate_method",
+  "split_sum_mismatch",
+];
+
+// Dollars text as cents; null for blank, a sign, a third decimal or anything that isn't a plain
+// amount. Zero reads as 0 (the row message says why it fails).
+export function parsePartAmount(text: string): number | null {
+  const trimmed = text.trim();
+  if (!TWO_DECIMALS.test(trimmed)) return null;
+
+  const parsed = parseDollarsToCents(trimmed);
+  return "cents" in parsed ? parsed.cents : null;
+}
+
+function methodKey(method: string): string {
+  return method.trim().toLowerCase();
+}
+
+function partAmountError(amount: string): string | null {
+  const cents = parsePartAmount(amount);
+
+  let error: string | null = null;
+  if (amount.trim() === "") {
+    error = null;
+  } else if (NEGATIVE_AMOUNT.test(amount) || cents === 0) {
+    error = AMOUNT_ABOVE_ZERO_MESSAGE;
+  } else if (cents === null) {
+    error = AMOUNT_SHAPE_MESSAGE;
+  }
+  return error;
+}
+
+// Each row's own messages, shown at once like methodError. A blank amount has none: the
+// "left to assign" line carries it.
+export function partRowErrors(parts: PartDraft[]): PartRowError[] {
+  return parts.map((part, index) => {
+    const firstSame = parts.findIndex(
+      (other) => methodKey(other.method) === methodKey(part.method),
+    );
+
+    let method: string | null = null;
+    if (part.method.trim() === "") {
+      method = `Enter a method for part ${index + 1}.`;
+    } else if (firstSame < index) {
+      method = `Part ${index + 1} repeats part ${firstSame + 1}'s method.`;
+    }
+    return { method, amount: partAmountError(part.amount) };
+  });
+}
+
+function sumPartCents(parts: PartDraft[]): number {
+  return parts.reduce(
+    (sum, part) => sum + (parsePartAmount(part.amount) ?? 0),
+    0,
+  );
+}
+
+// The live line under the rows: "$340.00 left to assign", "$60.00 over", "$0.00 left to assign".
+export function splitSumLine(
+  totalCents: number,
+  partCents: number,
+): SplitSumLine {
+  const left = totalCents - partCents;
+  return left < 0
+    ? { text: `${formatCents(-left)} over`, tone: "destructive" }
+    : { text: `${formatCents(left)} left to assign`, tone: "muted" };
+}
+
+// The line for these drafts against the run's total.
+export function splitSumLineFor(
+  parts: PartDraft[],
+  totalCents: number,
+): SplitSumLine {
+  return splitSumLine(totalCents, sumPartCents(parts));
+}
+
+// Confirm is enabled only when the SQL would accept the parts: two or more, each method named and
+// distinct, each amount above $0, adding up to the run's total exactly.
+export function canConfirmSplit(
+  parts: PartDraft[],
+  totalCents: number,
+): boolean {
+  const hasNoRowError = partRowErrors(parts).every(
+    (error) => error.method === null && error.amount === null,
+  );
+  const hasEveryAmount = parts.every(
+    (part) => (parsePartAmount(part.amount) ?? 0) > 0,
+  );
+  return (
+    parts.length >= MIN_SPLIT_PARTS &&
+    hasNoRowError &&
+    hasEveryAmount &&
+    sumPartCents(parts) === totalCents
+  );
+}
+
+// What the server action takes: trimmed methods, amounts in cents. Call after canConfirmSplit.
+export function toSplitParts(parts: PartDraft[]): SplitPart[] {
+  return parts.map((part) => ({
+    method: part.method.trim(),
+    amountCents: parsePartAmount(part.amount) ?? 0,
+  }));
+}
+
+// A stored split as editable rows, amounts as "340.00".
+export function partsToDrafts(parts: PayoutPart[]): PartDraft[] {
+  return parts.map((part) => ({
+    method: part.method,
+    amount: (part.amount_cents / CENTS_PER_DOLLAR).toFixed(2),
+  }));
+}
+
+// A split refusal comes back as its message only; these four belong in the parts area, anything
+// else in the form Alert (null).
+export function splitRefusalMessage(serverMessage: string): string | null {
+  const isSplitRefusal = SPLIT_REFUSAL_CODES.some(
+    (code) => getPayrollErrorMessage(code) === serverMessage,
+  );
+  return isSplitRefusal ? serverMessage : null;
 }

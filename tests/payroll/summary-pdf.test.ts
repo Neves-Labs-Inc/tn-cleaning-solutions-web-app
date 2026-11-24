@@ -33,12 +33,14 @@ function summaryLine(
 }
 
 const ANA = summaryLine("ana", "Ana Oliveira", {
+  payoutMethods: ["Cash $200.00 + e-Transfer $340.00"],
   minutes: 1334,
   shiftPayCents: 46739,
   adjustmentsCents: -1500,
   totalCents: 45239,
 });
 const LUCIANA = summaryLine("luciana", "Luciana Costa", {
+  payoutMethods: ["e-Transfer"],
   minutes: 1068,
   shiftPayCents: 35600,
   totalCents: 35600,
@@ -80,12 +82,12 @@ describe("buildPayrollSummary", () => {
 
     assert.deepEqual(
       summary.columns.map((column) => column.label),
-      ["Cleaner", "Hours", "Pay rate", "Adjustments", "Total"],
+      ["Cleaner", "Payout method", "Hours", "Pay rate", "Adjustments", "Total"],
     );
     assert.deepEqual(summary.rows, [
-      ["Ana Oliveira", "22:14", "$21.00/h", "-$15.00", "$452.39"],
-      ["Luciana Costa", "17:48", "—", "$0.00", "$356.00"],
-      ["Maria Santos", "38:47", "$24.00/h", "+$30.00", "$925.12"],
+      ["Ana Oliveira", "Cash $200.00 + e-Transfer $340.00", "22:14", "$21.00/h", "-$15.00", "$452.39"],
+      ["Luciana Costa", "e-Transfer", "17:48", "—", "$0.00", "$356.00"],
+      ["Maria Santos", "", "38:47", "$24.00/h", "+$30.00", "$925.12"],
     ]);
   });
 
@@ -94,6 +96,7 @@ describe("buildPayrollSummary", () => {
 
     assert.deepEqual(summary.totalRow, [
       "Total",
+      "",
       "78:49",
       "",
       "+$15.00",
@@ -106,7 +109,16 @@ describe("buildPayrollSummary", () => {
 
     assert.deepEqual(
       summary.columns.map((column) => column.align),
-      ["left", "right", "right", "right", "right"],
+      ["left", "left", "right", "right", "right", "right"],
+    );
+  });
+
+  it("keeps the six column widths at 100%", () => {
+    const summary = buildPayrollSummary(MODEL, GENERATED_AT);
+
+    assert.deepEqual(
+      summary.columns.map((column) => column.widthPct),
+      [24, 22, 10, 14, 15, 15],
     );
   });
 
